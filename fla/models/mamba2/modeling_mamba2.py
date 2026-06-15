@@ -331,7 +331,8 @@ class Mamba2Model(Mamba2PreTrainedModel):
 
 
 class Mamba2ForCausalLM(Mamba2PreTrainedModel, FLAGenerationMixin):
-    _tied_weights_keys = []
+    # transformers>=5.12 expects a dict mapping (tied_param -> source_param), not a list.
+    _tied_weights_keys = {"lm_head.weight": "backbone.embeddings.weight"}
 
     def __init__(self, config):
         super().__init__(config)
