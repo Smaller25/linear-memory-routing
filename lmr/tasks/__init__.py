@@ -4,6 +4,6 @@
 # LICENSE file in the root directory of this source tree.
 
 from lmr.tasks.mqar import make_mqar
-from lmr.tasks.niah import make_passkey
+from lmr.tasks.niah import make_passkey, make_text_passkey
 
-__all__ = ["make_mqar", "make_passkey"]
+__all__ = ["make_mqar", "make_passkey", "make_text_passkey"]

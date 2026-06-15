@@ -63,3 +63,79 @@ def make_passkey(
         labels.append(lab)
 
     return {"input_ids": torch.stack(seqs), "labels": torch.stack(labels)}
+
+
+# Classic NIAH filler (Mohtashami & Jaggi / Chen et al.): benign repeated sentences so the
+# needle is the only salient fact.
+_FILLER = (
+    "The grass is green. The sky is blue. The sun is yellow. Here we go. "
+    "There and back again. "
+)
+_PREAMBLE = (
+    "There is an important pass key hidden inside a lot of irrelevant text. "
+    "Find it and remember it. I will quiz you about the pass key.\n\n"
+)
+_QUESTION = "\n\nWhat is the pass key? The pass key is"
+
+
+def make_text_passkey(
+    tokenizer,
+    num_examples: int = 64,
+    seq_len: int = 4096,
+    passkey_digits: int = 5,
+    depth: float | None = None,
+    seed: int = 0,
+) -> dict[str, torch.Tensor]:
+    """Natural-language passkey retrieval — **in-distribution for a text-pretrained LM**.
+
+    Unlike :func:`make_passkey` (random token ids, for from-scratch training), this builds a real
+    English NIAH prompt with ``tokenizer`` so a pretrained mamba2/GDN sees familiar text. The needle
+    ``"The pass key is N. Remember it."`` is placed at ``depth`` in repeated filler; the prompt ends
+    with ``"... The pass key is"`` and the answer span (the digits of ``N``) is the only labelled
+    span (teacher-forced next-token scoring, same convention as :func:`make_passkey`).
+
+    Examples are **right-padded** to a common length per batch (mamba is right-pad-invariant — it
+    compresses L→R, so trailing pad cannot corrupt earlier real positions; left-pad would). The
+    answer-label positions sit on real tokens before the pad, so a single forward scores everyone.
+    """
+    g = torch.Generator().manual_seed(seed)
+    pre_ids = tokenizer(_PREAMBLE, add_special_tokens=False).input_ids
+    filler_ids = tokenizer(_FILLER, add_special_tokens=False).input_ids
+    q_ids = tokenizer(_QUESTION, add_special_tokens=False).input_ids
+    pad_id = tokenizer.eos_token_id or 0
+
+    rows, labels, lens = [], [], []
+    for _ in range(num_examples):
+        lo, hi = 10 ** (passkey_digits - 1), 10 ** passkey_digits - 1
+        key = int(torch.randint(lo, hi + 1, (1,), generator=g).item())
+        needle_ids = tokenizer(f" The pass key is {key}. Remember it.", add_special_tokens=False).input_ids
+        ans_ids = tokenizer(f" {key}", add_special_tokens=False).input_ids
+
+        # Repeat filler to fill the budget around the needle + fixed prefix/suffix/answer.
+        budget = seq_len - len(pre_ids) - len(needle_ids) - len(q_ids) - len(ans_ids)
+        if budget < len(filler_ids):
+            raise ValueError(f"seq_len={seq_len} too short")
+        reps = budget // len(filler_ids)
+        hay = filler_ids * reps
+        d = torch.rand(1, generator=g).item() if depth is None else depth
+        cut = int(d * len(hay))
+        ids = pre_ids + hay[:cut] + needle_ids + hay[cut:] + q_ids + ans_ids
+
+        lab = [IGNORE] * len(ids)
+        # label position j predicts token j+1; the answer occupies the final len(ans_ids) tokens.
+        a0 = len(ids) - len(ans_ids)
+        for j in range(len(ans_ids)):
+            lab[a0 + j - 1] = ids[a0 + j]
+        rows.append(ids)
+        labels.append(lab)
+        lens.append(len(ids))
+
+    # Right-pad to the max length in the batch (RIGHT-pad for mamba: trailing pad is invariant,
+    # left-pad would corrupt the state for every real position).
+    maxlen = max(lens)
+    ids_t = torch.full((num_examples, maxlen), pad_id, dtype=torch.long)
+    lab_t = torch.full((num_examples, maxlen), IGNORE, dtype=torch.long)
+    for i, (ids, lab) in enumerate(zip(rows, labels)):
+        ids_t[i, :len(ids)] = torch.tensor(ids, dtype=torch.long)
+        lab_t[i, :len(lab)] = torch.tensor(lab, dtype=torch.long)
+    return {"input_ids": ids_t, "labels": lab_t}
