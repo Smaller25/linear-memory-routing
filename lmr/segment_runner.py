@@ -62,6 +62,10 @@ def _project_segment(mixer, x_in: torch.Tensor):
 def _run_scan(mixer, x, dt, B_g, C_g, A, D, initial_states, backend):
     """Dispatch one SSD scan. Returns ``(y:[b,l,h,p], final_state:[b,h,p,n])``."""
     if backend == "cuda" and mamba_chunk_scan_combined is not None and x.is_cuda:
+        # The mamba_ssm backward kernel asserts D.stride(-1) == 1; _get_D(expand_to_head_dim)
+        # returns a non-contiguous expand, so make it contiguous for the training (backward) path.
+        if D is not None:
+            D = D.contiguous()
         y, final_state = mamba_chunk_scan_combined(
             x, dt, A, B_g, C_g,
             chunk_size=mixer.chunk_size, D=D, z=None, seq_idx=None,
