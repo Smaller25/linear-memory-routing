@@ -130,18 +130,21 @@ def segment_lengths(total: int, chunk_size: int) -> list[int]:
     return lens
 
 
-def run_segmented_lm(model, input_ids, readouts, chunk_size, backend="naive"):
+def run_segmented_lm(model, input_ids, readouts, chunk_size, backend="naive", return_hidden=False):
     """Run an FLA ``Mamba2ForCausalLM`` segment-by-segment with Memory Caching.
 
     ``readouts``: one read-out head per layer (e.g. a ``ModuleList``); RM heads are shared/
     param-free, GRM/SSC heads carry per-layer params.
-    Returns ``(logits:[b, L, vocab], aux_total)``. ``aux_total`` sums any SSC load-balance losses.
+    Returns ``(logits:[b, L, vocab], aux_total)``, or with ``return_hidden=True`` the post-
+    ``norm_f`` hidden states ``[b, L, hidden]`` instead of logits — applying ``lm_head`` only at
+    the positions you need (e.g. labelled answer tokens) avoids materialising full-vocab logits
+    over every segment, which OOMs at long context.
     """
     backbone = model.backbone
     layers = backbone.layers
     caches: list[list[torch.Tensor]] = [[] for _ in layers]
 
-    seg_logits = []
+    seg_out = []
     aux_total = input_ids.new_zeros((), dtype=torch.float32)
     offset = 0
     for seg_len in segment_lengths(input_ids.shape[1], chunk_size):
@@ -166,9 +169,9 @@ def run_segmented_lm(model, input_ids, readouts, chunk_size, backend="naive"):
                 aux_total = aux_total + aux
 
         hidden = backbone.norm_f(hidden)
-        seg_logits.append(model.lm_head(hidden))
+        seg_out.append(hidden if return_hidden else model.lm_head(hidden))
 
         for li, fs in enumerate(new_finals):
             caches[li].append(fs)
 
-    return torch.cat(seg_logits, dim=1), aux_total
+    return torch.cat(seg_out, dim=1), aux_total

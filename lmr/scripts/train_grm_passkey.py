@@ -29,7 +29,7 @@ from transformers import AutoTokenizer
 
 from lmr.converter import load_fla_mamba2
 from lmr.readout import ResidualMemory, build_readout
-from lmr.scripts.eval_recall import score
+from lmr.scripts.eval_recall import score_hidden
 from lmr.segment_runner import run_segmented_lm
 from lmr.tasks import make_text_passkey
 
@@ -93,25 +93,27 @@ def main():
     print(f"[train] saved heads -> {args.out}")
 
     # ---- eval: vanilla vs +RM (training-free) vs +trained head, on held-out passkeys ----
+    # Memory-light (score_hidden: lm_head only at labelled positions) so 8k+ doesn't OOM.
     heads.eval()
     rm_heads = [ResidualMemory() for _ in model.backbone.layers]
+    lm_head = model.lm_head
 
-    def vanilla_fn(x):
-        return model(x).logits
+    def vanilla_h(x):
+        return model.backbone(x).last_hidden_state
 
-    def rm_fn(x):
-        return run_segmented_lm(model, x, rm_heads, args.chunk_size, backend=backend)[0]
+    def rm_h(x):
+        return run_segmented_lm(model, x, rm_heads, args.chunk_size, backend=backend, return_hidden=True)[0]
 
-    def trained_fn(x):
-        return run_segmented_lm(model, x, heads, args.chunk_size, backend=backend)[0]
+    def trained_h(x):
+        return run_segmented_lm(model, x, heads, args.chunk_size, backend=backend, return_hidden=True)[0]
 
     print(f"\n{'length':>8} | {'vanilla':>8} | {'+RM':>8} | {'+' + args.variant:>8} | {'Δ vs van':>9}")
     print("-" * 56)
     for L in args.eval_lengths:
         b = make_text_passkey(tok, num_examples=64, seq_len=L, seed=10_000 + L)
-        v = score(vanilla_fn, b, device=args.device)
-        r = score(rm_fn, b, device=args.device)
-        t = score(trained_fn, b, device=args.device)
+        v = score_hidden(vanilla_h, lm_head, b, device=args.device, micro_batch=2)
+        r = score_hidden(rm_h, lm_head, b, device=args.device, micro_batch=2)
+        t = score_hidden(trained_h, lm_head, b, device=args.device, micro_batch=2)
         print(f"{L:>8} | {v:8.3f} | {r:8.3f} | {t:8.3f} | {t - v:+9.3f}")
 
 

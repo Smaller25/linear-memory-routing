@@ -34,6 +34,26 @@ def score(logits_fn, batch, device="cpu", micro_batch=8) -> float:
     return correct / max(total, 1)
 
 
+@torch.no_grad()
+def score_hidden(hidden_fn, lm_head, batch, device="cpu", micro_batch=4) -> float:
+    """Memory-light scorer: ``hidden_fn(x) -> [b, L, hidden]``, then apply ``lm_head`` ONLY at the
+    labelled positions. Avoids materialising full-vocab logits over the whole sequence (which OOMs
+    at long context). Equivalent to :func:`score` but feasible at 8k-16k.
+    """
+    ids, labels = batch["input_ids"], batch["labels"]
+    correct = total = 0
+    for i in range(0, ids.shape[0], micro_batch):
+        x = ids[i:i + micro_batch].to(device)
+        y = labels[i:i + micro_batch].to(device)
+        hidden = hidden_fn(x)                       # [b, L, H]
+        mask = y != IGNORE
+        if mask.any():
+            sel = lm_head(hidden[mask])             # [n_labelled, vocab]
+            correct += (sel.argmax(dim=-1) == y[mask]).sum().item()
+            total += int(mask.sum().item())
+    return correct / max(total, 1)
+
+
 def evaluate(logits_fn, device="cpu", lengths=(2048, 4096, 8192, 16384, 32768), seed=0) -> dict:
     """Return a dict of task -> accuracy: MQAR plus passkey at each length."""
     results = {}
