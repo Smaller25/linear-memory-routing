@@ -353,7 +353,8 @@ class GatedDeltaNetModel(GatedDeltaNetPreTrainedModel):
 
 class GatedDeltaNetForCausalLM(GatedDeltaNetPreTrainedModel, FLAGenerationMixin):
 
-    _tied_weights_keys = ["lm_head.weight"]
+    # transformers>=5.12 expects a dict mapping (tied_param -> source_param), not a list.
+    _tied_weights_keys = {"lm_head.weight": "model.embeddings.weight"}
 
     def __init__(self, config):
         super().__init__(config)
