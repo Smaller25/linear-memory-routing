@@ -111,7 +111,9 @@ def run_mixer_with_cache(adapter: Adapter, mixer, x_in, cached_states, readout, 
         y_i, _ = adapter.scan(mixer, proj, h_i, backend, memory_only=True)
         y_cached.append(y_i)
         descriptors.append(adapter.descriptor(h_i))
-    descriptors = torch.stack(descriptors, dim=1) if descriptors else None
+    # The scan computes states in fp32; cast routing descriptors to the read-out dtype (e.g. bf16
+    # for large models) so the read-out heads' einsums don't hit a dtype mismatch.
+    descriptors = torch.stack(descriptors, dim=1).to(x_in.dtype) if descriptors else None
 
     y, aux = readout(y_main, y_cached, x_in, descriptors)
     out = adapter.finalize(mixer, proj, y, dtype)

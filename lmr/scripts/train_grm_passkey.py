@@ -71,18 +71,21 @@ def main():
     ap.add_argument("--hierarchical-k", type=int, default=None)
     ap.add_argument("--eval-lengths", type=int, nargs="+", default=[512, 1024, 2048, 4096])
     ap.add_argument("--device", default="cuda")
+    ap.add_argument("--dtype", default="float32", choices=["float32", "bfloat16"],
+                    help="backbone+head dtype; use bfloat16 for large models (e.g. 2.7b)")
     ap.add_argument("--out", default="heads.pt")
     args = ap.parse_args()
     low_rank_dim = None if not args.low_rank_dim else args.low_rank_dim
+    dtype = getattr(torch, args.dtype)
 
     model, tok = load_backbone(args.arch, repo=args.repo, tokenizer=args.tokenizer,
-                               device=args.device, dtype=torch.float32)
+                               device=args.device, dtype=dtype)
     model.requires_grad_(False)
     backend = "cuda" if args.device.startswith("cuda") else "naive"
     adapter = get_adapter(args.arch)
 
     heads = build_heads(model, args.arch, args.variant, args.topk, args.num_slots, low_rank_dim)
-    heads = heads.to(args.device)
+    heads = heads.to(args.device, dtype=dtype)
     opt = torch.optim.AdamW([p for p in heads.parameters() if p.requires_grad], lr=args.lr)
     n_params = sum(p.numel() for p in heads.parameters() if p.requires_grad)
     print(f"[train] arch={args.arch} variant={args.variant} low_rank_dim={low_rank_dim} "
