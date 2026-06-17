@@ -90,5 +90,37 @@ python -m lmr.scripts.train_grm_passkey \
   2>&1 | tee "logs/${VARIANT}_${ARCH}.log"
 set +x
 
-echo "=== DONE. heads -> $OUT ; log -> logs/${VARIANT}_${ARCH}.log ==="
-echo "To keep results: commit report/notes (ckpt/*.pt is gitignored) and 'git push origin $BRANCH'."
+echo "=== [4] commit + push results (ckpt/*.pt and logs/ are gitignored, so extract to report/runs/) ==="
+RUN_ID="${ARCH}_${VARIANT}_$(date +%Y%m%d_%H%M%S)"
+RESULT="report/runs/${RUN_ID}.md"
+mkdir -p report/runs
+{
+  echo "# Auto run — ${ARCH} / ${VARIANT}  (${RUN_ID})"
+  echo
+  echo "- model: ${MODEL:-default for ${ARCH}} | train_len ${TRAIN_LEN} | batch ${BATCH} | steps ${STEPS} | low_rank ${LOW_RANK} | dtype ${DTYPE}"
+  echo "- GPU: $(python -c 'import torch; print(torch.cuda.get_device_name(0))' 2>/dev/null || echo '?')"
+  echo "- commit: $(git rev-parse --short HEAD)"
+  echo
+  echo '```'
+  # final train lines + the vanilla/+RM/+variant eval table from the run log
+  grep -E '\[train\]|^  step|length|vanilla|^ *[0-9]+ \||saved' "logs/${VARIANT}_${ARCH}.log" | tail -40
+  echo '```'
+} > "$RESULT"
+echo "  wrote $RESULT"
+
+if [ -n "${GH_TOKEN:-}" ]; then
+  git add "$RESULT" report/ notes/ 2>/dev/null || true
+  if ! git diff --cached --quiet; then
+    git commit -q -m "vessl run: ${ARCH}/${VARIANT} results (${RUN_ID})"
+    # the branch may have advanced during the (long) run — rebase before pushing
+    git pull --rebase --autostash origin "$BRANCH" || true
+    git push origin "$BRANCH" && echo "  pushed results to origin/$BRANCH" \
+      || echo "  PUSH FAILED — commit is local ($RESULT); push manually"
+  else
+    echo "  nothing new to commit"
+  fi
+else
+  echo "  GH_TOKEN unset — results saved locally at $RESULT (not pushed)"
+fi
+
+echo "=== DONE. heads -> $OUT | log -> logs/${VARIANT}_${ARCH}.log | results -> $RESULT ==="
