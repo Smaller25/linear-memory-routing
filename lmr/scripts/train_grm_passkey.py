@@ -33,19 +33,20 @@ from lmr.loaders import load_backbone
 from lmr.readout import ResidualMemory, build_readout
 from lmr.scripts.eval_recall import score_hidden
 from lmr.segment_runner import run_segmented_lm
-from lmr.tasks import make_text_passkey
+from lmr.tasks import make_text_multikey, make_text_passkey
 
 IGNORE = -100
+TASKS = {"passkey": make_text_passkey, "multikey": make_text_multikey}
 
 
-def build_heads(model, arch, variant, topk, num_slots, low_rank_dim):
+def build_heads(model, arch, variant, topk, num_slots, low_rank_dim, aux_scale=1e-2):
     cfg = model.config
     dd = descriptor_dim_for(model, arch)
     kw = {"low_rank_dim": low_rank_dim}
     if variant == "ssc":
-        kw["topk"] = topk
+        kw["topk"] = topk; kw["aux_scale"] = aux_scale
     if variant == "mom":
-        kw["num_slots"] = num_slots
+        kw["num_slots"] = num_slots; kw["aux_scale"] = aux_scale
     return nn.ModuleList([
         build_readout(variant, cfg.hidden_size, dd, **kw)
         for _ in get_adapter(arch).blocks(model)
@@ -56,6 +57,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--arch", choices=["mamba2", "gdn"], default="mamba2")
     ap.add_argument("--variant", choices=["grm", "ssc", "mom", "aom"], default="grm")
+    ap.add_argument("--task", choices=["passkey", "multikey"], default="passkey",
+                    help="recall task to train (and in-script eval) on")
     ap.add_argument("--model", "--repo", dest="repo", default=None,
                     help="backbone repo; defaults per --arch")
     ap.add_argument("--tokenizer", default=None, help="mamba2 only; gdn ships its own")
@@ -66,6 +69,7 @@ def main():
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--topk", type=int, default=2)
     ap.add_argument("--num-slots", type=int, default=4)
+    ap.add_argument("--aux-scale", type=float, default=1e-2, help="SSC/MoM load-balance aux weight; lower for selective tasks (multikey)")
     ap.add_argument("--low-rank-dim", type=int, default=64,
                     help="low-rank router dim; pass 0 for a full-rank router")
     ap.add_argument("--hierarchical-k", type=int, default=None)
@@ -77,6 +81,7 @@ def main():
     args = ap.parse_args()
     low_rank_dim = None if not args.low_rank_dim else args.low_rank_dim
     dtype = getattr(torch, args.dtype)
+    gen = TASKS[args.task]
 
     model, tok = load_backbone(args.arch, repo=args.repo, tokenizer=args.tokenizer,
                                device=args.device, dtype=dtype)
@@ -84,7 +89,7 @@ def main():
     backend = "cuda" if args.device.startswith("cuda") else "naive"
     adapter = get_adapter(args.arch)
 
-    heads = build_heads(model, args.arch, args.variant, args.topk, args.num_slots, low_rank_dim)
+    heads = build_heads(model, args.arch, args.variant, args.topk, args.num_slots, low_rank_dim, aux_scale=args.aux_scale)
     heads = heads.to(args.device, dtype=dtype)
     opt = torch.optim.AdamW([p for p in heads.parameters() if p.requires_grad], lr=args.lr)
     n_params = sum(p.numel() for p in heads.parameters() if p.requires_grad)
@@ -99,7 +104,7 @@ def main():
 
     heads.train()
     for step in range(args.steps):
-        batch = make_text_passkey(tok, num_examples=args.batch, seq_len=args.train_len, seed=step)
+        batch = gen(tok, num_examples=args.batch, seq_len=args.train_len, seed=step)
         ids = batch["input_ids"].to(args.device)
         labels = batch["labels"].to(args.device)
         logits, aux = run(ids, heads)
@@ -131,7 +136,7 @@ def main():
     print(f"\n{'length':>8} | {'vanilla':>8} | {'+RM':>8} | {'+' + args.variant:>8} | {'Δ vs van':>9}")
     print("-" * 56)
     for L in args.eval_lengths:
-        b = make_text_passkey(tok, num_examples=64, seq_len=L, seed=10_000 + L)
+        b = gen(tok, num_examples=64, seq_len=L, seed=10_000 + L)
         v = score_hidden(vanilla_h, lm_head, b, device=args.device, micro_batch=2)
         r = score_hidden(rm_h, lm_head, b, device=args.device, micro_batch=2)
         t = score_hidden(trained_h, lm_head, b, device=args.device, micro_batch=2)
