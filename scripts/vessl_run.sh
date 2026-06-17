@@ -45,6 +45,9 @@ python -m pip install -q --upgrade pip
 python -m pip install -q "transformers>=5.0" huggingface_hub tokenizers sentencepiece \
     einops "datasets>=3.3.0" accelerate pytest
 python -c "import triton" 2>/dev/null || python -m pip install -q triton
+# Hopper (H100) + Triton>=3.4 miscomputes FLA's gated-delta chunk BACKWARD (fla issue #640); fla
+# raises and requires the tilelang backend for it. Needed for GDN router TRAINING on H100.
+python -c "import tilelang" 2>/dev/null || python -m pip install -q "tilelang>=0.1.9"
 # GDN uses ONLY this repo's fla Triton ops -> mamba_ssm / causal-conv1d are NOT needed.
 # For a mamba2 backbone, also build them against the container torch (uncomment):
 #   python -m pip install -q ninja packaging setuptools wheel
