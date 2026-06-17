@@ -139,3 +139,76 @@ def make_text_passkey(
         ids_t[i, :len(ids)] = torch.tensor(ids, dtype=torch.long)
         lab_t[i, :len(lab)] = torch.tensor(lab, dtype=torch.long)
     return {"input_ids": ids_t, "labels": lab_t}
+
+
+# A small pool of distinct nouns used as named keys for the multi-key task.
+_KEY_WORDS = [
+    "garden", "river", "mountain", "engine", "harbor", "lantern", "compass", "meadow",
+    "anchor", "falcon", "willow", "cavern", "beacon", "thistle", "marble", "ember",
+]
+
+
+def make_text_multikey(
+    tokenizer,
+    num_examples: int = 64,
+    seq_len: int = 4096,
+    num_keys: int = 8,
+    value_digits: int = 4,
+    seed: int = 0,
+) -> dict[str, torch.Tensor]:
+    """Real-text MULTI-KEY recall — harder than the single passkey (has distractors).
+
+    ``num_keys`` distinct *named* facts ("The <word> code is <number>.") are scattered at random
+    depths through natural-language filler; the prompt then asks for ONE of them ("What is the
+    <word> code? The <word> code is <number>"). The model must retrieve the queried key's value
+    while ignoring the other num_keys-1 distractor facts — the recall-with-interference setting MC
+    routing is meant to win. In-distribution (real words/sentences, the backbone's tokenizer),
+    long-context, right-padded. Scored as next-token over the answer digits (like make_text_passkey).
+    """
+    g = torch.Generator().manual_seed(seed)
+    pre_ids = tokenizer("Several codes are hidden in the text below. Remember them all.\n\n",
+                        add_special_tokens=False).input_ids
+    filler_ids = tokenizer(_FILLER, add_special_tokens=False).input_ids
+    pad_id = tokenizer.eos_token_id or 0
+    lo, hi = 10 ** (value_digits - 1), 10 ** value_digits - 1
+
+    rows, labels, lens = [], [], []
+    for _ in range(num_examples):
+        # pick num_keys distinct words + a value each
+        perm = torch.randperm(len(_KEY_WORDS), generator=g)[:num_keys].tolist()
+        words = [_KEY_WORDS[i] for i in perm]
+        vals = [int(torch.randint(lo, hi + 1, (1,), generator=g).item()) for _ in words]
+        facts = [tokenizer(f" The {w} code is {v}.", add_special_tokens=False).input_ids
+                 for w, v in zip(words, vals)]
+        qi = int(torch.randint(0, num_keys, (1,), generator=g).item())  # which key is queried
+        q_ids = tokenizer(f"\n\nWhat is the {words[qi]} code? The {words[qi]} code is",
+                          add_special_tokens=False).input_ids
+        ans_ids = tokenizer(f" {vals[qi]}", add_special_tokens=False).input_ids
+
+        budget = seq_len - len(pre_ids) - sum(len(f) for f in facts) - len(q_ids) - len(ans_ids)
+        if budget < len(filler_ids):
+            raise ValueError(f"seq_len={seq_len} too short for {num_keys} keys")
+        # scatter the facts at random depths through the filler
+        reps = budget // len(filler_ids)
+        hay = filler_ids * reps
+        cuts = sorted(int(torch.rand(1, generator=g).item() * len(hay)) for _ in facts)
+        ids = list(pre_ids)
+        prev = 0
+        for c, fact in zip(cuts, facts):
+            ids += hay[prev:c] + fact
+            prev = c
+        ids += hay[prev:] + q_ids + ans_ids
+
+        lab = [IGNORE] * len(ids)
+        a0 = len(ids) - len(ans_ids)
+        for j in range(len(ans_ids)):
+            lab[a0 + j - 1] = ids[a0 + j]
+        rows.append(ids); labels.append(lab); lens.append(len(ids))
+
+    maxlen = max(lens)
+    ids_t = torch.full((num_examples, maxlen), pad_id, dtype=torch.long)
+    lab_t = torch.full((num_examples, maxlen), IGNORE, dtype=torch.long)
+    for i, (ids, lab) in enumerate(zip(rows, labels)):
+        ids_t[i, :len(ids)] = torch.tensor(ids, dtype=torch.long)
+        lab_t[i, :len(lab)] = torch.tensor(lab, dtype=torch.long)
+    return {"input_ids": ids_t, "labels": lab_t}
