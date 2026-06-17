@@ -69,14 +69,24 @@ class GDNAdapter(Adapter):
         return _GDNProj(q, k, v, beta, g, out_gate)
 
     def scan(self, mixer, proj, initial_state, backend, *, memory_only):
-        from fla.ops.gated_delta_rule import chunk_gated_delta_rule
         v = torch.zeros_like(proj.v) if memory_only else proj.v
-        o, final_state = chunk_gated_delta_rule(
+        kw = dict(
             q=proj.q, k=proj.k, v=v, g=proj.g, beta=proj.beta,
             initial_state=initial_state, output_final_state=True,
             use_qk_l2norm_in_kernel=True, use_gate_in_kernel=True,
             A_log=mixer.A_log, dt_bias=mixer.dt_bias,
         )
+        # The chunk BACKWARD kernel is blocked on both our targets: A100 OOMs its shared memory
+        # (head_dim=256 -> 225KB > 167KB), and Hopper+Triton>=3.4 miscomputes it (fla #640, needs
+        # tilelang — which fails to import here). The fused_recurrent path has its own fwd/bwd
+        # kernels (no chunk_bwd_dqkwg), uses little shared memory, and is correct on both. So route
+        # TRAINING (grad enabled) through fused_recurrent; keep chunk for fast no-grad forward/eval.
+        if torch.is_grad_enabled():
+            from fla.ops.gated_delta_rule import fused_recurrent_gated_delta_rule
+            o, final_state = fused_recurrent_gated_delta_rule(**kw)
+        else:
+            from fla.ops.gated_delta_rule import chunk_gated_delta_rule
+            o, final_state = chunk_gated_delta_rule(**kw)
         return o, final_state
 
     def descriptor(self, state):
