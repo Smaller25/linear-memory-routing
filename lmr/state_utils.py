@@ -28,6 +28,19 @@ def meanpool_state(state: torch.Tensor) -> torch.Tensor:
     return state.mean(dim=2).reshape(b, h * n)
 
 
+def gdn_meanpool_state(state: torch.Tensor) -> torch.Tensor:
+    """Mean-pool a Gated-DeltaNet checkpoint ``[b, hv, k, v]`` to a descriptor ``[b, hv*k]``.
+
+    The GDN read-out ``o_t = q_t @ S_t`` contracts the key axis (``k``), so -- by analogy with
+    :func:`meanpool_state` pooling Mamba2's ``head_dim`` -- this pools over the value axis (``v``),
+    leaving a ``(num_v_heads, head_k_dim)`` summary flattened to a vector for GRM/SSC/MoM/AoM.
+    """
+    if state.dim() != 4:
+        raise ValueError(f"expected state of shape [b, hv, k, v], got {tuple(state.shape)}")
+    b, hv, k, _v = state.shape
+    return state.mean(dim=3).reshape(b, hv * k)
+
+
 def stack_checkpoints(checkpoints: list[torch.Tensor]) -> torch.Tensor:
     """Stack a list of ``i`` checkpoints ``[b, h, p, n]`` into ``[b, i, h, p, n]``."""
     return torch.stack(checkpoints, dim=1)

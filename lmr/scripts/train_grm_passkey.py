@@ -3,19 +3,21 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-"""Phase 1: train a GRM/SSC read-out head on the in-distribution passkey (backbone frozen).
+"""Phase 1+: train a Memory-Caching read-out head (backbone frozen) on the passkey.
 
-Phase-0b showed training-free RM destroys recall on a frozen mamba2 (it sums every cached
-checkpoint blindly). This trains ONLY the per-layer read-out head (``W_u`` / router; the 1.3B
-backbone is frozen) on the natural-language passkey so the head learns *which* cached segment to
-surface for the query. Training uses multi-segment sequences (``train_len > chunk_size``) so the
-cache is non-empty and the head actually receives gradient — unlike single-segment MQAR.
+Phase-0b showed training-free RM destroys recall on a frozen backbone (it sums every cached
+checkpoint blindly). This trains ONLY the per-layer read-out head (the 1.3B backbone is frozen) on
+the natural-language passkey so the head learns *which* cached segment to surface for the query.
+Training uses multi-segment sequences (``train_len > chunk_size``) so the cache is non-empty and the
+head actually receives gradient.
 
-After training it evaluates vanilla vs +RM (training-free) vs +trained-head on held-out passkeys
-across lengths, so the three sit in one table.
+Works for both backbones via ``--arch {mamba2,gdn}`` and any trained head via
+``--variant {grm,ssc,mom,aom}``; all trained heads default to low-rank routers (``--low-rank-dim``).
 
-    python -m lmr.scripts.train_grm_passkey --variant grm --train-len 1024 --steps 300 \
-        --batch 8 --eval-lengths 512 1024 2048 4096
+After training it evaluates vanilla vs +RM (training-free) vs +trained-head on held-out passkeys.
+
+    python -m lmr.scripts.train_grm_passkey --arch gdn --variant ssc --train-len 1024 --steps 300 \
+        --batch 8 --low-rank-dim 64 --eval-lengths 512 1024 2048 4096
 """
 
 from __future__ import annotations
@@ -25,62 +27,79 @@ import argparse
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from transformers import AutoTokenizer
 
-from lmr.converter import load_fla_mamba2
+from lmr.adapters import descriptor_dim_for, get_adapter
+from lmr.loaders import load_backbone
 from lmr.readout import ResidualMemory, build_readout
 from lmr.scripts.eval_recall import score_hidden
 from lmr.segment_runner import run_segmented_lm
 from lmr.tasks import make_text_passkey
 
-TOKENIZER = "EleutherAI/gpt-neox-20b"
 IGNORE = -100
 
 
-def build_heads(model, variant, topk):
+def build_heads(model, arch, variant, topk, num_slots, low_rank_dim):
     cfg = model.config
-    descriptor_dim = cfg.num_heads * cfg.state_size
+    dd = descriptor_dim_for(model, arch)
+    kw = {"low_rank_dim": low_rank_dim}
+    if variant == "ssc":
+        kw["topk"] = topk
+    if variant == "mom":
+        kw["num_slots"] = num_slots
     return nn.ModuleList([
-        build_readout(variant, cfg.hidden_size, descriptor_dim,
-                      **({"topk": topk} if variant == "ssc" else {}))
-        for _ in model.backbone.layers
+        build_readout(variant, cfg.hidden_size, dd, **kw)
+        for _ in get_adapter(arch).blocks(model)
     ])
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--variant", choices=["grm", "ssc"], default="grm")
-    ap.add_argument("--repo", default="state-spaces/mamba2-1.3b")
-    ap.add_argument("--tokenizer", default=TOKENIZER)
+    ap.add_argument("--arch", choices=["mamba2", "gdn"], default="mamba2")
+    ap.add_argument("--variant", choices=["grm", "ssc", "mom", "aom"], default="grm")
+    ap.add_argument("--model", "--repo", dest="repo", default=None,
+                    help="backbone repo; defaults per --arch")
+    ap.add_argument("--tokenizer", default=None, help="mamba2 only; gdn ships its own")
     ap.add_argument("--chunk-size", type=int, default=256)
     ap.add_argument("--train-len", type=int, default=1024)
     ap.add_argument("--batch", type=int, default=8)
     ap.add_argument("--steps", type=int, default=300)
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--topk", type=int, default=2)
+    ap.add_argument("--num-slots", type=int, default=4)
+    ap.add_argument("--low-rank-dim", type=int, default=64,
+                    help="low-rank router dim; pass 0 for a full-rank router")
+    ap.add_argument("--hierarchical-k", type=int, default=None)
     ap.add_argument("--eval-lengths", type=int, nargs="+", default=[512, 1024, 2048, 4096])
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--out", default="heads.pt")
     args = ap.parse_args()
+    low_rank_dim = None if not args.low_rank_dim else args.low_rank_dim
 
-    tok = AutoTokenizer.from_pretrained(args.tokenizer)
-    model = load_fla_mamba2(args.repo, device=args.device, dtype=torch.float32)
+    model, tok = load_backbone(args.arch, repo=args.repo, tokenizer=args.tokenizer,
+                               device=args.device, dtype=torch.float32)
     model.requires_grad_(False)
     backend = "cuda" if args.device.startswith("cuda") else "naive"
+    adapter = get_adapter(args.arch)
 
-    heads = build_heads(model, args.variant, args.topk).to(args.device)
+    heads = build_heads(model, args.arch, args.variant, args.topk, args.num_slots, low_rank_dim)
+    heads = heads.to(args.device)
     opt = torch.optim.AdamW([p for p in heads.parameters() if p.requires_grad], lr=args.lr)
     n_params = sum(p.numel() for p in heads.parameters() if p.requires_grad)
-    print(f"[train] variant={args.variant} trainable head params={n_params:,} "
-          f"train_len={args.train_len} chunk={args.chunk_size} "
+    print(f"[train] arch={args.arch} variant={args.variant} low_rank_dim={low_rank_dim} "
+          f"trainable head params={n_params:,} train_len={args.train_len} chunk={args.chunk_size} "
           f"segments={-(-args.train_len // args.chunk_size)}")
+
+    def run(ids, hds, return_hidden=False):
+        return run_segmented_lm(model, ids, hds, args.chunk_size, backend=backend,
+                                return_hidden=return_hidden, arch=args.arch,
+                                hierarchical_k=args.hierarchical_k)
 
     heads.train()
     for step in range(args.steps):
         batch = make_text_passkey(tok, num_examples=args.batch, seq_len=args.train_len, seed=step)
         ids = batch["input_ids"].to(args.device)
         labels = batch["labels"].to(args.device)
-        logits, aux = run_segmented_lm(model, ids, heads, args.chunk_size, backend=backend)
+        logits, aux = run(ids, heads)
         loss = F.cross_entropy(logits.flatten(0, 1), labels.flatten(), ignore_index=IGNORE) + aux
         opt.zero_grad(); loss.backward(); opt.step()
         if step % 25 == 0 or step == args.steps - 1:
@@ -93,19 +112,18 @@ def main():
     print(f"[train] saved heads -> {args.out}")
 
     # ---- eval: vanilla vs +RM (training-free) vs +trained head, on held-out passkeys ----
-    # Memory-light (score_hidden: lm_head only at labelled positions) so 8k+ doesn't OOM.
     heads.eval()
-    rm_heads = [ResidualMemory() for _ in model.backbone.layers]
-    lm_head = model.lm_head
+    rm_heads = [ResidualMemory() for _ in adapter.blocks(model)]
+    lm_head = adapter.lm_head(model)
 
     def vanilla_h(x):
-        return model.backbone(x).last_hidden_state
+        return adapter.vanilla_hidden(model, x)
 
     def rm_h(x):
-        return run_segmented_lm(model, x, rm_heads, args.chunk_size, backend=backend, return_hidden=True)[0]
+        return run(x, rm_heads, return_hidden=True)[0]
 
     def trained_h(x):
-        return run_segmented_lm(model, x, heads, args.chunk_size, backend=backend, return_hidden=True)[0]
+        return run(x, heads, return_hidden=True)[0]
 
     print(f"\n{'length':>8} | {'vanilla':>8} | {'+RM':>8} | {'+' + args.variant:>8} | {'Δ vs van':>9}")
     print("-" * 56)

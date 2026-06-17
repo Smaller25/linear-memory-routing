@@ -6,10 +6,11 @@
 """Memory-light long-context eval: vanilla vs +RM vs +trained head on the passkey.
 
 Uses :func:`lmr.scripts.eval_recall.score_hidden` (apply lm_head only at labelled positions) so it
-reaches 8k-16k without the full-vocab-logit OOM. Loads trained GRM/SSC heads from --heads.
+reaches 8k-16k without the full-vocab-logit OOM. Loads trained GRM/SSC/MoM/AoM heads from --heads.
+Works for both backbones via ``--arch {mamba2,gdn}``.
 
-    python -m lmr.scripts.eval_long --heads ckpt/grm_heads_1024.pt --variant grm \
-        --lengths 512 2048 4096 8192 --num-examples 32
+    python -m lmr.scripts.eval_long --arch gdn --heads ckpt/ssc_heads.pt --variant ssc \
+        --low-rank-dim 64 --lengths 512 2048 4096 8192 --num-examples 32
 """
 
 from __future__ import annotations
@@ -18,57 +19,69 @@ import argparse
 
 import torch
 import torch.nn as nn
-from transformers import AutoTokenizer
 
-from lmr.converter import load_fla_mamba2
+from lmr.adapters import descriptor_dim_for, get_adapter
+from lmr.loaders import load_backbone
 from lmr.readout import ResidualMemory, build_readout
 from lmr.scripts.eval_recall import score_hidden
 from lmr.segment_runner import run_segmented_lm
 from lmr.tasks import make_text_passkey
 
-TOKENIZER = "EleutherAI/gpt-neox-20b"
-
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--repo", default="state-spaces/mamba2-1.3b")
-    ap.add_argument("--tokenizer", default=TOKENIZER)
+    ap.add_argument("--arch", choices=["mamba2", "gdn"], default="mamba2")
+    ap.add_argument("--model", "--repo", dest="repo", default=None, help="backbone repo; defaults per --arch")
+    ap.add_argument("--tokenizer", default=None, help="mamba2 only; gdn ships its own")
     ap.add_argument("--heads", default=None, help="trained head state_dict (.pt); omit for RM-only")
-    ap.add_argument("--variant", choices=["grm", "ssc"], default="grm")
+    ap.add_argument("--variant", choices=["grm", "ssc", "mom", "aom"], default="grm")
     ap.add_argument("--chunk-size", type=int, default=256)
     ap.add_argument("--topk", type=int, default=2)
+    ap.add_argument("--num-slots", type=int, default=4)
+    ap.add_argument("--low-rank-dim", type=int, default=64, help="must match the trained head; 0 = full-rank")
+    ap.add_argument("--hierarchical-k", type=int, default=None)
     ap.add_argument("--lengths", type=int, nargs="+", default=[512, 2048, 4096, 8192])
     ap.add_argument("--num-examples", type=int, default=32)
     ap.add_argument("--micro-batch", type=int, default=2)
     ap.add_argument("--device", default="cuda")
     args = ap.parse_args()
+    low_rank_dim = None if not args.low_rank_dim else args.low_rank_dim
 
-    tok = AutoTokenizer.from_pretrained(args.tokenizer)
-    model = load_fla_mamba2(args.repo, device=args.device, dtype=torch.float32)
+    model, tok = load_backbone(args.arch, repo=args.repo, tokenizer=args.tokenizer,
+                               device=args.device, dtype=torch.float32)
     backend = "cuda" if args.device.startswith("cuda") else "naive"
-    lm_head = model.lm_head
+    adapter = get_adapter(args.arch)
+    lm_head = adapter.lm_head(model)
 
-    rm_heads = [ResidualMemory() for _ in model.backbone.layers]
+    rm_heads = [ResidualMemory() for _ in adapter.blocks(model)]
     trained = None
     if args.heads:
-        cfg = model.config
-        dd = cfg.num_heads * cfg.state_size
+        dd = descriptor_dim_for(model, args.arch)
+        kw = {"low_rank_dim": low_rank_dim}
+        if args.variant == "ssc":
+            kw["topk"] = args.topk
+        if args.variant == "mom":
+            kw["num_slots"] = args.num_slots
         trained = nn.ModuleList([
-            build_readout(args.variant, cfg.hidden_size, dd,
-                          **({"topk": args.topk} if args.variant == "ssc" else {}))
-            for _ in model.backbone.layers
+            build_readout(args.variant, model.config.hidden_size, dd, **kw)
+            for _ in adapter.blocks(model)
         ]).to(args.device)
         trained.load_state_dict(torch.load(args.heads, map_location=args.device))
         trained.eval()
 
+    def run(x, hds):
+        return run_segmented_lm(model, x, hds, args.chunk_size, backend=backend,
+                                return_hidden=True, arch=args.arch,
+                                hierarchical_k=args.hierarchical_k)[0]
+
     def van_hidden(x):
-        return model.backbone(x).last_hidden_state
+        return adapter.vanilla_hidden(model, x)
 
     def rm_hidden(x):
-        return run_segmented_lm(model, x, rm_heads, args.chunk_size, backend=backend, return_hidden=True)[0]
+        return run(x, rm_heads)
 
     def tr_hidden(x):
-        return run_segmented_lm(model, x, trained, args.chunk_size, backend=backend, return_hidden=True)[0]
+        return run(x, trained)
 
     cols = ["vanilla", "+RM"] + (["+" + args.variant] if trained else [])
     head = " | ".join(f"{c:>8}" for c in cols)

@@ -19,6 +19,7 @@ underlying numerics separately in ``test_ssd_scan.py`` (scan linearity) and ``te
 import pytest
 import torch
 
+from lmr.adapters import get_adapter
 from lmr.readout import ResidualMemory
 from lmr.segment_runner import run_mixer_with_cache, run_segmented_lm
 
@@ -50,7 +51,8 @@ def test_single_segment_mixer_matches_fla():
     mixer = model.backbone.layers[0].mixer
     x = torch.randn(2, 8, mixer.in_proj.in_features, dtype=torch.float32, device="cuda")
 
-    out, final_state, aux = run_mixer_with_cache(mixer, x, [], ResidualMemory(), backend="cuda")
+    out, final_state, aux = run_mixer_with_cache(get_adapter("mamba2"), mixer, x, [],
+                                                 ResidualMemory(), backend="cuda")
     ref, _, _ = mixer(x, use_cache=False)
 
     assert aux is None
