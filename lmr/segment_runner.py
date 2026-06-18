@@ -51,8 +51,29 @@ def checkpoint_list(fine_states: list[torch.Tensor], hierarchical_k: int | None)
     return coarse + tail
 
 
+def bounded_checkpoints(fine_states: list[torch.Tensor], cap: int | None,
+                        evict: str = "uniform") -> list[torch.Tensor]:
+    """Cap the checkpoints the read-out sees to a constant ``cap`` (bounded memory / O(N·cap) read).
+
+    - ``evict='uniform'``: keep ``cap`` evenly-spaced snapshots (coverage across depth — the needle
+      can sit anywhere, so spread retention beats recency).
+    - ``evict='recent'``: keep the last ``cap`` (most recent).
+    - ``evict='first'``: keep the earliest ``cap``.
+    """
+    n = len(fine_states)
+    if not cap or n <= cap:
+        return fine_states
+    if evict == "recent":
+        return fine_states[-cap:]
+    if evict == "first":
+        return fine_states[:cap]
+    idx = [round(i * (n - 1) / (cap - 1)) for i in range(cap)]   # uniform incl. endpoints
+    return [fine_states[i] for i in idx]
+
+
 def run_segmented_lm(model, input_ids, readouts, chunk_size, backend="naive",
-                     return_hidden=False, arch="mamba2", hierarchical_k=None):
+                     return_hidden=False, arch="mamba2", hierarchical_k=None,
+                     cache_cap=None, evict="uniform"):
     """Run a frozen linear-recurrent causal LM segment-by-segment with Memory Caching.
 
     ``readouts``: one read-out head per recurrent layer (e.g. a ``ModuleList``); RM heads are
@@ -80,6 +101,8 @@ def run_segmented_lm(model, input_ids, readouts, chunk_size, backend="naive",
         new_finals = []
         for li, block in enumerate(blocks):
             cached = checkpoint_list(fine[li], hierarchical_k)
+            if cache_cap:
+                cached = bounded_checkpoints(cached, cache_cap, evict)
             hidden, final_state, aux = adapter.run_block(block, hidden, cached, readouts[li], backend)
             new_finals.append(final_state.detach())
             if aux is not None:

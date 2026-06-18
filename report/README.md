@@ -22,6 +22,10 @@ router instead of retraining a 1.3–2.7B model.
 - **Multi-key recall (MQAR-style):** SSC does not help — where vanilla is competent, segmenting hurts;
   where it's hard, both floor. Segment-level routing can't disambiguate keys clustered in a segment;
   this is the *interference* regime (MoM's domain), not the *saturation* regime (0010).
+- **Not constant-memory:** the win needs ~all O(N) segment snapshots; capping the cache to a constant
+  B degrades recall ∝ B/N (an evicted needle is unrecoverable). Top-k cuts the *read* to O(N·k) but
+  the cache stays O(N) — SSC is a compressed-cache point on the RNN↔attention spectrum, not a
+  constant-memory linear model (0011).
 
 ## Reports
 | # | topic | result |
@@ -36,6 +40,7 @@ router instead of retraining a 1.3–2.7B model.
 | 0008 | mechanism comparison | only SSC generalizes; AoM/MoM/hier collapse |
 | 0009 | top-k sweep + **RULER** | k∈[2,8] robust; **SSC zero-shot transfers to RULER niah_single** |
 | 0010 | multi-key | SSC's win is scoped to single-needle (multi-key = out of scope) |
+| 0011 | bounded cache | SSC's win needs ~full O(N) cache; capping degrades ∝ B/N → NOT constant-memory |
 
 ## Future work
 - **MoCM (Mixture of Cached Memories)** — combine MoM's *parallel* memory axis with MC's *temporal*
