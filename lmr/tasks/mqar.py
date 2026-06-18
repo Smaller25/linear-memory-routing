@@ -3,19 +3,21 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-"""Self-contained Multi-Query Associative Recall (MQAR) generator.
+"""Self-contained Multi-Query Associative Recall (MQAR) generator — Zoology-faithful.
 
-Token-level, tokenizer-free synthetic recall task (Zoology-style). Each example lays out a
-context of distinct key->value pairs, then a series of query keys; the target is each queried
-key's value, scored as next-token prediction at the query-key position.
+Token-level synthetic recall (Arora, Eyuboglu et al., "Zoology"). A context of distinct key→value
+pairs is followed by **single query keys** scattered through random filler at **power-law** gaps; the
+value is the **label only** (next-token target at the position after the query key) — it is NOT placed
+in the input. Non-query slots are random tokens. This is the standard MQAR protocol (the format
+small linear models are trained on from scratch); keys/values occupy disjoint vocab halves.
 
-Keys and values occupy disjoint halves of the vocab so they can't be confused. Returns a dict
-of ``input_ids`` ``[N, L]`` and ``labels`` ``[N, L]`` (``-100`` everywhere except the query-key
-positions, where the label is the value to predict).
+Returns ``input_ids`` ``[N, L]`` and ``labels`` ``[N, L]`` (``-100`` except answer positions).
+Re-implements ``zoology.data.multiquery_ar`` standalone (no zoology/wandb deps).
 """
 
 from __future__ import annotations
 
+import numpy as np
 import torch
 
 IGNORE = -100
@@ -25,33 +27,46 @@ def make_mqar(
     num_examples: int = 512,
     vocab_size: int = 8192,
     num_kv_pairs: int = 64,
-    num_queries: int | None = None,
+    input_seq_len: int | None = None,
+    power_a: float = 0.01,
+    random_non_queries: bool = True,
     seed: int = 0,
 ) -> dict[str, torch.Tensor]:
-    if num_queries is None:
-        num_queries = num_kv_pairs
-    g = torch.Generator().manual_seed(seed)
+    """Standard MQAR. ``input_seq_len`` defaults to ``4*num_kv_pairs`` (min context+queries)."""
+    if input_seq_len is None:
+        input_seq_len = max(256, 4 * num_kv_pairs)
+    assert input_seq_len % 2 == 0 and vocab_size > input_seq_len
+    assert 4 * num_kv_pairs <= input_seq_len, "input_seq_len too short for num_kv_pairs"
+    rng = np.random.default_rng(seed)
+
+    context_size = num_kv_pairs * 2
     half = vocab_size // 2
-    key_lo, val_lo = 1, half  # reserve 0 as a separator/pad
+    key_choices = np.arange(1, half)
+    value_choices = np.arange(half, vocab_size)
 
-    seqs, labels = [], []
-    for _ in range(num_examples):
-        keys = torch.randperm(half - 1, generator=g)[:num_kv_pairs] + key_lo
-        vals = torch.randint(0, half, (num_kv_pairs,), generator=g) + val_lo
+    # unique keys & values per example
+    keys = np.stack([rng.choice(key_choices, size=num_kv_pairs, replace=False) for _ in range(num_examples)])
+    values = np.stack([rng.choice(value_choices, size=num_kv_pairs, replace=False) for _ in range(num_examples)])
+    kvs = np.zeros((num_examples, context_size), dtype=np.int64)
+    kvs[:, 0::2] = keys
+    kvs[:, 1::2] = values
 
-        ctx = torch.stack([keys, vals], dim=1).reshape(-1)  # k1 v1 k2 v2 ...
+    # power-law gap placement of queries in the post-context region
+    space = (input_seq_len - context_size) // 2
+    p = power_a * np.arange(1, space + 1) ** (power_a - 1)
+    p = p / p.sum()
+    gaps = np.stack([rng.choice(space, size=num_kv_pairs, replace=False, p=p) for _ in range(num_examples)])
 
-        q_idx = torch.randint(0, num_kv_pairs, (num_queries,), generator=g)
-        q_keys, q_vals = keys[q_idx], vals[q_idx]
-        # query layout: [query_key, value] pairs; predict value at the key position.
-        q_block = torch.stack([q_keys, q_vals], dim=1).reshape(-1)
+    queries = np.zeros((num_examples, input_seq_len - context_size + 1), dtype=np.int64)
+    np.put_along_axis(queries, gaps * 2, values=keys, axis=1)
+    examples = np.concatenate([kvs, queries], axis=1)
 
-        ids = torch.cat([ctx, q_block])
-        lab = torch.full_like(ids, IGNORE)
-        # query-key positions are at offset len(ctx), every other token.
-        key_positions = len(ctx) + torch.arange(0, 2 * num_queries, 2)
-        lab[key_positions] = q_vals
-        seqs.append(ids)
-        labels.append(lab)
+    labels = np.full((num_examples, input_seq_len + 1), IGNORE, dtype=np.int64)
+    np.put_along_axis(labels, gaps * 2 + context_size + 1, values=values, axis=1)
 
-    return {"input_ids": torch.stack(seqs), "labels": torch.stack(labels)}
+    inputs = torch.tensor(examples[:, :-1])
+    labels = torch.tensor(labels[:, 1:])
+    if random_non_queries:
+        rand = torch.randint(vocab_size, size=inputs.shape)
+        inputs[inputs == 0] = rand[inputs == 0]
+    return {"input_ids": inputs, "labels": labels}
