@@ -107,11 +107,11 @@ if [ "$WITH_TILELANG" = "1" ]; then
     fi
   fi
 else
-  echo "  SKIPPED on '$GPU' / py$PYVER."
+  echo "  SKIPPED on '$GPU' (py$PYVER)."
   if [ "$GPU" = "blackwell" ]; then
-    echo "     tilelang crashes on import under py3.13 (TVM-FFI). GDN router TRAINING needs"
-    echo "     head_dim=256 chunk-backward, which is kernel-blocked without it — GDN here is"
-    echo "     forward/eval-only for now. (Set WITH_TILELANG=1 to force-attempt.)"
+    echo "     Only GDN router TRAINING (head_dim=256 chunk-backward) needs tilelang, and the"
+    echo "     latest tilelang crashes on import under py3.1x (TVM-FFI). GDN here is forward/"
+    echo "     eval-only for now. (Set WITH_TILELANG=1 to force-attempt.)"
   fi
 fi
 
