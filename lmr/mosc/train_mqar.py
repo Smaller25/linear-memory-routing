@@ -1,0 +1,114 @@
+# Copyright (c) 2023-2026, Songlin Yang, Yu Zhang, Zhiyuan Li
+#
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
+
+"""From-scratch MQAR trainer for the Dynamic-MoSC track (GDN2 backbone).
+
+Models:
+  --model gdn2  : the vanilla GDN2 backbone (baseline / Phase-0 ``vanilla``).
+  --model mosc  : Dynamic-MoSC (--chunk-mode fixed|oracle|surprisal, --num-pools, --topk).
+
+Phase-0 kill-test (segment-level routing under the BEST case): compare ``vanilla`` vs
+``mosc --chunk-mode oracle`` on multi-key MQAR. If oracle boundaries don't beat vanilla, segment-
+level routing is dead (pivot to consolidation). Run via Slurm:
+
+    sbatch scripts/sh_slurm_run.sh python -m lmr.mosc.train_mqar \
+        --model mosc --chunk-mode oracle --train-kv 16 32 --eval-kv 16 32 64 --steps 3000
+
+GOTCHA: MQAR has a delayed phase transition (~2000 steps) — loss sits at random (~ln(vocab/2)) then
+drops sharply. Run >= 3000 steps; earlier <=1500-step runs look "stuck" but aren't (report README).
+"""
+
+from __future__ import annotations
+
+import argparse
+
+import torch
+import torch.nn.functional as F
+
+from lmr.mosc.backbone import GDN2LM
+from lmr.mosc.dynamic_chunk import mqar_key_positions
+from lmr.mosc.mosc_model import DynamicMoSC
+from lmr.tasks.mqar import make_mqar
+
+IGNORE = -100
+
+
+def build_model(args, vocab):
+    if args.model == "gdn2":
+        return GDN2LM(vocab, d_model=args.d_model, n_layers=args.n_layers,
+                      head_dim=args.head_dim, num_heads=args.num_heads)
+    return DynamicMoSC(vocab, d_model=args.d_model, n_layers=args.n_layers,
+                       head_dim=args.head_dim, num_heads=args.num_heads,
+                       chunk_mode=args.chunk_mode, chunk=args.chunk,
+                       num_pools=args.num_pools, topk=args.topk)
+
+
+def run_model(model, ids, labels, is_mosc):
+    if is_mosc and model.chunk_mode == "oracle":
+        return model(ids, oracle_positions=mqar_key_positions(ids, labels))
+    return model(ids)
+
+
+@torch.no_grad()
+def recall_acc(model, k, vocab, device, is_mosc, seq_len=None, n=256):
+    batch = make_mqar(num_examples=n, vocab_size=vocab, num_kv_pairs=k,
+                      input_seq_len=seq_len, seed=10_000 + k)
+    ids, labels = batch["input_ids"].to(device), batch["labels"].to(device)
+    correct = total = 0
+    for i in range(0, n, 64):
+        logits = run_model(model, ids[i:i + 64], labels[i:i + 64], is_mosc)
+        pred = logits.argmax(-1)
+        m = labels[i:i + 64] != IGNORE
+        correct += (pred[m] == labels[i:i + 64][m]).sum().item()
+        total += m.sum().item()
+    return correct / max(total, 1)
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--model", choices=["gdn2", "mosc"], default="gdn2")
+    ap.add_argument("--chunk-mode", choices=["fixed", "oracle", "surprisal"], default="fixed")
+    ap.add_argument("--chunk", type=int, default=64)
+    ap.add_argument("--num-pools", type=int, default=1)
+    ap.add_argument("--topk", type=int, default=4)
+    ap.add_argument("--train-kv", type=int, nargs="+", default=[16, 32])
+    ap.add_argument("--eval-kv", type=int, nargs="+", default=[16, 32, 64])
+    ap.add_argument("--seq-len", type=int, default=None)
+    ap.add_argument("--vocab", type=int, default=8192)
+    ap.add_argument("--d-model", type=int, default=128)
+    ap.add_argument("--n-layers", type=int, default=2)
+    ap.add_argument("--head-dim", type=int, default=64)
+    ap.add_argument("--num-heads", type=int, default=2)
+    ap.add_argument("--steps", type=int, default=3000)
+    ap.add_argument("--batch", type=int, default=64)
+    ap.add_argument("--lr", type=float, default=3e-4)
+    args = ap.parse_args()
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    is_mosc = args.model == "mosc"
+    model = build_model(args, args.vocab).to(device).train()
+    opt = torch.optim.AdamW(model.parameters(), lr=args.lr)
+    print(f"model={args.model} chunk={args.chunk_mode} pools={args.num_pools} "
+          f"params={sum(p.numel() for p in model.parameters())/1e6:.2f}M | device={device}")
+
+    for step in range(1, args.steps + 1):
+        k = args.train_kv[step % len(args.train_kv)]
+        batch = make_mqar(num_examples=args.batch, vocab_size=args.vocab, num_kv_pairs=k,
+                          input_seq_len=args.seq_len, seed=step)
+        ids, labels = batch["input_ids"].to(device), batch["labels"].to(device)
+        logits = run_model(model, ids, labels, is_mosc)
+        loss = F.cross_entropy(logits.reshape(-1, args.vocab), labels.reshape(-1), ignore_index=IGNORE)
+        opt.zero_grad(); loss.backward(); opt.step()
+        if step % 250 == 0 or step == 1:
+            print(f"[train] step {step:5d}  loss {loss.item():.4f}")
+
+    print("=== recall accuracy (vs #kv pairs) ===")
+    model.eval()
+    for k in args.eval_kv:
+        print(f"  kv={k:4d}  acc={recall_acc(model, k, args.vocab, device, is_mosc, args.seq_len):.3f}")
+
+
+if __name__ == "__main__":
+    main()
