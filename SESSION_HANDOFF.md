@@ -37,9 +37,18 @@ frozen model **exceed its fixed-state recall where the state saturates** (long-c
 - **Dense/merge read-outs fail** (AoM, MoM-slot-merge, hierarchical) — only hard top-k generalizes.
 
 ## 4. Environment & how to run (resume checklist)
-Env: NVIDIA torch container (torch 2.9.1+cu128), **transformers 5.12**, **fla = the in-repo `fla/`**
-(use `PYTHONPATH=.`; do NOT pip-install a different fla), `mamba_ssm`/`causal_conv1d` `.post1`
-source-built, `tilelang 0.1.8` (A100 only — see gotchas), `datasets`, `tokenizers`, `sentencepiece`.
+**One-shot, GPU-aware setup: `bash scripts/setup_env.sh`** — auto-detects the GPU (sm_80 A100 /
+sm_90 H100 / sm_120 Blackwell = RTX PRO 6000) and installs the right deps, branching only where the
+hardware actually differs: `TORCH_CUDA_ARCH_LIST` for source builds, and tilelang on/off (A100/H100
+yes; Blackwell+py3.13 skipped — tilelang crashes on import there). `vessl_run.sh` now calls it.
+Knobs: `GPU=a100|h100|blackwell` (force target), `BACKBONE=mamba2` (also source-build the mamba
+CUDA kernels), `WITH_TILELANG=1` (force-attempt). The cu128 torch wheel covers all three arches.
+
+Underlying env (what the script installs): torch 2.9.1+cu128, **transformers 5.12**, **fla = the
+in-repo `fla/`** (use `PYTHONPATH=.`; do NOT pip-install a different fla), `mamba_ssm`/`causal_conv1d`
+`.post1` source-built (only for a mamba2 backbone), `tilelang 0.1.9` (A100/H100 only — see gotchas),
+`datasets`, `tokenizers`, `sentencepiece`. The validated runs were on A100 (py3.10); the current box
+is 2× RTX PRO 6000 Blackwell (96GB, sm_120, py3.13) — GDN here is forward/eval-only (tilelang gap).
 Always run from repo root with `PYTHONPATH=. PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`.
 
 Core commands (mamba2 = gpt-neox tok; GDN = Mistral tok, auto):

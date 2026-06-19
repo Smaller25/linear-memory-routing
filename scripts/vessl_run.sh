@@ -40,20 +40,12 @@ else
 fi
 echo "  HEAD: $(git log --oneline -1)"
 
-echo "=== [1] Python deps (the 'slim' container ships torch only) ==="
-python -m pip install -q --upgrade pip
-python -m pip install -q "transformers>=5.0" huggingface_hub tokenizers sentencepiece \
-    einops "datasets>=3.3.0" accelerate pytest
-python -c "import triton" 2>/dev/null || python -m pip install -q triton
-# Hopper (H100) + Triton>=3.4 miscomputes FLA's gated-delta chunk BACKWARD (fla issue #640); fla
-# dispatches that kernel to the tilelang backend instead. Needed for GDN router TRAINING on H100.
-# Pin 0.1.9 (fla's minimum): the latest tilelang crashes on import here with a TVM-FFI
-# double-registration ("__ffi_repr__ already registered for type index 130").
-python -c "import tilelang" 2>/dev/null || python -m pip install -q "tilelang==0.1.9"
-# GDN uses ONLY this repo's fla Triton ops -> mamba_ssm / causal-conv1d are NOT needed.
-# For a mamba2 backbone, also build them against the container torch (uncomment):
-#   python -m pip install -q ninja packaging setuptools wheel
-#   MAX_JOBS=8 python -m pip install -q --no-build-isolation causal-conv1d mamba-ssm
+echo "=== [1] Python deps (GPU-aware; delegated to scripts/setup_env.sh) ==="
+# All dependency logic lives in setup_env.sh, which branches on the detected GPU (A100/H100/
+# Blackwell). On this H100 container it auto-enables tilelang (needed for GDN router TRAINING:
+# Hopper+Triton>=3.4 miscomputes FLA's gated-delta chunk BACKWARD, fla #640, so fla dispatches
+# to the tilelang backend). Set BACKBONE=mamba2 to also source-build mamba_ssm/causal_conv1d.
+BACKBONE="${BACKBONE:-gdn}" bash scripts/setup_env.sh
 
 # Optional HF auth (the GDN ckpt ships no tokenizer; loader falls back to the Mistral tokenizer,
 # which may be gated — set HF_TOKEN as a VESSL secret if the download 403s).
