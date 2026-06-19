@@ -32,6 +32,9 @@ SH_RECREATE="${SH_RECREATE:-0}"
 echo "=== [conda] bring up '$SH_ENV' (python $SH_PY) ==="
 # make `conda activate` work inside this non-interactive shell
 CONDA_BASE="$(conda info --base)"
+# disable nounset around conda machinery: activate.d hooks (e.g. cuda-nvcc's NVCC_PREPEND_FLAGS)
+# reference unset vars and trip `set -u`.
+set +u
 # shellcheck disable=SC1091
 source "$CONDA_BASE/etc/profile.d/conda.sh"
 
@@ -50,6 +53,7 @@ else
 fi
 
 conda activate "$SH_ENV"
+set -u
 echo "  active env : $CONDA_PREFIX"
 echo "  python     : $(python -c 'import sys; print(sys.version.split()[0])')"
 

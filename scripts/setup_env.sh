@@ -121,7 +121,38 @@ echo "=== [3] mamba2 kernels (backbone=$BACKBONE) ==="
 if [ "$BACKBONE" = "mamba2" ]; then
   echo "  source-building mamba_ssm / causal_conv1d for arch $ARCH_LIST (this is slow)"
   "$PY" -m pip install -q ninja packaging setuptools wheel
-  MAX_JOBS="${MAX_JOBS:-8}" "$PY" -m pip install -q --no-build-isolation causal-conv1d mamba-ssm
+
+  # These compile CUDA extensions, so they need an nvcc whose MAJOR version matches torch's CUDA
+  # (PyTorch's extension builder rejects a major mismatch). The Pro 6000 box ships a system CUDA 13
+  # toolkit while torch here is cu12.x — install a matching toolkit into the active conda env and
+  # build against that. (On an A100 container where system nvcc already matches, this is a no-op.)
+  TORCH_CUDA="$("$PY" -c 'import torch; print(torch.version.cuda or "")')"   # e.g. 12.8
+  TORCH_CUDA_MAJ="${TORCH_CUDA%%.*}"
+  SYS_NVCC_MAJ="$(nvcc --version 2>/dev/null | sed -n 's/.*release \([0-9]*\).*/\1/p' | head -1)"
+  if [ -n "${CONDA_PREFIX:-}" ] && [ -n "$TORCH_CUDA_MAJ" ] && [ "$SYS_NVCC_MAJ" != "$TORCH_CUDA_MAJ" ]; then
+    if [ ! -x "$CONDA_PREFIX/bin/nvcc" ]; then
+      echo "  system nvcc (CUDA $SYS_NVCC_MAJ) != torch CUDA $TORCH_CUDA -> installing cuda-toolkit=$TORCH_CUDA into the env"
+      conda install -y -c nvidia "cuda-toolkit=$TORCH_CUDA" >/dev/null
+    fi
+    export CUDA_HOME="$CONDA_PREFIX"
+    export PATH="$CUDA_HOME/bin:$PATH"
+    # conda's nvidia CUDA puts headers/libs under targets/<triple>/ , not $PREFIX/include|lib,
+    # which torch's extension builder & gcc host-compile don't search -> add them explicitly
+    # (otherwise: "fatal error: cuda_runtime_api.h: No such file or directory").
+    _tgt="$CUDA_HOME/targets/x86_64-linux"
+    [ -d "$_tgt/include" ] && export CPATH="$_tgt/include:${CPATH:-}"
+    [ -d "$_tgt/lib" ] && export LIBRARY_PATH="$_tgt/lib:${LIBRARY_PATH:-}"
+  fi
+  echo "  CUDA_HOME=${CUDA_HOME:-<system>} | nvcc=$(command -v nvcc) | arch=$ARCH_LIST"
+  # best-effort: these are an OPTIONAL acceleration for the pretrained mamba2 checkpoints. FLA's
+  # Triton mamba2 runs without them (use FLA_CONV_BACKEND=triton), so a build failure on bleeding-
+  # edge GPUs is non-fatal — we warn and continue.
+  if MAX_JOBS="${MAX_JOBS:-8}" "$PY" -m pip install --no-build-isolation causal-conv1d mamba-ssm; then
+    echo "  mamba_ssm / causal_conv1d built OK"
+  else
+    echo "  !! mamba_ssm/causal_conv1d build FAILED — continuing. The FLA Triton mamba2 path still"
+    echo "     works; run mamba2 with FLA_CONV_BACKEND=triton (no CUDA kernels needed)."
+  fi
 else
   echo "  gdn backbone uses only this repo's FLA Triton ops — mamba_ssm/causal_conv1d NOT needed."
 fi

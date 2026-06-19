@@ -44,11 +44,14 @@ mkdir -p logs ckpt
 
 echo "=== [slurm] job $SLURM_JOB_ID on $(hostname) | gres=${SLURM_JOB_GRES:-?} ==="
 
-# activate the sh_routing conda env
+# activate the sh_routing conda env. Disable nounset around activation: conda's activate.d hooks
+# (e.g. cuda-nvcc's NVCC_PREPEND_FLAGS) reference unset vars and trip `set -u`.
 CONDA_BASE="$(conda info --base)"
+set +u
 # shellcheck disable=SC1091
 source "$CONDA_BASE/etc/profile.d/conda.sh"
 conda activate "$SH_ENV"
+set -u
 
 export PYTHONPATH="$REPO_ROOT:${PYTHONPATH:-}"
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
