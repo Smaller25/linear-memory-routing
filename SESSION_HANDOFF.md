@@ -44,6 +44,14 @@ yes; Blackwell+py3.13 skipped — tilelang crashes on import there). `vessl_run.
 Knobs: `GPU=a100|h100|blackwell` (force target), `BACKBONE=mamba2` (also source-build the mamba
 CUDA kernels), `WITH_TILELANG=1` (force-attempt). The cu128 torch wheel covers all three arches.
 
+**Pro 6000 server (Slurm + conda).** This server is Slurm-managed and requires a dedicated conda
+env; by owner convention the env is **`sh_routing`** and all custom vars are `SH_*`. Two scripts:
+- `bash scripts/sh_env_pro6000.sh` — run ONCE on the login node: creates conda env `sh_routing`
+  (`SH_PY`, default 3.11; lands in `~/.conda/envs`) and populates it via `setup_env.sh` (GPU=blackwell).
+- `sbatch scripts/sh_slurm_run.sh [cmd...]` — all GPU work goes through Slurm (partition `main`,
+  `--gres=gpu:rtx6000:N`, 6h cap). No args → runs the GDN correctness gate; else runs the given
+  command inside `sh_routing`. e.g. `sbatch scripts/sh_slurm_run.sh python -m lmr.scripts.eval_long ...`.
+
 Underlying env (what the script installs): torch 2.9.1+cu128, **transformers 5.12**, **fla = the
 in-repo `fla/`** (use `PYTHONPATH=.`; do NOT pip-install a different fla), `mamba_ssm`/`causal_conv1d`
 `.post1` source-built (only for a mamba2 backbone), `tilelang 0.1.9` (A100/H100 only — see gotchas),
