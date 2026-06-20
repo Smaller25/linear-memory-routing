@@ -28,7 +28,7 @@ import torch
 import torch.nn.functional as F
 
 from lmr.mosc.backbone import GDN2LM
-from lmr.mosc.dynamic_chunk import mqar_key_positions
+from lmr.mosc.dynamic_chunk import mqar_oracle_positions
 from lmr.mosc.mosc_model import DynamicMoSC
 from lmr.tasks.mqar import make_mqar
 
@@ -45,9 +45,10 @@ def build_model(args, vocab):
                        num_pools=args.num_pools, topk=args.topk)
 
 
-def run_model(model, ids, labels, is_mosc):
+def run_model(model, ids, k, is_mosc):
     if is_mosc and model.chunk_mode == "oracle":
-        return model(ids, oracle_positions=mqar_key_positions(ids, labels))
+        oracle = mqar_oracle_positions(k, ids.shape[0], device=ids.device)
+        return model(ids, oracle_positions=oracle)
     return model(ids)
 
 
@@ -58,7 +59,7 @@ def recall_acc(model, k, vocab, device, is_mosc, seq_len=None, n=256):
     ids, labels = batch["input_ids"].to(device), batch["labels"].to(device)
     correct = total = 0
     for i in range(0, n, 64):
-        logits = run_model(model, ids[i:i + 64], labels[i:i + 64], is_mosc)
+        logits = run_model(model, ids[i:i + 64], k, is_mosc)
         pred = logits.argmax(-1)
         m = labels[i:i + 64] != IGNORE
         correct += (pred[m] == labels[i:i + 64][m]).sum().item()
@@ -83,14 +84,16 @@ def main():
     ap.add_argument("--num-heads", type=int, default=2)
     ap.add_argument("--steps", type=int, default=3000)
     ap.add_argument("--batch", type=int, default=64)
-    ap.add_argument("--lr", type=float, default=3e-4)
+    ap.add_argument("--lr", type=float, default=3e-3)  # MQAR needs the high lr to hit the transition
     args = ap.parse_args()
 
+    torch.manual_seed(0)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     is_mosc = args.model == "mosc"
     model = build_model(args, args.vocab).to(device).train()
-    opt = torch.optim.AdamW(model.parameters(), lr=args.lr)
-    print(f"model={args.model} chunk={args.chunk_mode} pools={args.num_pools} "
+    # match the validated MoCM MQAR recipe (lmr/scripts/train_mocm_mqar.py): high lr + wd + grad clip
+    opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.1, betas=(0.9, 0.95))
+    print(f"model={args.model} chunk={args.chunk_mode} pools={args.num_pools} lr={args.lr} "
           f"params={sum(p.numel() for p in model.parameters())/1e6:.2f}M | device={device}")
 
     for step in range(1, args.steps + 1):
@@ -98,9 +101,11 @@ def main():
         batch = make_mqar(num_examples=args.batch, vocab_size=args.vocab, num_kv_pairs=k,
                           input_seq_len=args.seq_len, seed=step)
         ids, labels = batch["input_ids"].to(device), batch["labels"].to(device)
-        logits = run_model(model, ids, labels, is_mosc)
+        logits = run_model(model, ids, k, is_mosc)
         loss = F.cross_entropy(logits.reshape(-1, args.vocab), labels.reshape(-1), ignore_index=IGNORE)
-        opt.zero_grad(); loss.backward(); opt.step()
+        opt.zero_grad(); loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        opt.step()
         if step % 250 == 0 or step == 1:
             print(f"[train] step {step:5d}  loss {loss.item():.4f}")
 

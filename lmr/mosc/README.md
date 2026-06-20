@@ -48,9 +48,32 @@ fewer snapshots?) + replace the pooled-hidden proxy with the true GDN2 recurrent
 
 ## Run
 ```bash
-# Phase-0 kill-test (Blackwell, via Slurm; MQAR needs >=3000 steps — delayed phase transition)
+# Phase-0 kill-test (Blackwell, via Slurm). Use an EASY curriculum (train-kv 4 8) — training
+# directly on kv 16/32 fails to bootstrap (loss pinned at random; not a kernel bug — fla's gated-
+# delta op test passes on sm_120). >=6000 steps.
 sbatch scripts/sh_slurm_run.sh python -m lmr.mosc.train_mqar \
-    --model gdn2 --train-kv 16 32 --eval-kv 16 32 64 --steps 3000              # baseline
+    --model gdn2 --train-kv 4 8 --eval-kv 4 8 16 32 64 128 --steps 6000              # vanilla baseline
 sbatch scripts/sh_slurm_run.sh python -m lmr.mosc.train_mqar \
-    --model mosc --chunk-mode oracle --train-kv 16 32 --eval-kv 16 32 64 --steps 3000
+    --model mosc --chunk-mode oracle --train-kv 4 8 --eval-kv 4 8 16 32 64 128 --steps 6000
 ```
+
+## Phase-0 results (2026-06-19, RTX PRO 6000, train-kv 4/8, 6000 steps) — recall acc vs #kv
+| model | kv4 | kv8 | kv16 | kv32 | kv64 | kv128 |
+|-------|----|----|-----|-----|-----|------|
+| vanilla GDN2     | 1.00 | 1.00 | 0.93 | 0.55 | 0.28 | —    |
+| mosc **oracle**  | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 |
+| mosc fixed       | 1.00 | 1.00 | 0.97 | 0.64 | 0.34 | 0.17 |
+| mosc surprisal   | 1.00 | 1.00 | 0.91 | 0.50 | 0.25 | 0.12 |
+
+**Verdict — PASS, but the whole win is boundary placement.** Oracle (a boundary at each context
+value = per-fact segments) gives near-perfect recall at every kv (0.997 @ kv128 vs vanilla 0.28 @
+kv64) — segment-level caching + hard-top-k read *does* solve multi-key recall (the regime SSC failed
+in report 0010). BUT fixed-chunk barely beats vanilla and the current surprisal heuristic (NLL peak +
+min-gap) is no better than vanilla — it does not find fact boundaries. So Phase-1's single question:
+**learn boundaries that approximate the oracle.** Caveats: segment summary is still the pooled-hidden
+PROXY (not the true recurrent state); the read-out is attention-lite over segments (a compressed-cache
+point on the RNN↔attention spectrum, cf. report 0011), so "mosc >> vanilla" is partly expected — the
+*scientific* signal is oracle ≫ fixed/surprisal (same read-out, only boundaries differ).
+
+NOTE: the legacy `lmr/scripts/train_mocm_mqar.py` (MoCMMixer) does NOT learn under fla 0.5.2 (silent,
+likely API drift) — not on this track's path; GDN2LM here learns fine.

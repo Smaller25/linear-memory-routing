@@ -90,19 +90,15 @@ def _enforce_min_gap(mask: torch.Tensor, min_gap: int) -> torch.Tensor:
     return out
 
 
-def mqar_key_positions(input_ids: torch.Tensor, labels: torch.Tensor, ignore: int = -100) -> torch.Tensor:
-    """Oracle helper for Phase-0: the query-key positions of an MQAR batch (token before each label).
+def mqar_oracle_positions(num_kv_pairs: int, batch_size: int, device=None) -> torch.Tensor:
+    """Oracle boundaries for Phase-0: one segment per (key,value) fact, in the CONTEXT region.
 
-    In ``make_mqar`` the answer label sits one step after the query key, so the key position is
-    ``label_pos - 1``. Returns ``[B, K]`` (padded with the last index where rows have fewer keys).
+    ``make_mqar`` lays out the context as the first ``2*num_kv_pairs`` tokens with keys at even
+    indices and **values at odd indices** (1, 3, ..., 2k-1). To make each segment ~per-fact, end a
+    segment at each value token, so the value's state is cleanly checkpointed. Returns ``[B, k]``.
+
+    NOTE: this is the upper-bound oracle — boundaries at the values being recalled, not at the query
+    keys (those live later, in the query region, and contain no values to cache).
     """
-    rows = []
-    maxk = 0
-    for b in range(labels.shape[0]):
-        pos = (labels[b] != ignore).nonzero(as_tuple=True)[0] - 1
-        rows.append(pos)
-        maxk = max(maxk, pos.numel())
-    out = torch.full((labels.shape[0], maxk), input_ids.shape[1] - 1, dtype=torch.long, device=labels.device)
-    for b, pos in enumerate(rows):
-        out[b, : pos.numel()] = pos
-    return out
+    pos = torch.arange(1, 2 * num_kv_pairs, 2, device=device)  # [k] value positions in context
+    return pos[None].expand(batch_size, -1).contiguous()
