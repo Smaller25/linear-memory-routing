@@ -90,6 +90,14 @@ def _enforce_min_gap(mask: torch.Tensor, min_gap: int) -> torch.Tensor:
     return out
 
 
+def positions_to_mask(positions: torch.Tensor, seq_len: int) -> torch.Tensor:
+    """[B, k] token indices -> boolean ``[B, T]`` mask (used to turn oracle positions into a target
+    for the learned boundary predictor)."""
+    mask = torch.zeros(positions.shape[0], seq_len, dtype=torch.bool, device=positions.device)
+    mask.scatter_(1, positions.clamp(0, seq_len - 1), True)
+    return mask
+
+
 def mqar_oracle_positions(num_kv_pairs: int, batch_size: int, device=None) -> torch.Tensor:
     """Oracle boundaries for Phase-0: one segment per (key,value) fact, in the CONTEXT region.
 

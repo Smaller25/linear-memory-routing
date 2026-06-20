@@ -23,9 +23,10 @@ from __future__ import annotations
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from lmr.mosc.backbone import GDN2LM
-from lmr.mosc.dynamic_chunk import segment_boundaries, token_surprisal
+from lmr.mosc.dynamic_chunk import positions_to_mask, segment_boundaries, token_surprisal
 from lmr.mosc.router import SegmentCacheRouter
 
 
@@ -50,6 +51,11 @@ class DynamicMoSC(nn.Module):
         self.chunk = chunk
         self.surprisal_min_gap = surprisal_min_gap
         self.lm_head = self.backbone.lm_head  # tie read-out head to the backbone's
+        # Phase-1: a small head that predicts segment boundaries from the model's own hidden states.
+        # Trained (optionally distilled from oracle positions) to recover the per-fact boundaries that
+        # made the oracle win — the open question Phase-0 localised.
+        self.boundary_predictor = nn.Linear(d_model, 1) if chunk_mode == "learned" else None
+        self.boundary_loss = None  # set per-forward; consumed by the trainer
 
     def _segment_summaries(self, hidden: torch.Tensor, boundaries: torch.Tensor) -> torch.Tensor:
         """[B, T, d] hidden + [B, T] boundary mask -> [B, N, d] per-segment masked-mean summaries.
@@ -66,15 +72,30 @@ class DynamicMoSC(nn.Module):
         cnt.scatter_add_(1, seg_id[..., None], torch.ones_like(hidden[..., :1]))
         return summ / cnt.clamp_min(1.0)
 
-    def forward(self, input_ids: torch.Tensor, oracle_positions: torch.Tensor | None = None):
+    def forward(self, input_ids: torch.Tensor, oracle_positions: torch.Tensor | None = None,
+                boundary_distill: float = 0.0):
+        B, T = input_ids.shape
         base_h = self.backbone(input_ids, return_hidden=True)        # [B, T, d]
         base_logits = self.lm_head(base_h)
-        surp = token_surprisal(base_logits, input_ids) if self.chunk_mode == "surprisal" else None
-        bnd = segment_boundaries(
-            batch_size=input_ids.shape[0], seq_len=input_ids.shape[1], mode=self.chunk_mode,
-            chunk=self.chunk, surprisal=surp, min_gap=self.surprisal_min_gap,
-            oracle_positions=oracle_positions, device=input_ids.device,
-        )
+        self.boundary_loss = base_h.new_zeros(())
+
+        if self.chunk_mode == "learned":
+            blogits = self.boundary_predictor(base_h).squeeze(-1)    # [B, T]
+            bnd = (blogits.sigmoid() > 0.5).clone()                  # hard boundaries at inference
+            bnd[:, -1] = True
+            if boundary_distill > 0.0 and oracle_positions is not None:
+                tgt = positions_to_mask(oracle_positions, T).float()
+                pos_w = (tgt.numel() - tgt.sum()) / tgt.sum().clamp_min(1.0)  # boundaries are sparse
+                self.boundary_loss = boundary_distill * F.binary_cross_entropy_with_logits(
+                    blogits, tgt, pos_weight=pos_w)
+        else:
+            surp = token_surprisal(base_logits, input_ids) if self.chunk_mode == "surprisal" else None
+            bnd = segment_boundaries(
+                batch_size=B, seq_len=T, mode=self.chunk_mode, chunk=self.chunk, surprisal=surp,
+                min_gap=self.surprisal_min_gap, oracle_positions=oracle_positions, device=input_ids.device,
+            )
+
+        self.last_boundaries = bnd                                   # [B, T] for diagnostics
         bank = self._segment_summaries(base_h, bnd)                  # [B, N, d]
         read = self.router.read(base_h, bank, pool_of=None if self.router.num_pools == 1 else
                                 self.router.write(bank))             # [B, T, d]

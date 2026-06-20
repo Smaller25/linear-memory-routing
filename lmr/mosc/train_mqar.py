@@ -45,10 +45,17 @@ def build_model(args, vocab):
                        num_pools=args.num_pools, topk=args.topk)
 
 
-def run_model(model, ids, k, is_mosc):
-    if is_mosc and model.chunk_mode == "oracle":
+def run_model(model, ids, k, is_mosc, distill=0.0):
+    if not is_mosc:
+        return model(ids)
+    if model.chunk_mode == "oracle":
         oracle = mqar_oracle_positions(k, ids.shape[0], device=ids.device)
         return model(ids, oracle_positions=oracle)
+    if model.chunk_mode == "learned":
+        # distill the boundary head from oracle positions during TRAINING only; at eval (distill=0)
+        # the model must segment from its own predictions — no oracle.
+        oracle = mqar_oracle_positions(k, ids.shape[0], device=ids.device) if distill > 0 else None
+        return model(ids, oracle_positions=oracle, boundary_distill=distill)
     return model(ids)
 
 
@@ -70,7 +77,9 @@ def recall_acc(model, k, vocab, device, is_mosc, seq_len=None, n=256):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", choices=["gdn2", "mosc"], default="gdn2")
-    ap.add_argument("--chunk-mode", choices=["fixed", "oracle", "surprisal"], default="fixed")
+    ap.add_argument("--chunk-mode", choices=["fixed", "oracle", "surprisal", "learned"], default="fixed")
+    ap.add_argument("--boundary-distill", type=float, default=1.0,
+                    help="weight on the oracle-boundary distillation loss (chunk-mode=learned)")
     ap.add_argument("--chunk", type=int, default=64)
     ap.add_argument("--num-pools", type=int, default=1)
     ap.add_argument("--topk", type=int, default=4)
@@ -101,8 +110,10 @@ def main():
         batch = make_mqar(num_examples=args.batch, vocab_size=args.vocab, num_kv_pairs=k,
                           input_seq_len=args.seq_len, seed=step)
         ids, labels = batch["input_ids"].to(device), batch["labels"].to(device)
-        logits = run_model(model, ids, k, is_mosc)
+        logits = run_model(model, ids, k, is_mosc, distill=args.boundary_distill)
         loss = F.cross_entropy(logits.reshape(-1, args.vocab), labels.reshape(-1), ignore_index=IGNORE)
+        if getattr(model, "boundary_loss", None) is not None:
+            loss = loss + model.boundary_loss
         opt.zero_grad(); loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         opt.step()
@@ -113,6 +124,25 @@ def main():
     model.eval()
     for k in args.eval_kv:
         print(f"  kv={k:4d}  acc={recall_acc(model, k, args.vocab, device, is_mosc, args.seq_len):.3f}")
+
+    # boundary-quality diagnostic for the learned predictor: how many boundaries does it fire at
+    # eval, and how well do they match the oracle (per-fact) positions?
+    if is_mosc and model.chunk_mode == "learned":
+        from lmr.mosc.dynamic_chunk import positions_to_mask
+        print("=== learned-boundary quality (predicted vs oracle) ===")
+        for k in args.eval_kv:
+            b = make_mqar(num_examples=64, vocab_size=args.vocab, num_kv_pairs=k,
+                          input_seq_len=args.seq_len, seed=20_000 + k)
+            ids = b["input_ids"].to(device)
+            with torch.no_grad():
+                model(ids)
+            pred = model.last_boundaries.clone(); pred[:, -1] = False  # ignore the forced last
+            tgt = positions_to_mask(mqar_oracle_positions(k, ids.shape[0], device), ids.shape[1])
+            tp = (pred & tgt).sum().item()
+            prec = tp / max(pred.sum().item(), 1)
+            rec = tp / max(tgt.sum().item(), 1)
+            print(f"  kv={k:4d}  pred/seq={pred.float().sum(1).mean():.1f} (oracle={k})  "
+                  f"precision={prec:.2f} recall={rec:.2f}")
 
 
 if __name__ == "__main__":

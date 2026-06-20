@@ -77,3 +77,32 @@ point on the RNN↔attention spectrum, cf. report 0011), so "mosc >> vanilla" is
 
 NOTE: the legacy `lmr/scripts/train_mocm_mqar.py` (MoCMMixer) does NOT learn under fla 0.5.2 (silent,
 likely API drift) — not on this track's path; GDN2LM here learns fine.
+
+## Phase-1 status (IN PROGRESS — learn the oracle's boundaries)
+`chunk-mode learned`: a `nn.Linear(d_model,1)` boundary head (`DynamicMoSC.boundary_predictor`),
+distilled from oracle positions via pos-weighted BCE during training (`--boundary-distill`), using
+its own hard (sigmoid>0.5) boundaries at eval.
+
+**First attempt FAILED** (train-kv 4/8, 6000 steps, distill 1.0) — recall vs #kv:
+| kv4 | kv8 | kv16 | kv32 | kv64 | kv128 |
+|----|----|-----|-----|-----|------|
+| 1.00 | 1.00 | 0.50 | 0.25 | 0.13 | 0.06 |
+
+learned is **worse than vanilla** (kv16 0.50 vs 0.93) — predicted boundaries are bad enough that the
+read-out injects noise. So naive per-token BCE distillation does NOT recover oracle boundaries.
+**Diagnosing now**: instrumented predicted-boundary count + precision/recall vs oracle (see the
+"learned-boundary quality" block printed by `train_mqar.py`). In-flight job 1101 → result in
+`logs/sh_sh_routing_1101.out`.
+
+### RESUME HERE
+1. Read `logs/sh_sh_routing_1101.out` (boundary precision/recall) to see HOW learned fails:
+   - fires too FEW boundaries (under-segments → ~vanilla) vs too MANY (over-segments → noise) vs
+     right count but wrong POSITIONS (low precision/recall).
+2. Then pick the fix the diagnostic points to, e.g.: eval threshold / top-k=#facts instead of 0.5;
+   bigger predictor (MLP, not linear); straight-through instead of hard threshold; or distill the
+   segment-summary read directly. Re-run with the same curriculum (train-kv 4 8, 6000 steps).
+3. Orthogonal validity step still pending: replace the pooled-hidden segment-summary PROXY in
+   `mosc_model._segment_summaries` with the TRUE GDN2 recurrent state at each boundary (segment-wise
+   run with `output_final_state`, cf. frozen-track `lmr/segment_runner.py`).
+
+Env: `conda activate sh_routing`; run via `sbatch scripts/sh_slurm_run.sh python -m lmr.mosc.train_mqar ...`.
