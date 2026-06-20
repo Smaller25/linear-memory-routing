@@ -90,19 +90,32 @@ its own hard (sigmoid>0.5) boundaries at eval.
 
 learned is **worse than vanilla** (kv16 0.50 vs 0.93) — predicted boundaries are bad enough that the
 read-out injects noise. So naive per-token BCE distillation does NOT recover oracle boundaries.
-**Diagnosing now**: instrumented predicted-boundary count + precision/recall vs oracle (see the
-"learned-boundary quality" block printed by `train_mqar.py`). In-flight job 1101 → result in
-`logs/sh_sh_routing_1101.out`.
+
+**Diagnosed (job 1101) — the failure is UNDER-FIRING.** Predicted-boundary count + precision/recall
+vs oracle:
+| kv | recall-acc | pred/seq (oracle) | precision | boundary-recall |
+|----|-----------|-------------------|-----------|-----------------|
+| 4  | 1.00 | 4.6 (4)  | 0.87 | 1.00 |
+| 8  | 1.00 | 8.2 (8)  | 0.98 | 1.00 |
+| 16 | 0.52 | 8.2 (16) | 1.00 | **0.52** |
+| 32 | 0.28 | 10.3 (32)| 0.96 | **0.31** |
+| 64 | 0.51 | 36.5 (64)| 0.97 | 0.56 |
+Precision is ~1.0 (a fired boundary is almost always a true fact), but the sigmoid>0.5 threshold is
+too conservative → it MISSES ~half the facts at mid-kv → un-checkpointed facts can't be recalled.
 
 ### RESUME HERE
-1. Read `logs/sh_sh_routing_1101.out` (boundary precision/recall) to see HOW learned fails:
-   - fires too FEW boundaries (under-segments → ~vanilla) vs too MANY (over-segments → noise) vs
-     right count but wrong POSITIONS (low precision/recall).
-2. Then pick the fix the diagnostic points to, e.g.: eval threshold / top-k=#facts instead of 0.5;
-   bigger predictor (MLP, not linear); straight-through instead of hard threshold; or distill the
-   segment-summary read directly. Re-run with the same curriculum (train-kv 4 8, 6000 steps).
+The fix is cheap and clear: **make it fire more boundaries** (precision is already ~1.0, so extra
+boundaries cost little). In order of effort:
+1. Eval-time: replace the `sigmoid>0.5` threshold in `DynamicMoSC.forward` (learned branch) with
+   **top-k (k≈#facts) or a lower threshold**; re-run train-kv 4 8 / 6000 steps. Cheapest test of the
+   under-firing hypothesis.
+2. If still recall-limited: bigger predictor (MLP not Linear); or a recall-weighted / focal boundary
+   loss; or straight-through so the CE loss (not just BCE) shapes boundaries.
 3. Orthogonal validity step still pending: replace the pooled-hidden segment-summary PROXY in
    `mosc_model._segment_summaries` with the TRUE GDN2 recurrent state at each boundary (segment-wise
    run with `output_final_state`, cf. frozen-track `lmr/segment_runner.py`).
+
+(Also noted: run-to-run variance is non-trivial — kv64/128 acc jumped between two identical runs;
+seed the eval data / average a few seeds when comparing.)
 
 Env: `conda activate sh_routing`; run via `sbatch scripts/sh_slurm_run.sh python -m lmr.mosc.train_mqar ...`.
