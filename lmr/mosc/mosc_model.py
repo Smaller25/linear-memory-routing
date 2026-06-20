@@ -55,6 +55,7 @@ class DynamicMoSC(nn.Module):
         # Trained (optionally distilled from oracle positions) to recover the per-fact boundaries that
         # made the oracle win — the open question Phase-0 localised.
         self.boundary_predictor = nn.Linear(d_model, 1) if chunk_mode == "learned" else None
+        self.boundary_threshold = 0.5  # eval-time sigmoid cutoff for firing a boundary (sweepable)
         self.boundary_loss = None  # set per-forward; consumed by the trainer
 
     def _segment_summaries(self, hidden: torch.Tensor, boundaries: torch.Tensor) -> torch.Tensor:
@@ -81,7 +82,7 @@ class DynamicMoSC(nn.Module):
 
         if self.chunk_mode == "learned":
             blogits = self.boundary_predictor(base_h).squeeze(-1)    # [B, T]
-            bnd = (blogits.sigmoid() > 0.5).clone()                  # hard boundaries at inference
+            bnd = (blogits.sigmoid() > self.boundary_threshold).clone()   # hard boundaries at inference
             bnd[:, -1] = True
             if boundary_distill > 0.0 and oracle_positions is not None:
                 tgt = positions_to_mask(oracle_positions, T).float()

@@ -103,19 +103,33 @@ vs oracle:
 Precision is ~1.0 (a fired boundary is almost always a true fact), but the sigmoid>0.5 threshold is
 too conservative → it MISSES ~half the facts at mid-kv → un-checkpointed facts can't be recalled.
 
-### RESUME HERE
-The fix is cheap and clear: **make it fire more boundaries** (precision is already ~1.0, so extra
-boundaries cost little). In order of effort:
-1. Eval-time: replace the `sigmoid>0.5` threshold in `DynamicMoSC.forward` (learned branch) with
-   **top-k (k≈#facts) or a lower threshold**; re-run train-kv 4 8 / 6000 steps. Cheapest test of the
-   under-firing hypothesis.
-2. If still recall-limited: bigger predictor (MLP not Linear); or a recall-weighted / focal boundary
-   loss; or straight-through so the CE loss (not just BCE) shapes boundaries.
-3. Orthogonal validity step still pending: replace the pooled-hidden segment-summary PROXY in
-   `mosc_model._segment_summaries` with the TRUE GDN2 recurrent state at each boundary (segment-wise
-   run with `output_final_state`, cf. frozen-track `lmr/segment_runner.py`).
+**SOLVED — it was positional overfitting, not the threshold.** The threshold sweep barely moved recall
+(kv16 0.61→0.78 from thr 0.5→0.05) because the head fired only ~10 boundaries *regardless of kv*
+(pred/seq capped ~10): trained on kv 4/8 only (context 8–16 tokens), it learned "fire on the first
+~8 value-looking tokens" — a POSITION bias, not "is this token a value". Widening the training
+curriculum to **train-kv 4 8 16 32 64** (8000 steps) fixes it completely:
 
-(Also noted: run-to-run variance is non-trivial — kv64/128 acc jumped between two identical runs;
-seed the eval data / average a few seeds when comparing.)
+| model | kv4 | kv8 | kv16 | kv32 | kv64 | kv128 |
+|-------|----|----|-----|-----|-----|------|
+| vanilla            | 1.00 | 1.00 | 0.93 | 0.55 | 0.28 | —    |
+| oracle (ceiling)   | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 |
+| learned (kv 4/8)   | 1.00 | 1.00 | 0.61 | 0.31 | 0.15 | 0.08 |
+| **learned (kv 4–64)** | 1.00 | 1.00 | **1.00** | **1.00** | **1.00** | **1.00** |
+
+Boundary count now scales with kv (pred/seq 16.9/33.0/65.2/128.7 vs oracle 16/32/64/128; precision
+0.84–0.99, recall 1.00; threshold-insensitive 0.05–0.5). **=> boundaries ARE learnable**: a Linear
+head over the model's own hidden states recovers oracle-level recall. The Dynamic-MoSC core mechanism
+works.
+
+### RESUME HERE (Phase-1 done w/ supervision; remaining)
+1. **Remove the oracle crutch**: train boundaries end-to-end from the TASK loss only (`--boundary-
+   distill 0`), or with a sparsity/budget penalty — does the head still find facts without BCE
+   supervision? (distillation proved the signal is *present*; this proves it's *learnable unsupervised*.)
+2. **Validity**: replace the pooled-hidden segment-summary PROXY in `mosc_model._segment_summaries`
+   with the TRUE GDN2 recurrent state at each boundary (segment-wise run with `output_final_state`,
+   cf. frozen-track `lmr/segment_runner.py`).
+3. Then Phase 2 (M parallel pools) and real-data / LongBench (Phase 4). Caveat throughout: the
+   read-out is attention-lite over segments (RNN↔attention spectrum, report 0011) — the scientific
+   claim is about boundary learnability, not constant memory.
 
 Env: `conda activate sh_routing`; run via `sbatch scripts/sh_slurm_run.sh python -m lmr.mosc.train_mqar ...`.

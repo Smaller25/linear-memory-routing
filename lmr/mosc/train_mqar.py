@@ -80,6 +80,8 @@ def main():
     ap.add_argument("--chunk-mode", choices=["fixed", "oracle", "surprisal", "learned"], default="fixed")
     ap.add_argument("--boundary-distill", type=float, default=1.0,
                     help="weight on the oracle-boundary distillation loss (chunk-mode=learned)")
+    ap.add_argument("--eval-thresholds", type=float, nargs="*", default=[0.5, 0.3, 0.2, 0.1, 0.05],
+                    help="learned mode: re-eval the trained model at these boundary thresholds")
     ap.add_argument("--chunk", type=int, default=64)
     ap.add_argument("--num-pools", type=int, default=1)
     ap.add_argument("--topk", type=int, default=4)
@@ -124,6 +126,17 @@ def main():
     model.eval()
     for k in args.eval_kv:
         print(f"  kv={k:4d}  acc={recall_acc(model, k, args.vocab, device, is_mosc, args.seq_len):.3f}")
+
+    # learned mode: sweep the eval-time boundary threshold (no retrain). Diagnosis says the head
+    # UNDER-FIRES at 0.5 (precision ~1.0, recall low); a lower cutoff should fire more boundaries and
+    # recover recall. Lists recall across kv at each threshold.
+    if is_mosc and model.chunk_mode == "learned" and args.eval_thresholds:
+        print("=== boundary-threshold sweep (recall-acc across kv) ===")
+        for thr in args.eval_thresholds:
+            model.boundary_threshold = thr
+            accs = [recall_acc(model, k, args.vocab, device, is_mosc, args.seq_len) for k in args.eval_kv]
+            print(f"  thr={thr:.2f}  " + "  ".join(f"kv{k}={a:.2f}" for k, a in zip(args.eval_kv, accs)))
+        model.boundary_threshold = 0.5
 
     # boundary-quality diagnostic for the learned predictor: how many boundaries does it fire at
     # eval, and how well do they match the oracle (per-fact) positions?
