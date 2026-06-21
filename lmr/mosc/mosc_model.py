@@ -43,6 +43,7 @@ class DynamicMoSC(nn.Module):
         num_pools: int = 1,
         topk: int = 4,
         surprisal_min_gap: int = 8,
+        use_true_state: bool = False,
     ):
         super().__init__()
         self.backbone = GDN2LM(vocab_size, d_model, n_layers, head_dim, num_heads)
@@ -51,6 +52,10 @@ class DynamicMoSC(nn.Module):
         self.chunk = chunk
         self.surprisal_min_gap = surprisal_min_gap
         self.lm_head = self.backbone.lm_head  # tie read-out head to the backbone's
+        # true-state mode: cache each segment's actual GDN2 recurrent state (not a pooled-hidden
+        # proxy) and read over it -> tests whether recall comes from the RNN state vs hidden attention.
+        self.use_true_state = use_true_state
+        self.state_proj = nn.Linear(self.backbone.state_dim, d_model) if use_true_state else None
         # Phase-1: a small head that predicts segment boundaries from the model's own hidden states.
         # Trained (optionally distilled from oracle positions) to recover the per-fact boundaries that
         # made the oracle win — the open question Phase-0 localised.
@@ -73,9 +78,31 @@ class DynamicMoSC(nn.Module):
         cnt.scatter_add_(1, seg_id[..., None], torch.ones_like(hidden[..., :1]))
         return summ / cnt.clamp_min(1.0)
 
+    def _seg_bounds(self, oracle_positions, seq_len):
+        """(start, end) slices partitioning [0, T], uniform across the batch (oracle/fixed only)."""
+        if self.chunk_mode == "oracle":
+            ends = sorted(set((oracle_positions[0] + 1).tolist()) | {seq_len})
+        else:  # fixed
+            ends = sorted(set(range(self.chunk, seq_len, self.chunk)) | {seq_len})
+        bounds, prev = [], 0
+        for e in ends:
+            if e > prev:
+                bounds.append((prev, e)); prev = e
+        return bounds
+
     def forward(self, input_ids: torch.Tensor, oracle_positions: torch.Tensor | None = None,
                 boundary_distill: float = 0.0):
         B, T = input_ids.shape
+
+        if self.use_true_state:
+            # cache the actual recurrent state per segment (oracle/fixed boundaries) and read over it
+            bounds = self._seg_bounds(oracle_positions, T)
+            h_full, states = self.backbone.run_segmented(input_ids, bounds)   # [B,T,d], [B,N,state_dim]
+            self.boundary_loss = h_full.new_zeros(())
+            bank = self.state_proj(states)                                    # [B, N, d]
+            read = self.router.read(h_full, bank, pool_of=None)
+            return self.lm_head(h_full + read)
+
         base_h = self.backbone(input_ids, return_hidden=True)        # [B, T, d]
         base_logits = self.lm_head(base_h)
         self.boundary_loss = base_h.new_zeros(())

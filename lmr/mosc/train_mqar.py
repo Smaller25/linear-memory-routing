@@ -42,7 +42,8 @@ def build_model(args, vocab):
     return DynamicMoSC(vocab, d_model=args.d_model, n_layers=args.n_layers,
                        head_dim=args.head_dim, num_heads=args.num_heads,
                        chunk_mode=args.chunk_mode, chunk=args.chunk,
-                       num_pools=args.num_pools, topk=args.topk)
+                       num_pools=args.num_pools, topk=args.topk,
+                       use_true_state=args.true_state)
 
 
 def run_model(model, ids, k, is_mosc, distill=0.0):
@@ -83,6 +84,8 @@ def main():
     ap.add_argument("--eval-thresholds", type=float, nargs="*", default=[0.5, 0.3, 0.2, 0.1, 0.05],
                     help="learned mode: re-eval the trained model at these boundary thresholds")
     ap.add_argument("--chunk", type=int, default=64)
+    ap.add_argument("--true-state", action="store_true",
+                    help="cache the TRUE GDN2 recurrent state per segment (not pooled-hidden proxy)")
     ap.add_argument("--num-pools", type=int, default=1)
     ap.add_argument("--topk", type=int, default=4)
     ap.add_argument("--train-kv", type=int, nargs="+", default=[16, 32])

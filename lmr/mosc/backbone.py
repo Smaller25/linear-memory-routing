@@ -49,8 +49,12 @@ class GDN2LM(nn.Module):
             ])
         else:
             self.mlp_norms = self.mlps = None
+        for i, m in enumerate(self.mixers):
+            m.layer_idx = i  # required for fla's per-layer Cache (segment-wise state threading)
         self.norm_f = nn.RMSNorm(d_model)
         self.lm_head = nn.Linear(d_model, vocab_size, bias=False)
+        # flattened recurrent-state width [H*K*V] of one GDN2 layer (for the true-state read-out)
+        self.state_dim = num_heads * head_dim * int(head_dim * expand_v)
 
     def forward(self, input_ids: torch.Tensor, return_hidden: bool = False) -> torch.Tensor:
         h = self.embed(input_ids)
@@ -60,3 +64,23 @@ class GDN2LM(nn.Module):
                 h = h + self.mlps[i](self.mlp_norms[i](h))
         h = self.norm_f(h)
         return h if return_hidden else self.lm_head(h)
+
+    def run_segmented(self, input_ids: torch.Tensor, seg_bounds):
+        """Run segment-by-segment with state threading (fla Cache), capturing each segment's TRUE
+        last-layer recurrent state. ``seg_bounds``: list of (start, end) slices partitioning [0, T],
+        uniform across the batch. Returns ``(hidden_full [B,T,d], states [B, N, state_dim])``.
+        Verified equivalent to a full forward (state threads correctly)."""
+        from fla.models.utils import Cache
+        cache = Cache.from_legacy_cache(None)
+        outs, states = [], []
+        last = len(self.mixers) - 1
+        for s, e in seg_bounds:
+            h = self.embed(input_ids[:, s:e])
+            for i, (norm, mixer) in enumerate(zip(self.mix_norms, self.mixers)):
+                o, _, cache = mixer(hidden_states=norm(h), past_key_values=cache, use_cache=True)
+                h = h + o
+                if self.mlps is not None:
+                    h = h + self.mlps[i](self.mlp_norms[i](h))
+            outs.append(h)
+            states.append(cache[last]["recurrent_state"].flatten(1))   # [B, H*K*V]
+        return self.norm_f(torch.cat(outs, dim=1)), torch.stack(states, dim=1)
