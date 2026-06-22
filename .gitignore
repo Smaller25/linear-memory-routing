@@ -47,3 +47,4 @@ ckpt/
 logs/
 logs_sh_env_setup.txt
 logs_sh_mamba2_build.txt
+_workspace/
