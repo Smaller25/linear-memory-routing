@@ -13,12 +13,12 @@
 축으로 갈린다.
 
 - **시간 축(포화):** 긴 맥락을 지나는 동안 고정 상태가 과거 정보를 덮어쓴다 → 길이가 길어지면
-  Needle-in-a-Haystack / passkey에서 실패한다.
-- **공간 축(간섭):** 여러 사실이 한 상태에 누적되며 서로를 덮어쓴다 → multi-key 회상(MQAR)에서
+  Needle-in-a-Haystack / passkey retrieval에서 실패한다.
+- **공간 축(간섭):** 여러 사실이 한 상태에 누적되며 서로를 덮어쓴다 → multi-key recall(MQAR)에서
   실패한다.
 
 **핵심 가설.** 시퀀스를 따라 **순환 상태의 체크포인트를 캐싱**하고, 질의 시점에 그중에서 고르는 작은
-**학습된 read-out 라우터**를 붙이면, 모델은 동작에 쓰는 상태를 키우지 않고도 **고정 상태의 회상 한계를
+**학습된 read-out 라우터**를 붙이면, 모델은 동작에 쓰는 상태를 키우지 않고도 **고정 상태의 retrieval 한계를
 넘어선다**. 라이브 상태가 잃어버린 정보를 되살리는 방식이다.
 
 두 레퍼런스가 이 두 축을 잡아준다. **Memory Caching**(시간 축 체크포인트)과
@@ -32,7 +32,7 @@
 |---|---|---|
 | 아이디어 | 사전학습 모델을 freeze하고, 캐싱된 상태 위의 read-out 라우터만 학습 | 캐싱·라우팅을 내장한 작은 모델을 end-to-end로 학습 |
 | 백본 | Mamba-2 1.3B/2.7B, GDN 1.3B (사전학습 → FLA) | GDN-2 (2층, from scratch) |
-| 목표 | single-needle long-context (포화) | multi-key 회상 (간섭) |
+| 목표 | single-needle long-context retrieval (포화) | multi-key recall (간섭) |
 | 성과 | **검증된 net win** | **multi-key 해결 (이번 세션)** |
 
 ---
@@ -47,13 +47,13 @@
 
 **핵심 결과.**
 
-- **포화 길이에서의 net win.** 자연어 passkey @8k: vanilla→+SSC = **0.738→0.986 (+0.25) @mamba2-1.3b**,
+- **포화 길이에서의 net win.** 자연어 passkey retrieval @8k: vanilla→+SSC = **0.738→0.986 (+0.25) @mamba2-1.3b**,
   **0.500→1.000 (+0.50) @2.7b**. 이 win은 **모델이 클수록 커진다** (0005, 0007).
-- **표준 벤치마크로 전이.** passkey로 학습한 SSC가 RULER `niah_single`에서 **zero-shot**으로
+- **표준 벤치마크로 전이.** passkey retrieval로 학습한 SSC가 RULER `niah_single`에서 **zero-shot**으로
   vanilla를 이긴다 (+0.06–0.18 @4k/8k) (0009).
 - **오직 hard top-k만 일반화.** RM / GRM / AoM(dense) / MoM-slot-merge / hierarchical은 long-context에서
   모두 붕괴하고, 희소한 hard 선택만 살아남는다 (k∈[2,8]; k=1은 불안정) (0008, 0009).
-- **GDN**은 long-context 회상이 강한 백본이지만(vanilla passkey 8k≈0.93 vs mamba2 0.74), GDN의 **라우터
+- **GDN**은 long-context retrieval이 강한 백본이지만(vanilla passkey retrieval 8k≈0.93 vs mamba2 0.74), GDN의 **라우터
   학습은 커널에 막혔다**. head_dim=256에서 chunk-bwd 공유메모리가 A100 한도를 넘고 tilelang 공백이
   있다 (0006).
 
@@ -62,9 +62,9 @@
 - **multi-key는 범위 밖 (0010).** multi-key로 SSC를 학습시키면 수렴하지 않았다. 근본 원인:
   *"MC는 **사실**마다가 아니라 **세그먼트**마다 상태 하나를 캐싱한다; 한 세그먼트를 공유하는 키들은
   구분되지 않는다."* 이것은 *포화*가 아니라 *간섭* 영역이다.
-- **constant-memory가 아니다 (0011).** win은 O(N) 스냅샷이 거의 다 있어야 나온다; 캐시를 B로 제한하면
-  회상이 B/N에 비례해 저하된다. top-k는 *읽기*를 O(N·k)로 줄이지만 *캐시*는 O(N)으로 남는다 → SSC는
-  RNN↔attention 스펙트럼 위의 압축 캐시 한 점이지, constant-memory 선형 모델이 아니다.
+- **상수 메모리(constant memory)가 아니다 (0011).** win은 O(N) 스냅샷이 거의 다 있어야 나온다; 캐시를 B로 제한하면
+  retrieval 정확도가 B/N에 비례해 저하된다. top-k는 *읽기*를 O(N·k)로 줄이지만 *캐시*는 O(N)으로 남는다 → SSC는
+  RNN↔attention 스펙트럼 위의 압축 캐시 한 점이지, 상수 메모리(시퀀스 길이에 무관하게 일정한) 선형 모델이 아니다.
 
 ---
 
@@ -75,7 +75,7 @@
 from scratch로 공동학습한다. 백본은 **GDN-2** (`fla.layers.gdn2`; gated-delta의 일반형 — 스칼라 게이트
 → Gated DeltaNet v1, 벡터 게이트 → KDA). 태스크는 Zoology 충실 구현 **MQAR**.
 
-### Phase 0 — 세그먼트 라우팅이 multi-key를 풀긴 푸는가? (recall vs #kv)
+### Phase 0 — 세그먼트 라우팅이 multi-key를 풀긴 푸는가? (정확도, kv 수별)
 | 모델 | kv4 | kv8 | kv16 | kv32 | kv64 | kv128 |
 |-------|----|----|-----|-----|-----|------|
 | vanilla GDN-2 | 1.00 | 1.00 | 0.93 | 0.55 | 0.28 | — |
@@ -96,7 +96,7 @@ from scratch로 공동학습한다. 백본은 **GDN-2** (`fla.layers.gdn2`; gate
 
 ### true-state 타당성 검증 — 확정됨
 read-out은 세그먼트를 pooled-hidden **proxy**(attention-lite)로 요약하고 있었다. 그래서 win이 *진짜
-순환 상태 회상*인지가 미해결로 남아 있었다. 각 경계의 **진짜 GDN-2 순환 상태**를 뱅크에 담아 다시 돌렸다
+순환 상태 기반 retrieval*인지가 미해결로 남아 있었다. 각 경계의 **진짜 GDN-2 순환 상태**를 뱅크에 담아 다시 돌렸다
 (`backbone.run_segmented`):
 
 | 모델 | kv16 | kv32 | kv64 | kv128 |
@@ -106,7 +106,7 @@ read-out은 세그먼트를 pooled-hidden **proxy**(attention-lite)로 요약하
 | fixed (proxy)       | 0.97 | 0.64 | 0.34 | 0.17 |
 | **fixed (true-state)**  | 0.999 | 0.988 | **0.882** | **0.468** |
 
-→ (1) **multi-key win은 진짜 순환 상태 회상이다.** pooled-hidden attention 아티팩트가 아니다. 핵심
+→ (1) **multi-key win은 진짜 순환 상태 기반 retrieval이다.** pooled-hidden attention 아티팩트가 아니다. 핵심
 caveat이 해소됐다. (2) **진짜 순환 상태 자체가 큰 지렛대다**: 경계가 조잡한 `fixed`인데도
 kv64에서 0.34→0.88, kv128에서 0.17→0.47로 뛴다(proxy는 경계 배치의 중요성을 과장했다). 경계 배치는
 가장 밀도가 높은 지점(kv128)에서만 여전히 결정적이다.
@@ -134,9 +134,9 @@ kv64에서 0.34→0.88, kv128에서 0.17→0.47로 뛴다(proxy는 경계 배치
 
 **확립된 것.**
 
-- Track A: frozen 모델의 캐싱된 상태 위에 학습한 hard-top-k read-out은 single-needle long-context에서
-  크기에 따라 커지는 실질 net win을 주고 RULER로 전이한다 — 다만 single-needle 전용이고
-  constant-memory가 아니다.
+- Track A: frozen 모델의 캐싱된 상태 위에 학습한 hard-top-k read-out은 single-needle long-context retrieval에서
+  크기에 따라 커지는 실질 net win을 주고 RULER로 전이한다 — 다만 single-needle retrieval 전용이고
+  상수 메모리가 아니다.
 - Track B: Track A가 닿지 못한 multi-key 영역이, GDN-2 + **진짜** 캐싱 순환 상태 위의 hard-top-k
   read-out으로, **경계가 사실 단위일 때** from scratch로 **풀린다**. 그리고 그 경계는 **학습
   가능하다**(learned ≈ oracle, 일반화 포함).
@@ -148,7 +148,7 @@ kv64에서 0.34→0.88, kv128에서 0.17→0.47로 뛴다(proxy는 경계 배치
 2. **learned × true-state 결합** (지금까지 따로 측정).
 3. **true-state read-out 스케일** — `run_segmented`는 세그먼트별 순차 루프라 ~5–6× 느리다; batched /
    intermediate-state 커널이 필요하다.
-4. **일반화** — single-needle long-context(passkey/RULER), 병렬 풀 라우팅(Mixture of Segment-Cache),
+4. **일반화** — single-needle long-context retrieval(passkey retrieval/RULER), 병렬 풀 라우팅(Mixture of Segment-Cache),
    더 긴 맥락(16k/32k).
 
 **보고서 매핑:** Track A = 0001–0011; Track B = 0012; 이 문서 = 종합본.

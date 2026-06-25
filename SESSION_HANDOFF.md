@@ -108,5 +108,13 @@ Checkpoints (`ckpt/*.pt`) and data are gitignored → retrain/regenerate (SSC tr
    fail) — the only way to a constant-memory SSC.
 3. **GDN router training** once tilelang/H100 works (`scripts/vessl_run.sh` is ready) or a
    differentiable chunked GDN scan.
-4. More **RULER single-needle** tasks + length sweep (16k/32k); full RULER free-gen metric for
-   publication-grade numbers.
+4. More **RULER single-needle** tasks + length sweep (16k/32k). **Publication-grade RULER free-gen
+   metric: DONE** — `lmr/scripts/predict_ruler.py` does greedy free generation with the read-out in
+   the decode loop (segment-cache built once over the prompt; current partial segment re-run per
+   step) and writes `pred.jsonl` in RULER's format, so scoring is the official unchanged metric.
+   Pipeline: `scripts/ruler.py prepare …` → `python -m lmr.scripts.predict_ruler --arch mamba2
+   --variant ssc --heads ckpt/ssc.pt --topk 4 --lengths 4096 8192 --tasks niah_single_1 …` →
+   `scripts/ruler.py eval …`. (`--variant vanilla` = native generate baseline.) Loop validated on
+   Blackwell: one-segment+RM matches native greedy token-for-token; multi-segment plumbing runs.
+   Still needed for headline numbers: download the pretrained backbone + retrain an SSC head (~25
+   min) + prepare RULER data, then run the pipeline via Slurm.
