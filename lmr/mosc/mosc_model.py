@@ -64,19 +64,22 @@ class DynamicMoSC(nn.Module):
         self.boundary_loss = None  # set per-forward; consumed by the trainer
 
     def _segment_summaries(self, hidden: torch.Tensor, boundaries: torch.Tensor) -> torch.Tensor:
-        """[B, T, d] hidden + [B, T] boundary mask -> [B, N, d] per-segment masked-mean summaries.
+        """[B, T, d] hidden + [B, T] boundary mask -> [B, N, d] per-segment summaries.
 
-        PROXY (see module docstring). N = max #segments across the batch; short rows are zero-padded
-        (their extra all-zero summaries contribute ~0 after the descriptor projection).
+        Summary = the hidden at each segment's END (boundary) token — the state right after that
+        segment's content. Mean-pooling over the segment dilutes the fact when the segment contains
+        filler/blanks (which collapses recall on irregular layouts); the boundary token's hidden does
+        not. PROXY for the true recurrent state. N = max #segments; short rows zero-pad.
         """
         B, T, d = hidden.shape
         seg_id = boundaries.long().cumsum(1) - boundaries.long()  # segment index per token
         N = int(seg_id.max().item()) + 1
-        summ = hidden.new_zeros(B, N, d)
-        cnt = hidden.new_zeros(B, N, 1)
-        summ.scatter_add_(1, seg_id[..., None].expand(-1, -1, d), hidden)
-        cnt.scatter_add_(1, seg_id[..., None], torch.ones_like(hidden[..., :1]))
-        return summ / cnt.clamp_min(1.0)
+        # boundary tokens scatter their hidden to bank[seg_id]; non-boundary tokens -> dump slot N.
+        # Each segment has exactly one boundary (its end), so each slot gets one clean write.
+        tgt = torch.where(boundaries, seg_id, torch.full_like(seg_id, N))
+        bank = hidden.new_zeros(B, N + 1, d)
+        bank.scatter_(1, tgt[..., None].expand(-1, -1, d), hidden)
+        return bank[:, :N]
 
     def _seg_bounds(self, oracle_positions, seq_len):
         """(start, end) slices partitioning [0, T], uniform across the batch (oracle/fixed only)."""
