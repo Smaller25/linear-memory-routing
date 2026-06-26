@@ -85,7 +85,7 @@ fi
 
 # transformers 5.12 is the version the loaders/converter were patched against (SESSION_HANDOFF §5).
 "$PY" -m pip install -q "transformers>=5.12,<6" huggingface_hub tokenizers sentencepiece \
-    einops "datasets>=3.3.0" accelerate pytest nltk
+    einops "datasets>=3.3.0" accelerate pytest nltk wonderwords tenacity html2text
 "$PY" -c 'import triton' 2>/dev/null || "$PY" -m pip install -q triton
 
 # --- per-GPU: tilelang (GDN router TRAINING on Hopper) --------------------------------------
