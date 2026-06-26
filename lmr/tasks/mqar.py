@@ -116,7 +116,12 @@ def make_mqar_gapped(
         for qp, i in zip(qpos, rng.permutation(k)):
             inp[n, qp] = keys[i]; labels[n, qp] = vals[i]
 
+    # CONTEXT filler stays blank (token 0) — randomising it would inject fake keys/values into the
+    # context and destroy the associations (every method, incl. oracle, then scores 0). Only the
+    # QUERY region gets random distractors, matching standard MQAR.
+    qr = np.zeros_like(inp, dtype=bool); qr[:, ctx_len:] = True
     rand = rng.integers(1, vocab_size, size=inp.shape)
-    inp[inp == 0] = rand[inp == 0]                                      # fill filler slots
+    fillq = (inp == 0) & qr
+    inp[fillq] = rand[fillq]
     return {"input_ids": torch.tensor(inp), "labels": torch.tensor(labels),
             "value_pos": torch.tensor(vpos)}
