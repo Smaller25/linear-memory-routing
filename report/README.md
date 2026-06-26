@@ -43,6 +43,7 @@ router instead of retraining a 1.3–2.7B model.
 | 0011 | bounded cache | SSC's win needs ~full O(N) cache; capping degrades ∝ B/N → NOT constant-memory |
 | 0012 | **from-scratch Dynamic-MoSC** | **GDN-2 + learned per-fact boundaries solve multi-key MQAR (learned ≈ oracle, kv128 ~1.0)** — the 0010 regime, from scratch |
 | 0013 | learned segment-length distribution | learned head segments **per fact (median len 2)**, count scales with kv (→512), recovering the oracle structure |
+| 0014 | **RULER free-gen** (frozen mamba2-370m) | vanilla free-gen: niah_single 28.1@4k, 0@8k; multikey 0 — frozen 370m weak/OOD on real RULER (predict_ruler inline metric buggy → use official eval); **+SSC running** |
 | 0015 | **adaptive vs fixed boundaries** | regular MQAR is degenerate (fixed chunk=2 == oracle == 1.0); on **irregular** MQAR fixed-stride **fails (0.00)** while learned ≈ oracle (~1.0, prec/rec 1.0) — boundaries are genuinely content-adaptive |
 
 ## Future work
