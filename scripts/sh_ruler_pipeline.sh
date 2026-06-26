@@ -10,9 +10,11 @@ TASKS="niah_single_1 niah_multikey_2"
 LENS="4096 8192"
 
 echo "===== [1/4] train SSC router on passkey (backbone frozen) ====="
+# memory: the read-out stacks per-checkpoint scans, so cost ~ batch x train_len x #segments. Keep
+# batch=2 / train_len=1024 (4 segments @ chunk 256) — batch 4 / len 2048 OOMs a 96GB card on 370m.
 python -m lmr.scripts.train_grm_passkey --arch mamba2 --model "$MODEL" --variant ssc \
-  --topk 4 --low-rank-dim 64 --aux-scale 1e-4 --train-len 2048 --batch 4 --steps 500 \
-  --dtype bfloat16 --eval-lengths 512 2048 4096 --out "$CKPT"
+  --topk 4 --low-rank-dim 64 --aux-scale 1e-4 --train-len 1024 --batch 2 --steps 500 \
+  --dtype bfloat16 --eval-lengths 512 1024 2048 --out "$CKPT"
 
 echo "===== [2/4] prepare RULER data (vendored NVIDIA generators) ====="
 python scripts/ruler.py prepare --lengths 4096 --tasks niah_single_1,niah_multikey_2 --num-samples 50
