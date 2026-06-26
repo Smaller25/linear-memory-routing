@@ -30,7 +30,7 @@ import torch.nn.functional as F
 from lmr.mosc.backbone import GDN2LM
 from lmr.mosc.dynamic_chunk import mqar_oracle_positions
 from lmr.mosc.mosc_model import DynamicMoSC
-from lmr.tasks.mqar import make_mqar
+from lmr.tasks.mqar import make_mqar, make_mqar_gapped
 
 IGNORE = -100
 
@@ -46,28 +46,43 @@ def build_model(args, vocab):
                        use_true_state=args.true_state)
 
 
-def run_model(model, ids, k, is_mosc, distill=0.0):
+def gen_batch(ctx_filler, n, vocab, k, seq_len, seed):
+    """Return (input_ids, labels, oracle_pos). ctx_filler>0 -> IRREGULAR MQAR (facts at random
+    positions; oracle_pos = the per-row value positions). ctx_filler==0 -> standard MQAR (oracle_pos
+    None, derived from the fixed period at use)."""
+    if ctx_filler > 0:
+        b = make_mqar_gapped(num_examples=n, vocab_size=vocab, num_kv_pairs=k,
+                             ctx_filler=ctx_filler, seed=seed)
+        return b["input_ids"], b["labels"], b["value_pos"]
+    b = make_mqar(num_examples=n, vocab_size=vocab, num_kv_pairs=k, input_seq_len=seq_len, seed=seed)
+    return b["input_ids"], b["labels"], None
+
+
+def run_model(model, ids, k, is_mosc, distill=0.0, oracle_pos=None):
     if not is_mosc:
         return model(ids)
+
+    def _oracle():  # explicit per-row value positions (irregular) or the fixed-period fallback
+        return oracle_pos if oracle_pos is not None else mqar_oracle_positions(k, ids.shape[0], device=ids.device)
+
     if model.chunk_mode == "oracle":
-        oracle = mqar_oracle_positions(k, ids.shape[0], device=ids.device)
-        return model(ids, oracle_positions=oracle)
+        return model(ids, oracle_positions=_oracle())
     if model.chunk_mode == "learned":
-        # distill the boundary head from oracle positions during TRAINING only; at eval (distill=0)
-        # the model must segment from its own predictions — no oracle.
-        oracle = mqar_oracle_positions(k, ids.shape[0], device=ids.device) if distill > 0 else None
-        return model(ids, oracle_positions=oracle, boundary_distill=distill)
+        # distill from oracle positions during TRAINING only; at eval (distill=0) the head segments
+        # from its own predictions.
+        return model(ids, oracle_positions=_oracle() if distill > 0 else None, boundary_distill=distill)
     return model(ids)
 
 
 @torch.no_grad()
-def recall_acc(model, k, vocab, device, is_mosc, seq_len=None, n=256):
-    batch = make_mqar(num_examples=n, vocab_size=vocab, num_kv_pairs=k,
-                      input_seq_len=seq_len, seed=10_000 + k)
-    ids, labels = batch["input_ids"].to(device), batch["labels"].to(device)
+def recall_acc(model, k, vocab, device, is_mosc, seq_len=None, ctx_filler=0, n=256):
+    ids, labels, vpos = gen_batch(ctx_filler, n, vocab, k, seq_len, 10_000 + k)
+    ids, labels = ids.to(device), labels.to(device)
+    vpos = vpos.to(device) if vpos is not None else None
     correct = total = 0
     for i in range(0, n, 64):
-        logits = run_model(model, ids[i:i + 64], k, is_mosc)
+        op = vpos[i:i + 64] if vpos is not None else None
+        logits = run_model(model, ids[i:i + 64], k, is_mosc, oracle_pos=op)
         pred = logits.argmax(-1)
         m = labels[i:i + 64] != IGNORE
         correct += (pred[m] == labels[i:i + 64][m]).sum().item()
@@ -93,6 +108,9 @@ def main():
     ap.add_argument("--train-kv", type=int, nargs="+", default=[16, 32])
     ap.add_argument("--eval-kv", type=int, nargs="+", default=[16, 32, 64])
     ap.add_argument("--seq-len", type=int, default=None)
+    ap.add_argument("--ctx-filler", type=int, default=0,
+                    help=">0 -> IRREGULAR MQAR: insert this many random filler tokens in the context so "
+                         "facts sit at non-periodic positions (tests adaptive vs fixed-stride boundaries)")
     ap.add_argument("--vocab", type=int, default=8192)
     ap.add_argument("--d-model", type=int, default=128)
     ap.add_argument("--n-layers", type=int, default=2)
@@ -114,10 +132,10 @@ def main():
 
     for step in range(1, args.steps + 1):
         k = args.train_kv[step % len(args.train_kv)]
-        batch = make_mqar(num_examples=args.batch, vocab_size=args.vocab, num_kv_pairs=k,
-                          input_seq_len=args.seq_len, seed=step)
-        ids, labels = batch["input_ids"].to(device), batch["labels"].to(device)
-        logits = run_model(model, ids, k, is_mosc, distill=args.boundary_distill)
+        ids, labels, vpos = gen_batch(args.ctx_filler, args.batch, args.vocab, k, args.seq_len, step)
+        ids, labels = ids.to(device), labels.to(device)
+        vpos = vpos.to(device) if vpos is not None else None
+        logits = run_model(model, ids, k, is_mosc, distill=args.boundary_distill, oracle_pos=vpos)
         loss = F.cross_entropy(logits.reshape(-1, args.vocab), labels.reshape(-1), ignore_index=IGNORE)
         if getattr(model, "boundary_loss", None) is not None:
             loss = loss + model.boundary_loss
@@ -130,7 +148,7 @@ def main():
     print("=== recall accuracy (vs #kv pairs) ===")
     model.eval()
     for k in args.eval_kv:
-        print(f"  kv={k:4d}  acc={recall_acc(model, k, args.vocab, device, is_mosc, args.seq_len):.3f}")
+        print(f"  kv={k:4d}  acc={recall_acc(model, k, args.vocab, device, is_mosc, args.seq_len, args.ctx_filler):.3f}")
 
     # learned mode: sweep the eval-time boundary threshold (no retrain). Diagnosis says the head
     # UNDER-FIRES at 0.5 (precision ~1.0, recall low); a lower cutoff should fire more boundaries and
@@ -139,7 +157,7 @@ def main():
         print("=== boundary-threshold sweep (recall-acc across kv) ===")
         for thr in args.eval_thresholds:
             model.boundary_threshold = thr
-            accs = [recall_acc(model, k, args.vocab, device, is_mosc, args.seq_len) for k in args.eval_kv]
+            accs = [recall_acc(model, k, args.vocab, device, is_mosc, args.seq_len, args.ctx_filler) for k in args.eval_kv]
             print(f"  thr={thr:.2f}  " + "  ".join(f"kv{k}={a:.2f}" for k, a in zip(args.eval_kv, accs)))
         model.boundary_threshold = 0.5
 
@@ -149,13 +167,13 @@ def main():
         from lmr.mosc.dynamic_chunk import positions_to_mask
         print("=== learned-boundary quality (predicted vs oracle) ===")
         for k in args.eval_kv:
-            b = make_mqar(num_examples=64, vocab_size=args.vocab, num_kv_pairs=k,
-                          input_seq_len=args.seq_len, seed=20_000 + k)
-            ids = b["input_ids"].to(device)
+            ids, _, vpos = gen_batch(args.ctx_filler, 64, args.vocab, k, args.seq_len, 20_000 + k)
+            ids = ids.to(device); vpos = vpos.to(device) if vpos is not None else None
             with torch.no_grad():
                 model(ids)
             pred = model.last_boundaries.clone(); pred[:, -1] = False  # ignore the forced last
-            tgt = positions_to_mask(mqar_oracle_positions(k, ids.shape[0], device), ids.shape[1])
+            op = vpos if vpos is not None else mqar_oracle_positions(k, ids.shape[0], device)
+            tgt = positions_to_mask(op, ids.shape[1])
             tp = (pred & tgt).sum().item()
             prec = tp / max(pred.sum().item(), 1)
             rec = tp / max(tgt.sum().item(), 1)
@@ -167,9 +185,8 @@ def main():
             import numpy as np
             out = {}
             for k in args.eval_kv:
-                b = make_mqar(num_examples=64, vocab_size=args.vocab, num_kv_pairs=k,
-                              input_seq_len=args.seq_len, seed=30_000 + k)
-                ids = b["input_ids"].to(device)
+                ids, _, _ = gen_batch(args.ctx_filler, 64, args.vocab, k, args.seq_len, 30_000 + k)
+                ids = ids.to(device)
                 with torch.no_grad():
                     model(ids)
                 bnd = model.last_boundaries                       # [B, T] bool (last token forced True)
