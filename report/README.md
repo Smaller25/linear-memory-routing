@@ -42,6 +42,7 @@ router instead of retraining a 1.3–2.7B model.
 | 0010 | multi-key | SSC's win is scoped to single-needle (multi-key = out of scope) |
 | 0011 | bounded cache | SSC's win needs ~full O(N) cache; capping degrades ∝ B/N → NOT constant-memory |
 | 0012 | **from-scratch Dynamic-MoSC** | **GDN-2 + learned per-fact boundaries solve multi-key MQAR (learned ≈ oracle, kv128 ~1.0)** — the 0010 regime, from scratch |
+| 0013 | learned segment-length distribution | learned head segments **per fact (median len 2)**, count scales with kv (→512), recovering the oracle structure |
 
 ## Future work
 - **MoCM (Mixture of Cached Memories)** — combine MoM's *parallel* memory axis with MC's *temporal*
