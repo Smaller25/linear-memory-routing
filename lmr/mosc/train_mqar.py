@@ -83,6 +83,8 @@ def main():
                     help="weight on the oracle-boundary distillation loss (chunk-mode=learned)")
     ap.add_argument("--eval-thresholds", type=float, nargs="*", default=[0.5, 0.3, 0.2, 0.1, 0.05],
                     help="learned mode: re-eval the trained model at these boundary thresholds")
+    ap.add_argument("--dump-boundaries", default=None,
+                    help="learned mode: save predicted segment lengths per eval-kv to this .npz (for viz)")
     ap.add_argument("--chunk", type=int, default=64)
     ap.add_argument("--true-state", action="store_true",
                     help="cache the TRUE GDN2 recurrent state per segment (not pooled-hidden proxy)")
@@ -159,6 +161,29 @@ def main():
             rec = tp / max(tgt.sum().item(), 1)
             print(f"  kv={k:4d}  pred/seq={pred.float().sum(1).mean():.1f} (oracle={k})  "
                   f"precision={prec:.2f} recall={rec:.2f}")
+
+        # dump predicted segment lengths (gaps between consecutive boundaries) for visualization
+        if args.dump_boundaries:
+            import numpy as np
+            out = {}
+            for k in args.eval_kv:
+                b = make_mqar(num_examples=64, vocab_size=args.vocab, num_kv_pairs=k,
+                              input_seq_len=args.seq_len, seed=30_000 + k)
+                ids = b["input_ids"].to(device)
+                with torch.no_grad():
+                    model(ids)
+                bnd = model.last_boundaries                       # [B, T] bool (last token forced True)
+                T = bnd.shape[1]
+                seglens = []
+                for row in bnd:
+                    idx = row.nonzero(as_tuple=True)[0].tolist()   # boundary end positions
+                    prev = -1
+                    for e in idx:
+                        seglens.append(e - prev); prev = e
+                out[f"kv{k}_seglens"] = np.array(seglens, dtype=np.int64)
+                out[f"kv{k}_T"] = np.array([T])
+            np.savez(args.dump_boundaries, **out)
+            print(f"[dump] segment lengths saved -> {args.dump_boundaries}")
 
 
 if __name__ == "__main__":
