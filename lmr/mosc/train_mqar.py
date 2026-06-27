@@ -67,9 +67,9 @@ def run_model(model, ids, k, is_mosc, distill=0.0, oracle_pos=None):
 
     if model.chunk_mode == "oracle":
         return model(ids, oracle_positions=_oracle())
-    if model.chunk_mode == "learned":
-        # distill from oracle positions during TRAINING only; at eval (distill=0) the head segments
-        # from its own predictions.
+    if model.chunk_mode in ("learned", "unsup_ste"):
+        # distill from oracle when distill>0 (learned: always; unsup_ste: warm-up phase only). At
+        # eval (distill=0) the head segments from its own predictions.
         return model(ids, oracle_positions=_oracle() if distill > 0 else None, boundary_distill=distill)
     return model(ids)
 
@@ -96,6 +96,9 @@ def main():
     ap.add_argument("--chunk-mode", choices=["fixed", "oracle", "surprisal", "learned", "unsup", "unsup_ste"], default="fixed")
     ap.add_argument("--boundary-distill", type=float, default=1.0,
                     help="weight on the oracle-boundary distillation loss (chunk-mode=learned)")
+    ap.add_argument("--warmup-steps", type=int, default=-1,
+                    help="unsup_ste warm-start: distill the boundary head for the first N steps, then "
+                         "drop the oracle (task-loss only). -1 = distill always on (learned mode).")
     ap.add_argument("--budget", type=float, default=0.05,
                     help="chunk-mode=unsup: L1 sparsity weight on the landmark prob (no oracle)")
     ap.add_argument("--eval-thresholds", type=float, nargs="*", default=[0.5, 0.3, 0.2, 0.1, 0.05],
@@ -137,7 +140,8 @@ def main():
         ids, labels, vpos = gen_batch(args.ctx_filler, args.batch, args.vocab, k, args.seq_len, step)
         ids, labels = ids.to(device), labels.to(device)
         vpos = vpos.to(device) if vpos is not None else None
-        logits = run_model(model, ids, k, is_mosc, distill=args.boundary_distill, oracle_pos=vpos)
+        distill = args.boundary_distill if (args.warmup_steps < 0 or step <= args.warmup_steps) else 0.0
+        logits = run_model(model, ids, k, is_mosc, distill=distill, oracle_pos=vpos)
         loss = F.cross_entropy(logits.reshape(-1, args.vocab), labels.reshape(-1), ignore_index=IGNORE)
         if getattr(model, "boundary_loss", None) is not None:
             loss = loss + model.boundary_loss

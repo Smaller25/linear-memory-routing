@@ -136,6 +136,11 @@ class DynamicMoSC(nn.Module):
             bank = (bank[:, :N] * gate[:, :N, None])                     # gradient to p via magnitude
             read = self.router.read(base_h, bank, pool_of=None)         # top-k over the SPARSE cache
             self.boundary_loss = self.budget * p.mean()                 # L1 sparsity (no oracle)
+            if boundary_distill > 0.0 and oracle_positions is not None:  # warm-start: oracle BCE (phase 1)
+                tgt = positions_to_mask(oracle_positions, T).float()
+                pos_w = (tgt.numel() - tgt.sum()) / tgt.sum().clamp_min(1.0)
+                self.boundary_loss = self.boundary_loss + boundary_distill * F.binary_cross_entropy_with_logits(
+                    logits, tgt, pos_weight=pos_w)
             return self.lm_head(base_h + read)
 
         if self.chunk_mode == "unsup":
