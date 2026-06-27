@@ -61,7 +61,9 @@ class DynamicMoSC(nn.Module):
         # boundary head: predicts per-token boundary/landmark logits. `learned` distills it from oracle
         # positions; `unsup` trains it end-to-end (no oracle) via a differentiable landmark-biased read
         # + an L1 sparsity budget — testing whether the boundaries are learnable WITHOUT supervision.
-        self.boundary_predictor = nn.Linear(d_model, 1) if chunk_mode in ("learned", "unsup") else None
+        self.boundary_predictor = nn.Linear(d_model, 1) if chunk_mode in ("learned", "unsup", "unsup_ste") else None
+        if chunk_mode == "unsup_ste":
+            nn.init.constant_(self.boundary_predictor.bias, 2.0)  # start p~0.88 (avoid empty-cache cold start)
         self.boundary_threshold = 0.5  # eval-time sigmoid cutoff for firing a boundary (sweepable)
         self.boundary_loss = None  # set per-forward; consumed by the trainer
 
@@ -111,6 +113,30 @@ class DynamicMoSC(nn.Module):
         base_h = self.backbone(input_ids, return_hidden=True)        # [B, T, d]
         base_logits = self.lm_head(base_h)
         self.boundary_loss = base_h.new_zeros(())
+
+        if self.chunk_mode == "unsup_ste":
+            # UNSUPERVISED with a SPARSE hard cache (no full attention): the head's hard boundaries
+            # (STE: forward 0/1, backward sigmoid) define a segment-cache; the read is top-k over those
+            # ~N compressed summaries only. Each summary is gated by the STE prob so the task gradient
+            # reaches the head; an L1 budget prunes boundaries. Train==eval (both hard sparse cache), so
+            # the model MUST commit to boundaries — boundary precision/recall is now meaningful.
+            logits = self.boundary_predictor(base_h).squeeze(-1)         # [B, T]
+            p = logits.sigmoid()
+            hard = p > 0.5
+            hard_f = hard.float() + (p - p.detach())                    # STE value at each token
+            bnd = hard.clone(); bnd[:, -1] = True                        # keep cache non-empty
+            self.last_boundaries = bnd
+            seg_id = bnd.long().cumsum(1) - bnd.long()
+            N = int(seg_id.max().item()) + 1
+            tgt = torch.where(bnd, seg_id, torch.full_like(seg_id, N))   # non-boundary -> dump slot
+            bank = base_h.new_zeros(B, N + 1, base_h.shape[-1])
+            bank.scatter_(1, tgt[..., None].expand(-1, -1, base_h.shape[-1]), base_h)   # boundary-hidden
+            gate = base_h.new_zeros(B, N + 1)
+            gate.scatter_(1, tgt, hard_f)                               # STE prob per segment
+            bank = (bank[:, :N] * gate[:, :N, None])                     # gradient to p via magnitude
+            read = self.router.read(base_h, bank, pool_of=None)         # top-k over the SPARSE cache
+            self.boundary_loss = self.budget * p.mean()                 # L1 sparsity (no oracle)
+            return self.lm_head(base_h + read)
 
         if self.chunk_mode == "unsup":
             # UNSUPERVISED: no oracle. The head predicts a per-token landmark prob p; the read-out is a

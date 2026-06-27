@@ -93,7 +93,7 @@ def recall_acc(model, k, vocab, device, is_mosc, seq_len=None, ctx_filler=0, n=2
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", choices=["gdn2", "mosc"], default="gdn2")
-    ap.add_argument("--chunk-mode", choices=["fixed", "oracle", "surprisal", "learned", "unsup"], default="fixed")
+    ap.add_argument("--chunk-mode", choices=["fixed", "oracle", "surprisal", "learned", "unsup", "unsup_ste"], default="fixed")
     ap.add_argument("--boundary-distill", type=float, default=1.0,
                     help="weight on the oracle-boundary distillation loss (chunk-mode=learned)")
     ap.add_argument("--budget", type=float, default=0.05,
@@ -165,7 +165,7 @@ def main():
 
     # boundary-quality diagnostic for the learned predictor: how many boundaries does it fire at
     # eval, and how well do they match the oracle (per-fact) positions?
-    if is_mosc and model.chunk_mode in ("learned", "unsup"):
+    if is_mosc and model.chunk_mode in ("learned", "unsup", "unsup_ste"):
         from lmr.mosc.dynamic_chunk import positions_to_mask
         print("=== learned-boundary quality (predicted vs oracle) ===")
         for k in args.eval_kv:
