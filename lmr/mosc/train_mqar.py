@@ -43,7 +43,7 @@ def build_model(args, vocab):
                        head_dim=args.head_dim, num_heads=args.num_heads,
                        chunk_mode=args.chunk_mode, chunk=args.chunk,
                        num_pools=args.num_pools, topk=args.topk,
-                       use_true_state=args.true_state)
+                       use_true_state=args.true_state, budget=args.budget)
 
 
 def gen_batch(ctx_filler, n, vocab, k, seq_len, seed):
@@ -93,9 +93,11 @@ def recall_acc(model, k, vocab, device, is_mosc, seq_len=None, ctx_filler=0, n=2
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", choices=["gdn2", "mosc"], default="gdn2")
-    ap.add_argument("--chunk-mode", choices=["fixed", "oracle", "surprisal", "learned"], default="fixed")
+    ap.add_argument("--chunk-mode", choices=["fixed", "oracle", "surprisal", "learned", "unsup"], default="fixed")
     ap.add_argument("--boundary-distill", type=float, default=1.0,
                     help="weight on the oracle-boundary distillation loss (chunk-mode=learned)")
+    ap.add_argument("--budget", type=float, default=0.05,
+                    help="chunk-mode=unsup: L1 sparsity weight on the landmark prob (no oracle)")
     ap.add_argument("--eval-thresholds", type=float, nargs="*", default=[0.5, 0.3, 0.2, 0.1, 0.05],
                     help="learned mode: re-eval the trained model at these boundary thresholds")
     ap.add_argument("--dump-boundaries", default=None,
@@ -163,7 +165,7 @@ def main():
 
     # boundary-quality diagnostic for the learned predictor: how many boundaries does it fire at
     # eval, and how well do they match the oracle (per-fact) positions?
-    if is_mosc and model.chunk_mode == "learned":
+    if is_mosc and model.chunk_mode in ("learned", "unsup"):
         from lmr.mosc.dynamic_chunk import positions_to_mask
         print("=== learned-boundary quality (predicted vs oracle) ===")
         for k in args.eval_kv:

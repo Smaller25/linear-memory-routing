@@ -44,6 +44,7 @@ class DynamicMoSC(nn.Module):
         topk: int = 4,
         surprisal_min_gap: int = 8,
         use_true_state: bool = False,
+        budget: float = 0.05,
     ):
         super().__init__()
         self.backbone = GDN2LM(vocab_size, d_model, n_layers, head_dim, num_heads)
@@ -51,15 +52,16 @@ class DynamicMoSC(nn.Module):
         self.chunk_mode = chunk_mode
         self.chunk = chunk
         self.surprisal_min_gap = surprisal_min_gap
+        self.budget = budget                  # unsup: L1 weight on landmark prob (sparsity)
         self.lm_head = self.backbone.lm_head  # tie read-out head to the backbone's
         # true-state mode: cache each segment's actual GDN2 recurrent state (not a pooled-hidden
         # proxy) and read over it -> tests whether recall comes from the RNN state vs hidden attention.
         self.use_true_state = use_true_state
         self.state_proj = nn.Linear(self.backbone.state_dim, d_model) if use_true_state else None
-        # Phase-1: a small head that predicts segment boundaries from the model's own hidden states.
-        # Trained (optionally distilled from oracle positions) to recover the per-fact boundaries that
-        # made the oracle win — the open question Phase-0 localised.
-        self.boundary_predictor = nn.Linear(d_model, 1) if chunk_mode == "learned" else None
+        # boundary head: predicts per-token boundary/landmark logits. `learned` distills it from oracle
+        # positions; `unsup` trains it end-to-end (no oracle) via a differentiable landmark-biased read
+        # + an L1 sparsity budget — testing whether the boundaries are learnable WITHOUT supervision.
+        self.boundary_predictor = nn.Linear(d_model, 1) if chunk_mode in ("learned", "unsup") else None
         self.boundary_threshold = 0.5  # eval-time sigmoid cutoff for firing a boundary (sweepable)
         self.boundary_loss = None  # set per-forward; consumed by the trainer
 
@@ -109,6 +111,27 @@ class DynamicMoSC(nn.Module):
         base_h = self.backbone(input_ids, return_hidden=True)        # [B, T, d]
         base_logits = self.lm_head(base_h)
         self.boundary_loss = base_h.new_zeros(())
+
+        if self.chunk_mode == "unsup":
+            # UNSUPERVISED: no oracle. The head predicts a per-token landmark prob p; the read-out is a
+            # causal attention over all tokens biased by log p (so gradient reaches the head), and an
+            # L1 budget keeps p sparse. At inference, threshold p for hard boundaries.
+            p = self.boundary_predictor(base_h).squeeze(-1).sigmoid()    # [B, T]
+            q = self.router.query_proj(base_h)                            # [B, T, r]
+            k = self.router.key_proj(base_h)
+            scores = torch.einsum("bir,bjr->bij", q, k) / (q.shape[-1] ** 0.5)
+            scores = scores + torch.log(p + 1e-6)[:, None, :]             # prefer high-landmark tokens
+            causal = torch.triu(torch.ones(T, T, device=base_h.device, dtype=torch.bool), 1)
+            scores = scores.masked_fill(causal[None], float("-inf"))
+            kk = min(self.router.topk, T)
+            topv, topi = scores.topk(kk, dim=-1)                          # [B, T, k]
+            w = topv.softmax(-1)
+            sel = base_h[:, None].expand(-1, T, -1, -1).gather(
+                2, topi[..., None].expand(-1, -1, -1, base_h.shape[-1]))  # [B, T, k, d]
+            read = self.router.out_proj((w[..., None] * sel).sum(2))
+            self.boundary_loss = self.budget * p.mean()                   # sparsity (no oracle)
+            self.last_boundaries = (p > 0.5)
+            return self.lm_head(base_h + read)
 
         if self.chunk_mode == "learned":
             blogits = self.boundary_predictor(base_h).squeeze(-1)    # [B, T]
