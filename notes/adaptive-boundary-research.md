@@ -3,17 +3,56 @@
 _Design note, 2026-06-27. Sets the current goal, a menu of methods to test it, and whether our task
 is the right one._
 
-## The research question (now the goal)
-> Given a linear-RNN backbone and a segment-cache read-out, **can the model learn *where* to place
-> segment boundaries when the information sits at irregular, content-dependent positions** — i.e.
-> recover variable-length "fact" segments rather than a fixed stride?
+## The research question (now the goal) — REWRITTEN 2026-06-28
 
-Status from reports 0012–0015:
+**Old framing (0012–0016).** "Can the model *learn where to place boundaries* when information sits at
+irregular positions?" — answered: yes with oracle distillation (0015), no unsupervised (0016, three
+failures). The trouble is the framing itself: a per-token **boundary classifier distilled from oracle
+positions memorizes the *position distribution* of facts** — brittle to any shift in gap statistics or
+content, and undefined without labels. That is exactly the fragility intuition flagged on 2026-06-28.
+
+**New framing — information-density bit allocation.** Treat the segment cache as a **fixed bit budget**
+and allocate it by *information content*, not by a learned position label. Stop asking "is token t a
+boundary?" and start asking "where is the information, and how should a bounded memory spend its bits on
+it?" Two orthogonal axes:
+
+> **(1) Spatial — *where to cut*.** Segment by an **intrinsic information-density signal** of the
+> backbone — token surprisal (NLL), recurrent **‖Δstate‖**, or adjacent-state dissimilarity —
+> thresholded to a **target firing rate**. Each segment then carries ≈constant *information* (variable
+> length); the rule is content-driven, **transfers across distributions, and needs no oracle**.
+>
+> **(2) Temporal — *how to age*.** As a segment recedes from the current token, **re-compress it
+> hierarchically** (recent = fine, distant = progressively coarser), so memory stays bounded (≈log N)
+> instead of the flat O(N) cache that **0011** showed degrades ∝ B/N.
+
+Unifying principle: **fine bits to recent/high-information regions, coarse bits to distant/low-
+information regions.** (1) is spatial allocation by density; (2) is temporal allocation by recency.
+They compose into one multi-resolution, information-equalized recurrent-state memory.
+
+Status from reports 0012–0016 (what this reframing inherits):
 - Regular MQAR is **degenerate** (facts at a fixed period → fixed `chunk=2` == oracle == 1.0).
-- Irregular MQAR (`make_mqar_gapped`): **fixed stride fails (0.00)**, **oracle ≈ 1.0**, and a boundary
-  head **distilled from oracle** recovers it (≈1.0, precision/recall 1.0, variable segment lengths).
-- Open: that was **supervised** (oracle distillation) and a **single** method. We want unsupervised,
-  and a menu of methods, and confidence the task is right.
+- Irregular MQAR (`make_mqar_gapped`): **fixed stride fails (0.00)**, **oracle ≈ 1.0**, boundary head
+  **distilled from oracle** recovers it (≈1.0, prec/rec 1.0, variable lengths) — but **supervised-only**.
+- **0016 unsupervised failed three ways**; STE+L1 collapsed to 0 because L1 has no floor. → axis (1)'s
+  **target-rate** loss (two-sided, = H-Net's ratio loss) is the direct fix; density signals also give a
+  gradient *before any boundary forms*, which the oracle-distilled head never had.
+- **0010/0011**: multi-key out of scope, not constant-memory (∝ B/N). → axis (2) is the direct answer.
+
+## Two new directions vs the current method (comparison)
+| | current (boundary head) | (1) info-density segmentation | (2) hierarchical re-compression |
+|---|---|---|---|
+| decides | where to cut (per-token classify) | where to cut (threshold a signal) | how to age old segments |
+| signal | oracle-position labels → BCE | **intrinsic**: surprisal / ‖Δstate‖ / adjacent cos-dist | recency + over-budget merge |
+| supervision | **needs oracle** | **self-supervised** | unsup (a policy) |
+| d.o.f. | a full per-position classifier | **one scalar threshold** (+target rate) | #levels, merge operator |
+| shift-robust | weak (memorizes positions) | **strong** (content-driven, transfers) | neutral |
+| fixes which negative | — | **0016** (unsup *where*) | **0010/0011** (not constant-memory) |
+| prior art | — | **BLT** entropy byte-patching (Meta'24); **H-Net** dynamic chunking, ratio-loss+STE ('25) | **Compressive Transformer** (Rae'20); **∞-former** sticky memory |
+| cost / risk | oracle required | tune threshold/target-rate | lossy → far-needle recall drop (must quantify) |
+
+Axis (1) directly attacks the **live** failure (unsupervised segmentation, 0016) and is testable on the
+existing MQAR/selcopy harness → **do it first**. Axis (2) attacks the memory-scaling negative (0011),
+needs a multi-segment cache + a learned merge operator, and is measured by the B/N degradation curve.
 
 ## Methods to learn the boundaries (a menu)
 **Supervised reference (done, 0015).** Boundary head distilled from oracle positions (BCE). Upper
@@ -72,8 +111,29 @@ synthetic tasks that target exactly "find content at irregular positions among n
 sweeps) so the adaptivity claim rests on recognized benchmarks, not a bespoke one. RULER-VT for the
 state-tracking flavor; LongBench last.
 
-## Plan
-1. Unsupervised method (1) running on irregular MQAR — does it find facts without oracle?
-2. If yes, sweep methods (2–5) and report boundary precision/recall + seg-length distribution.
-3. Port the winning method to **Selective Copying** and **MAD noisy/fuzzy recall** (standard).
-4. Pair with true per-row recurrent-state cache (method 8).
+## Plan (reframed 2026-06-28 — information-density allocation)
+**In flight:** validate the *supervised* method on Selective Copying (jobs `selcopy-{vanilla,fixed,
+oracle,learned}`) → report 0017. This is the upper-bound/transfer check; the directions below replace
+the supervised head with self-supervised allocation.
+
+**Axis (1) — info-density segmentation (do first; attacks 0016):**
+1. Add density signals to the trainer: token surprisal (backbone NLL), ‖Δ recurrent-state‖, adjacent-
+   state cosine distance. Emit a per-token density `d_t`; boundary = `d_t` over a threshold.
+2. **Target-rate loss** instead of L1 (the 0016 collapse fix): penalize `(mean(fire) − ρ)²` toward a
+   target rate ρ = budget/seq-len, two-sided so it can't collapse to 0. STE/smoothing for the discrete
+   cut (cf. H-Net ratio loss).
+3. Evaluate on irregular MQAR + Selective Copying: recall vs kv (between fixed-floor and oracle-ceil),
+   boundary precision/recall vs true facts, **threshold-free top-k(p)∩facts** (the 0016 metric), and
+   the seg-length distribution. Crucial: **does it find facts with NO oracle?** (the 0016 open problem).
+4. Distribution-shift test (the robustness claim): train on one gap statistic, eval on another; the
+   density rule should transfer where the distilled head (0015) does not.
+
+**Axis (2) — hierarchical re-compression (attacks 0011):**
+5. Multi-level cache: a fine FIFO of recent segments; when over budget B, merge the oldest adjacent
+   pair via a learned coarsen operator → next level (recursively → ≈log N levels).
+6. Measure the **recall–memory tradeoff**: needle-vs-distance accuracy as a function of B and #levels,
+   against the 0011 flat-cache ∝B/N curve. Honest cost = far-needle degradation from lossy coarsening.
+
+**Shared:**
+7. Pair the winner with the true per-row recurrent-state cache (method 8) and port to **MAD
+   noisy/fuzzy recall** for a standard, noise-knobbed benchmark.
