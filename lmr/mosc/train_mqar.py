@@ -183,8 +183,17 @@ def main():
             tp = (pred & tgt).sum().item()
             prec = tp / max(pred.sum().item(), 1)
             rec = tp / max(tgt.sum().item(), 1)
+            # THRESHOLD-FREE: take the top-k positions by p (k = #facts) and overlap with the true
+            # facts — answers "does the head rank facts highest?" even if p never crosses 0.5.
+            tf = float("nan")
+            if getattr(model, "last_p", None) is not None:
+                p = model.last_p.clone()
+                p[:, -1] = -1.0                                   # exclude the forced-last boundary
+                topi = p.topk(min(k, p.shape[1] - 1), dim=1).indices
+                tfmask = positions_to_mask(topi, ids.shape[1])
+                tf = ((tfmask & tgt).sum().item()) / max(tgt.sum().item(), 1)   # top-k recall == prec
             print(f"  kv={k:4d}  pred/seq={pred.float().sum(1).mean():.1f} (oracle={k})  "
-                  f"precision={prec:.2f} recall={rec:.2f}")
+                  f"precision={prec:.2f} recall={rec:.2f}  | top-k(p) overlap={tf:.2f}")
 
         # dump predicted segment lengths (gaps between consecutive boundaries) for visualization
         if args.dump_boundaries:

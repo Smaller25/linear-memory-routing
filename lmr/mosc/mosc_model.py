@@ -125,7 +125,7 @@ class DynamicMoSC(nn.Module):
             hard = p > 0.5
             hard_f = hard.float() + (p - p.detach())                    # STE value at each token
             bnd = hard.clone(); bnd[:, -1] = True                        # keep cache non-empty
-            self.last_boundaries = bnd
+            self.last_p = p; self.last_boundaries = bnd
             seg_id = bnd.long().cumsum(1) - bnd.long()
             N = int(seg_id.max().item()) + 1
             tgt = torch.where(bnd, seg_id, torch.full_like(seg_id, N))   # non-boundary -> dump slot
@@ -161,7 +161,7 @@ class DynamicMoSC(nn.Module):
                 2, topi[..., None].expand(-1, -1, -1, base_h.shape[-1]))  # [B, T, k, d]
             read = self.router.out_proj((w[..., None] * sel).sum(2))
             self.boundary_loss = self.budget * p.mean()                   # sparsity (no oracle)
-            self.last_boundaries = (p > 0.5)
+            self.last_p = p; self.last_boundaries = (p > 0.5)
             return self.lm_head(base_h + read)
 
         if self.chunk_mode == "learned":
@@ -180,7 +180,7 @@ class DynamicMoSC(nn.Module):
                 min_gap=self.surprisal_min_gap, oracle_positions=oracle_positions, device=input_ids.device,
             )
 
-        self.last_boundaries = bnd                                   # [B, T] for diagnostics
+        self.last_p = blogits.sigmoid(); self.last_boundaries = bnd                                   # [B, T] for diagnostics
         bank = self._segment_summaries(base_h, bnd)                  # [B, N, d]
         read = self.router.read(base_h, bank, pool_of=None if self.router.num_pools == 1 else
                                 self.router.write(bank))             # [B, T, d]
