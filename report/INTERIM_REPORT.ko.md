@@ -1,8 +1,8 @@
 # Linear-Memory-Routing — 중간 보고서 (2026-06-28 갱신)
 
-report 0016까지의 결과를 묶었다. 목표와 실험 세팅, 결과를 한자리에 담았다. 실험별 상세는
-`report/0001`–`0016`에 있고, 이 문서는 그것들을 잇는 단일 서사다. (0012까지만 다루던 2026-06-22
-버전을 대체한다.)
+report 0019까지의 결과를 묶었다. 목표와 실험 세팅, 결과를 한자리에 담았다. 실험별 상세는
+`report/0001`–`0019`에 있고, 이 문서는 그것들을 잇는 단일 서사다. (0016에서 끊긴 앞선 2026-06-28
+판본과 0012까지였던 2026-06-22 판본을 대체한다.)
 
 ---
 
@@ -32,15 +32,19 @@ report 0016까지의 결과를 묶었다. 목표와 실험 세팅, 결과를 한
   - **RULER** (NVIDIA vendoring, 실제 텍스트 long-context) — `niah_single`, `niah_multikey`; free
     generation + 공식 string-match.
   - **flip-flop** (FFLM, `lmr/tasks/flipflop.py`) — state-tracking do-no-harm 체크.
-  - *권고(미실행):* **Selective Copying** + **MAD noisy/fuzzy recall** — 우리 MQAR+filler probe의 표준
-    대응물; 신뢰성 위해 채택 (`notes/adaptive-boundary-research.md`).
+  - **Selective Copying** (Gu & Dao 2023, `lmr/tasks/selective_copying.py`, **0017에서 실행**) — M개
+    데이터 토큰을 8M 노이즈 사이 랜덤 위치에 두고 순서대로 복사한다. content-vs-position 표준 task이자
+    우리 MQAR+filler probe의 외부 대응물이다. (**MAD** noisy/fuzzy recall은 여전히 권고.)
 - **레시피.** lr 3e-3, AdamW (wd 0.1, β 0.9/0.95), grad-clip 1.0; MQAR은 쉬운 kv와 어려운 kv를 함께 담은
   커리큘럼이 필요하다(어려운 kv만으로 곧장 학습하면 부트스트랩에 실패한다).
 - **하드웨어.** A100(VESSL) → 2× RTX PRO 6000 Blackwell(sm_120)로 이전, Slurm, conda 환경 `sh_routing`
   (torch 2.11+cu128, FLA 0.5.2). GPU 작업은 모두 `sbatch scripts/sh_slurm_run.sh`.
 - **read-out 모드** (`lmr/mosc/`): `fixed`(매 C), `oracle`(사실마다 경계), `surprisal`, `learned`(경계
-  head를 oracle로 distill), `unsup`/`unsup_ste`(oracle 없음). 세그먼트 요약은 **경계 토큰의 hidden**으로
-  잡는다(평균-풀링은 fact를 희석한다 — 0015/§4 참고). 진짜 순환 상태 캐시는 `backbone.run_segmented`.
+  head를 oracle로 distill), `unsup`/`unsup_ste`(oracle 없음), `density`(축1: surprisal/entropy/cos거리
+  같은 intrinsic 정보밀도 신호를 target rate로 임계). 세그먼트 요약은 **경계 토큰의 hidden**으로 잡는다
+  (평균-풀링은 fact를 희석한다 — 0015/§4 참고). 진짜 순환 상태 캐시는 `backbone.run_segmented`.
+  **메모리 예산 캐시**(축2, `cache_mode`): `full`(O(N)) | `capped`(최근 B개 유지, 나머지 drop) |
+  `hier`(최근 fine + 오래된 것을 학습 conv로 ≤B/2 병합).
 
 ---
 
@@ -86,11 +90,36 @@ report 0016까지의 결과를 묶었다. 목표와 실험 세팅, 결과를 한
 - **state-tracking do-no-harm (flip-flop).** vanilla GDN-2와 Dynamic-MoSC(fixed) 둘 다 n_instr
   128/256/512에서 1.00 — 분절이 native state-tracking을 깨지 않는다.
 
+### 이번 세션(0017–0019): 표준 벤치마크 + 두 신규 방향
+- **Selective Copying이 supervised method를 검증한다, 단서와 함께 (0017).** read-out이 vanilla의 M128
+  붕괴(**0.59**)를 ~1.0으로 끌어올리고, **learned head가 데이터 위치를 완벽 복원**한다(precision = recall
+  = top-k(p) = **1.00**, 정확히 #data개 경계) — 세그먼트 길이도 1/8 밀도를 따르는 가변 분포(mean 8.9)다.
+  0015 adaptivity 주장이 인정 벤치마크에서 재현됐다. *단*, fixed chunk=2도 **마찬가지로** ~1.0이다.
+  캐시가 무제한이면 과분할이 공짜라, 이 task는 *read-out vs vanilla*만 구분하지 *어디서 끊을지*는 구분하지
+  못한다. adaptivity의 필요성은 예산이 있어야 드러난다.
+- **축1(정보밀도 분절) — 실재하지만 약한 신호 (0018).** task로 학습된 백본의 **raw surprisal은 fact를
+  top-k(p) = 0.40으로 랭크**한다(0016 unsup 0.00, 랜덤 ~0.16 대비) — intrinsic 신호가 fact 위치 정보를
+  부분적으로 담는다. 하지만 *메커니즘*으로는 실패한다: 고정 0.5 임계는 발화가 없고(p가 diffuse), quantile
+  임계는 개수는 맞추지만 recall은 0이며 **co-train이 신호를 0.40 → 0.01로 drift**시킨다 — 밀도를 hard
+  selector로 쓰는 행위가 의존하던 상관을 파괴한다. entropy/cos거리는 더 약하다. fact 위에 경계를 놓는
+  방법은 여전히 supervised뿐이다.
+- **축2(hierarchical 재압축) — lossy 병합이 drop에 진다 (0019).** 예산 B에서 `capped`는 0011의 ∝B/N
+  저하를 재현하고(capped-64: 0.98→0.49→0.24), `hier`(오래된 세그먼트 학습 병합)는 **모든 예산에서 capped
+  보다 나쁘다**(hier-64 0.73/0.26/0.03). 서로 다른 fact 둘을 합치면 둘 다 복원 불가가 되므로, 정확 슬롯을
+  lossy coarse와 맞바꾸면 *exact* recall엔 손해다. **exact multi-key의 ~O(N)이라는 0011 결론이 선다** —
+  압축은 lossy 허용 task에만 맞는다. (density 경계로는 정책 무관 ~0: 축2는 좋은 경계를 전제한다.)
+
 ## 4. 정직한 범위 / 보이지 못한 것
 - **adaptivity는 supervised 한정이다.** learned per-fact 경계(0015)는 oracle distillation을 요구하고,
-  unsupervised 발견은 실패했다(0016). 이게 핵심 미해결이다.
-- **sparse-cache 예산이 주장의 전제다.** full(soft) attention을 주면 이 recall 태스크는 trivially
-  풀려서 caching에 대해 아무것도 증명하지 못한다 — 모든 비교는 캐시/read 예산을 고정해야 한다(0016).
+  unsupervised 발견은 세 방식 모두 실패했으며(0016) 축1 정보밀도 경로(0018)도 부분적이고 drift에 약한
+  신호만 준다(surprisal 0.40, co-train으로 붕괴). 여전히 핵심 미해결이다.
+- **sparse-cache 예산이 주장의 전제다.** full(soft) attention이나 무제한 캐시를 주면 이 recall 태스크는
+  trivially 풀려 caching에 대해 아무것도 증명하지 못한다 — 양쪽으로 확인됐다: 0016(soft attention)과
+  0017(무제한 캐시면 fixed chunk=2가 Selective Copying에서 oracle과 동률). *어디서 끊을지* 주장은 모두
+  캐시/read 예산을 고정해야 한다.
+- **exact recall은 압축으로 상수 메모리가 되지 않는다 (0019).** hierarchical 재압축은 단순 drop에 진다 —
+  서로 다른 fact를 합치면 복원 불가가 되기 때문이다. exact multi-key recall은 본질적으로 ~O(N)이다.
+  압축은 lossy 허용 task(요약/semantic retrieval)에만 맞는다.
 - **소규모다.** Track B는 합성 MQAR 위 ~6M from-scratch; Track A RULER은 370m(2k 너머 OOD).
 - **free-gen + read-out은 2k를 넘으면 느리다** (RULER 4k/8k +SSC 타임아웃) — batched/intermediate-state
   커널이 필요하다.
@@ -101,10 +130,14 @@ report 0016까지의 결과를 묶었다. 목표와 실험 세팅, 결과를 한
 long-context에서 크기 따라 커지는 순승을 주고, RULER로 전이하며, 실제 텍스트 free-gen에서도 2048에서
 순승한다 — 다만 single-needle 전용이고 상수 메모리가 아니다. (B) multi-key recall은 GDN-2 + **진짜** 캐싱
 상태 위의 read-out으로, 경계가 사실 단위일 때 from scratch로 풀리고, 그 경계는 **감독 하에서 학습되며
-content-adaptive**하다.
+content-adaptive**하다 — 이제 **표준 Selective Copying 벤치마크에서도 검증**됐다(0017: 경계 완벽 복원).
+(C) 두 한계가 실증으로 못박혔다: unsupervised 분절은 아직 안 되고(0016/0018), exact-recall 메모리는 ~O(N)
+아래로 압축되지 않는다(0019).
 
-**열린 것.** unsupervised 경계 학습; free-gen+read-out을 2k 너머로 스케일(커널); supervised method를
-표준 벤치마크(Selective Copying / MAD)로 검증; 진짜 per-row 순환 상태 캐시; LongBench.
+**열린 것.** unsupervised 경계 학습 — 살아있는 단서는 **frozen/stop-grad 밀도 신호**다(0018: 0.40
+surprisal 신호를 co-train drift로부터 보호); free-gen+read-out을 2k 너머로 스케일(커널); **병합 대신
+검색** 방식의 메모리 예산(0019: 인덱스를 압축하고 top-B 값은 on-demand로 복원); MAD noisy/fuzzy recall;
+진짜 per-row 순환 상태 캐시; LongBench.
 
-**보고서 맵.** Track A = 0001–0011, 0014; Track B = 0012, 0013, 0015, 0016; figure = artifact
-`seg-length-dist`, `adaptive-boundaries`; 이 문서 = 종합본.
+**보고서 맵.** Track A = 0001–0011, 0014; Track B = 0012, 0013, 0015–0019; figure = artifact
+`seg-length-dist`, `adaptive-boundaries`, `selcopy-seg-length-dist`; 이 문서 = 종합본.

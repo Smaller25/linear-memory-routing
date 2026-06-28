@@ -1,8 +1,8 @@
 # Linear-Memory-Routing — Interim Report (updated 2026-06-28)
 
-Consolidated account through report 0016: the goal, the experimental setup, and every result. Per-
-experiment detail is in `report/0001`–`0016`; this is the single narrative. (Supersedes the
-2026-06-22 version, which stopped at 0012.)
+Consolidated account through report 0019: the goal, the experimental setup, and every result. Per-
+experiment detail is in `report/0001`–`0019`; this is the single narrative. (Supersedes the earlier
+2026-06-28 cut at 0016, and the 2026-06-22 version at 0012.)
 
 ---
 
@@ -34,16 +34,20 @@ growing the state it runs with.
   - **RULER** (vendored NVIDIA, real-text long-context) — `niah_single`, `niah_multikey`; free
     generation + official string-match.
   - **flip-flop** (FFLM, `lmr/tasks/flipflop.py`) — state-tracking do-no-harm check.
-  - *Recommended (not yet run):* **Selective Copying** + **MAD noisy/fuzzy recall** — the standard
-    analogs of our MQAR+filler probe; adopt for credibility (`notes/adaptive-boundary-research.md`).
+  - **Selective Copying** (Gu & Dao 2023, `lmr/tasks/selective_copying.py`, **run 0017**) — M data
+    tokens at random positions among 8M noise, reproduced in order; the standard content-vs-position
+    task and external analog of our MQAR+filler probe. (**MAD** noisy/fuzzy recall still recommended.)
 - **Recipe.** lr 3e-3, AdamW (wd 0.1, β 0.9/0.95), grad-clip 1.0; MQAR needs a curriculum spanning
   easy+hard kv (training straight on hard kv fails to bootstrap).
 - **Hardware.** Migrated A100(VESSL) → 2× RTX PRO 6000 Blackwell (sm_120), Slurm, conda env
   `sh_routing` (torch 2.11+cu128, FLA 0.5.2). All GPU work via `sbatch scripts/sh_slurm_run.sh`.
 - **Read-out modes** (`lmr/mosc/`): `fixed` (every C), `oracle` (boundary at each fact), `surprisal`,
-  `learned` (boundary head distilled from oracle), `unsup`/`unsup_ste` (no oracle). Segment summary =
-  the **boundary-token hidden** (mean-pool dilutes facts; see 0015/§4). True recurrent-state cache via
-  `backbone.run_segmented`.
+  `learned` (boundary head distilled from oracle), `unsup`/`unsup_ste` (no oracle), `density` (axis-1:
+  boundaries from an intrinsic info-density signal — surprisal/entropy/cosine-distance — at a target
+  rate). Segment summary = the **boundary-token hidden** (mean-pool dilutes facts; see 0015/§4). True
+  recurrent-state cache via `backbone.run_segmented`. **Bounded-memory cache** (axis-2, `cache_mode`):
+  `full` (O(N)) | `capped` (keep recent B, drop older) | `hier` (recent fine + older merged to ≤B/2 via
+  a learned conv).
 
 ---
 
@@ -91,14 +95,40 @@ growing the state it runs with.
 - **State-tracking do-no-harm (flip-flop).** vanilla GDN-2 and Dynamic-MoSC(fixed) both 1.00 at
   n_instr 128/256/512 — segmenting does not break native state-tracking.
 
+### This session (0017–0019): standard benchmark + the two new directions
+- **Selective Copying validates the supervised method, with a caveat (0017).** Read-out turns vanilla's
+  collapse at M128 (**0.59**) into ~1.0; the **learned head recovers the data positions perfectly**
+  (precision = recall = top-k(p) = **1.00**, exactly #data boundaries) with variable adaptive segment
+  lengths (mean 8.9, tracking the 1/8 density) — the 0015 adaptivity claim reproduces on a recognized
+  task. *But* fixed chunk=2 **also** ~1.0: with an unconstrained cache, over-segmentation is free, so
+  the task discriminates *read-out vs vanilla*, not *where you cut*. Adaptivity-necessity needs a budget.
+- **Axis-1 (information-density segmentation) — a real but fragile signal (0018).** A task-trained
+  backbone's **raw surprisal ranks facts at top-k(p) = 0.40** (vs 0016 unsup 0.00, random ~0.16) — the
+  intrinsic signal genuinely carries partial fact-location info. But it fails as a *mechanism*: a fixed
+  0.5 cutoff fires nothing (p diffuse), and a quantile cutoff fires the right count but recall stays 0
+  **and co-training drifts the signal 0.40 → 0.01** — using density as a hard selector destroys the
+  correlation it relies on. Entropy/cosine-distance weaker. Supervised remains the only method on facts.
+- **Axis-2 (hierarchical re-compression) — lossy merge loses to dropping (0019).** Under a cache budget
+  B, `capped` reproduces 0011's ∝B/N degradation (capped-64: 0.98→0.49→0.24 as N grows). `hier` (learned
+  merge of old segments) is **worse than capped at every budget** (hier-64 0.73/0.26/0.03): merging two
+  distinct facts makes neither recoverable, so trading exact slots for lossy coarse ones strictly hurts
+  *exact* recall. **0011's ~O(N) for exact multi-key stands** — compression only fits lossy-tolerant
+  tasks. (Density boundaries → ~0 under every policy: axis-2 presupposes good cuts.)
+
 ---
 
 ## 4. Honest scope / what is NOT shown
 - **Adaptivity is supervised-only.** The learned per-fact boundaries (0015) require oracle distillation;
-  unsupervised discovery failed (0016). This is the main open problem.
-- **A sparse-cache budget is essential to the claim.** Given full (soft) attention, these recall tasks
-  are trivially solved and prove nothing about caching — every comparison holds the cache/read budget
-  fixed (0016).
+  unsupervised discovery failed three ways (0016) and the axis-1 information-density route (0018) gives
+  only a partial, drift-prone signal (surprisal 0.40, collapses under co-training). Still the main open
+  problem.
+- **A sparse-cache budget is essential to the claim.** Given full (soft) attention or an unbounded cache,
+  these recall tasks are trivially solved and prove nothing about caching — shown both ways: 0016 (soft
+  attention) and 0017 (unbounded cache makes fixed chunk=2 tie the oracle on Selective Copying). Every
+  claim about *where to cut* must hold the cache/read budget fixed.
+- **You cannot compress to constant memory for exact recall (0019).** Hierarchical re-compression loses
+  to plain dropping because merging distinct facts makes them unrecoverable; exact multi-key recall is
+  intrinsically ~O(N). Compression only fits lossy-tolerant tasks (summarization/semantic retrieval).
 - **Small scale.** Track B is ~6M from-scratch on synthetic MQAR; Track A RULER is 370m (OOD past 2k).
 - **Free-gen + read-out is slow** past 2k (RULER 4k/8k +SSC timed out) — needs a batched/intermediate-
   state kernel.
@@ -109,11 +139,15 @@ growing the state it runs with.
 size-scaling net win on single-needle long-context, transfers to RULER, and shows a net win even under
 real-text free generation at 2048 — but is single-needle-only and not constant-memory. (B) Multi-key
 recall is solved from scratch by GDN-2 + read-out over the **true** cached state when boundaries are
-per-fact, and those boundaries are **learnable and content-adaptive with supervision**.
+per-fact, and those boundaries are **learnable and content-adaptive with supervision** — now also
+**validated on the standard Selective Copying benchmark** (0017: perfect boundary recovery). (C) Two
+limits are now pinned down empirically: unsupervised segmentation does not yet work (0016/0018), and
+exact-recall memory cannot be compressed below ~O(N) (0019).
 
-**Open.** Unsupervised boundary learning; scaling free-gen+read-out past 2k (kernel); validating the
-supervised method on standard benchmarks (Selective Copying / MAD); true per-row recurrent-state cache;
-LongBench.
+**Open.** Unsupervised boundary learning — the live lead is a **frozen/stop-grad density signal** (0018:
+protect the 0.40 surprisal signal from co-training drift); scaling free-gen+read-out past 2k (kernel);
+**retrieval-not-merge** bounded memory (0019: compress the index, materialize top-B values on demand);
+MAD noisy/fuzzy recall; true per-row recurrent-state cache; LongBench.
 
-**Report map.** Track A = 0001–0011, 0014; Track B = 0012, 0013, 0015, 0016; figures = artifacts
-`seg-length-dist`, `adaptive-boundaries`; this file = synthesis.
+**Report map.** Track A = 0001–0011, 0014; Track B = 0012, 0013, 0015–0019; figures = artifacts
+`seg-length-dist`, `adaptive-boundaries`, `selcopy-seg-length-dist`; this file = synthesis.
