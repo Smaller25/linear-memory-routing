@@ -38,6 +38,33 @@ Status from reports 0012–0016 (what this reframing inherits):
   gradient *before any boundary forms*, which the oracle-distilled head never had.
 - **0010/0011**: multi-key out of scope, not constant-memory (∝ B/N). → axis (2) is the direct answer.
 
+## Axis-3 — segment by STATE SATURATION (the leading direction, added 2026-06-28)
+**Origin.** 0019 killed axis-2's *merge*: a learned conv that fuses two cached states loses to plain
+dropping, because **the recurrent update rule (GDN/Mamba) is already the right way to combine two
+states into one** — a post-hoc conv is strictly cruder. The fix is not a better merge but **never
+splitting then merging**: let one recurrent state accumulate over a *variable-length* span and only
+decide **when to cut**. And 0018 showed the cut signal should not be output-side surprisal (it drifts
+under co-training) — it should be read off the **state itself**.
+
+**Mechanism.** Run the backbone's recurrent state; monitor a **fullness signal**; when the state
+*saturates*, emit a boundary (checkpoint the full state into the cache, optionally reset), then start a
+fresh state. Each cached state is thus a "full but not overflowing" unit built by the model's own
+update rule — no lossy merge (fixes 0019), cut by an intrinsic structural signal (more drift-robust
+than 0018), variable-length by information content (axis-1's goal, achieved structurally), and memory
+≈ #facts / capacity ≪ O(N).
+
+**Fullness = effective rank (connects to the earlier rank experiment).** Linear-attention / DeltaNet /
+GDN states are `S = Σ kᵢ vᵢᵀ` — a sum of rank-1 updates. **effective rank(S) ≈ # distinct associations
+stored**, and capacity ≈ head_dim. So "state is full" = rank approaches head_dim / rank-growth → 0 →
+**cut here**. This turns the project's founding motivation (fixed state saturates at high kv) into a
+*quantitative cut criterion*. Cheap proxies (no per-token SVD): **stable rank** `‖S‖_F²/‖S‖₂²`,
+effective rank (singular-value entropy `exp(H(σ̃))`), nuclear norm, or the increment `‖ΔS‖/‖S‖`.
+
+**Open questions (for ultraplan).** (a) GDN-2's exact state object + which fullness proxy; (b) cut
+trigger parameter-free (detect saturation) vs lightly learned (threshold on the proxy) — parameter-free
+sidesteps the 0018 co-training drift; (c) post-cut policy (hard reset vs carry/decay residual); (d)
+reuse of the earlier **rank experiment** (state-rank-vs-#facts curve) as the calibration for "full".
+
 ## Two new directions vs the current method (comparison)
 | | current (boundary head) | (1) info-density segmentation | (2) hierarchical re-compression |
 |---|---|---|---|
