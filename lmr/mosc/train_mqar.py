@@ -44,7 +44,8 @@ def build_model(args, vocab):
                        head_dim=args.head_dim, num_heads=args.num_heads,
                        chunk_mode=args.chunk_mode, chunk=args.chunk,
                        num_pools=args.num_pools, topk=args.topk,
-                       use_true_state=args.true_state, budget=args.budget)
+                       use_true_state=args.true_state, budget=args.budget,
+                       density_signal=args.density_signal, target_rate=args.target_rate)
 
 
 def gen_batch(ctx_filler, n, vocab, k, seq_len, seed, task="mqar", scatter_mult=8):
@@ -107,7 +108,12 @@ def main():
     ap.add_argument("--scatter-mult", type=int, default=8,
                     help="selcopy: noise region length = scatter-mult * (#data tokens)")
     ap.add_argument("--model", choices=["gdn2", "mosc"], default="gdn2")
-    ap.add_argument("--chunk-mode", choices=["fixed", "oracle", "surprisal", "learned", "unsup", "unsup_ste"], default="fixed")
+    ap.add_argument("--chunk-mode", choices=["fixed", "oracle", "surprisal", "learned", "unsup", "unsup_ste", "density"], default="fixed")
+    ap.add_argument("--density-signal", choices=["surprisal", "entropy", "cosdist"], default="surprisal",
+                    help="chunk-mode=density: intrinsic info-density signal to segment on (no oracle)")
+    ap.add_argument("--target-rate", type=float, default=0.1,
+                    help="chunk-mode=density: target boundary firing rate (cache budget); the rate loss "
+                         "anchors mean(p) to this two-sided so it cannot collapse to 0")
     ap.add_argument("--boundary-distill", type=float, default=1.0,
                     help="weight on the oracle-boundary distillation loss (chunk-mode=learned)")
     ap.add_argument("--warmup-steps", type=int, default=-1,
@@ -184,7 +190,7 @@ def main():
 
     # boundary-quality diagnostic for the learned predictor: how many boundaries does it fire at
     # eval, and how well do they match the oracle (per-fact) positions?
-    if is_mosc and model.chunk_mode in ("learned", "unsup", "unsup_ste"):
+    if is_mosc and model.chunk_mode in ("learned", "unsup", "unsup_ste", "density"):
         from lmr.mosc.dynamic_chunk import positions_to_mask
         print("=== learned-boundary quality (predicted vs oracle) ===")
         for k in args.eval_kv:

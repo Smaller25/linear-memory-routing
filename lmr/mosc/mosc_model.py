@@ -21,6 +21,8 @@ track) so the read-out recovers saturated state, not just re-pooled activations.
 
 from __future__ import annotations
 
+import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -45,6 +47,8 @@ class DynamicMoSC(nn.Module):
         surprisal_min_gap: int = 8,
         use_true_state: bool = False,
         budget: float = 0.05,
+        density_signal: str = "surprisal",
+        target_rate: float = 0.1,
     ):
         super().__init__()
         self.backbone = GDN2LM(vocab_size, d_model, n_layers, head_dim, num_heads)
@@ -64,6 +68,16 @@ class DynamicMoSC(nn.Module):
         self.boundary_predictor = nn.Linear(d_model, 1) if chunk_mode in ("learned", "unsup", "unsup_ste") else None
         if chunk_mode == "unsup_ste":
             nn.init.constant_(self.boundary_predictor.bias, 2.0)  # start p~0.88 (avoid empty-cache cold start)
+        # density mode (axis-1): boundaries from an INTRINSIC info-density signal, NOT a per-token
+        # classifier. p_t = sigmoid(scale * standardize(d_t) + bias) — just TWO scalars, so the density
+        # ranking does the work and the rule transfers across distributions (no oracle, no position
+        # memorization). target_rate sets the firing budget; the loss anchors mean(p) to it two-sided
+        # (so it cannot collapse to 0, the 0016 STE+L1 failure). bias init -> initial rate ~= target.
+        self.density_signal = density_signal           # surprisal | entropy | cosdist
+        self.target_rate = target_rate
+        if chunk_mode == "density":
+            self.density_scale = nn.Parameter(torch.tensor(2.0))
+            self.density_bias = nn.Parameter(torch.tensor(math.log(target_rate / (1.0 - target_rate))))
         self.boundary_threshold = 0.5  # eval-time sigmoid cutoff for firing a boundary (sweepable)
         self.boundary_loss = None  # set per-forward; consumed by the trainer
 
@@ -84,6 +98,34 @@ class DynamicMoSC(nn.Module):
         bank = hidden.new_zeros(B, N + 1, d)
         bank.scatter_(1, tgt[..., None].expand(-1, -1, d), hidden)
         return bank[:, :N]
+
+    def _density(self, base_h, base_logits, input_ids):
+        """Per-token intrinsic information-density signal d_t [B, T] (no oracle, no labels needed for
+        entropy/cosdist). High d_t = an informative token => a good place to cut a segment."""
+        if self.density_signal == "surprisal":          # -log p(x_t | x_<t): the token carried info
+            return token_surprisal(base_logits, input_ids)
+        if self.density_signal == "entropy":             # predictive entropy (label-free, deployable)
+            logp = F.log_softmax(base_logits.float(), dim=-1)
+            return -(logp.exp() * logp).sum(-1)
+        if self.density_signal == "cosdist":             # 1 - cos(h_t, h_{t-1}): state moved a lot
+            prev = F.pad(base_h, (0, 0, 1, 0))[:, :-1]
+            return 1.0 - F.cosine_similarity(base_h, prev, dim=-1)
+        raise ValueError(f"unknown density_signal {self.density_signal}")
+
+    def _ste_sparse_read(self, base_h, bnd, gate_f):
+        """Shared STE sparse-cache read: scatter the boundary-token hidden into a per-segment bank,
+        gate each summary by its STE prob ``gate_f`` (so the task gradient reaches the boundary signal),
+        then top-k read over the SPARSE cache only. Used by both unsup_ste and density modes."""
+        B, T, d = base_h.shape
+        seg_id = bnd.long().cumsum(1) - bnd.long()
+        N = int(seg_id.max().item()) + 1
+        tgt = torch.where(bnd, seg_id, torch.full_like(seg_id, N))    # non-boundary -> dump slot N
+        bank = base_h.new_zeros(B, N + 1, d)
+        bank.scatter_(1, tgt[..., None].expand(-1, -1, d), base_h)    # boundary-token hidden
+        gate = base_h.new_zeros(B, N + 1)
+        gate.scatter_(1, tgt, gate_f)
+        bank = bank[:, :N] * gate[:, :N, None]
+        return self.router.read(base_h, bank, pool_of=None)
 
     def _seg_bounds(self, oracle_positions, seq_len):
         """(start, end) slices partitioning [0, T], uniform across the batch (oracle/fixed only)."""
@@ -126,21 +168,30 @@ class DynamicMoSC(nn.Module):
             hard_f = hard.float() + (p - p.detach())                    # STE value at each token
             bnd = hard.clone(); bnd[:, -1] = True                        # keep cache non-empty
             self.last_p = p; self.last_boundaries = bnd
-            seg_id = bnd.long().cumsum(1) - bnd.long()
-            N = int(seg_id.max().item()) + 1
-            tgt = torch.where(bnd, seg_id, torch.full_like(seg_id, N))   # non-boundary -> dump slot
-            bank = base_h.new_zeros(B, N + 1, base_h.shape[-1])
-            bank.scatter_(1, tgt[..., None].expand(-1, -1, base_h.shape[-1]), base_h)   # boundary-hidden
-            gate = base_h.new_zeros(B, N + 1)
-            gate.scatter_(1, tgt, hard_f)                               # STE prob per segment
-            bank = (bank[:, :N] * gate[:, :N, None])                     # gradient to p via magnitude
-            read = self.router.read(base_h, bank, pool_of=None)         # top-k over the SPARSE cache
+            read = self._ste_sparse_read(base_h, bnd, hard_f)           # top-k over the SPARSE cache
             self.boundary_loss = self.budget * p.mean()                 # L1 sparsity (no oracle)
             if boundary_distill > 0.0 and oracle_positions is not None:  # warm-start: oracle BCE (phase 1)
                 tgt = positions_to_mask(oracle_positions, T).float()
                 pos_w = (tgt.numel() - tgt.sum()) / tgt.sum().clamp_min(1.0)
                 self.boundary_loss = self.boundary_loss + boundary_distill * F.binary_cross_entropy_with_logits(
                     logits, tgt, pos_weight=pos_w)
+            return self.lm_head(base_h + read)
+
+        if self.chunk_mode == "density":
+            # AXIS-1: boundaries from the backbone's own info-density signal, thresholded by two learned
+            # scalars (scale, bias) calibrated to a TARGET RATE. No oracle, no per-token classifier.
+            d = self._density(base_h, base_logits, input_ids)            # [B, T]
+            d = (d - d.mean(1, keepdim=True)) / (d.std(1, keepdim=True) + 1e-5)   # per-row standardize
+            p = (self.density_scale * d + self.density_bias).sigmoid()   # [B, T]
+            hard = p > 0.5
+            hard_f = hard.float() + (p - p.detach())                    # STE
+            bnd = hard.clone(); bnd[:, -1] = True
+            self.last_p = p; self.last_boundaries = bnd
+            read = self._ste_sparse_read(base_h, bnd, hard_f)
+            # TARGET-RATE loss (relative, two-sided): anchors mean(p) to target_rate so it can neither
+            # collapse to 0 (the 0016 L1 failure) nor saturate. Scale-free in target_rate.
+            rate = p.mean()
+            self.boundary_loss = self.budget * ((rate - self.target_rate) / self.target_rate) ** 2
             return self.lm_head(base_h + read)
 
         if self.chunk_mode == "unsup":
