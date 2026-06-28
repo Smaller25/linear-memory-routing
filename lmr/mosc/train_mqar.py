@@ -45,7 +45,8 @@ def build_model(args, vocab):
                        chunk_mode=args.chunk_mode, chunk=args.chunk,
                        num_pools=args.num_pools, topk=args.topk,
                        use_true_state=args.true_state, budget=args.budget,
-                       density_signal=args.density_signal, target_rate=args.target_rate)
+                       density_signal=args.density_signal, target_rate=args.target_rate,
+                       cache_mode=args.cache_mode, cache_budget=args.cache_budget)
 
 
 def gen_batch(ctx_filler, n, vocab, k, seq_len, seed, task="mqar", scatter_mult=8):
@@ -114,6 +115,13 @@ def main():
     ap.add_argument("--target-rate", type=float, default=0.1,
                     help="chunk-mode=density: target boundary firing rate (cache budget); the rate loss "
                          "anchors mean(p) to this two-sided so it cannot collapse to 0")
+    ap.add_argument("--cache-mode", choices=["full", "capped", "hier"], default="full",
+                    help="AXIS-2 bounded memory when #segments > cache-budget: full=keep all (ceiling); "
+                         "capped=keep recent B, drop older (0011 baseline); hier=recent fine + older "
+                         "compressed via learned merge (bounded, lossy-not-dropped)")
+    ap.add_argument("--cache-budget", type=int, default=0,
+                    help="AXIS-2: max segments retained (0 = unlimited). The recall-vs-budget curve of "
+                         "capped vs hier is the axis-2 experiment (cf. 0011 ∝B/N degradation)")
     ap.add_argument("--boundary-distill", type=float, default=1.0,
                     help="weight on the oracle-boundary distillation loss (chunk-mode=learned)")
     ap.add_argument("--warmup-steps", type=int, default=-1,

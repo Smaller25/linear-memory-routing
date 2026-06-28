@@ -49,6 +49,8 @@ class DynamicMoSC(nn.Module):
         budget: float = 0.05,
         density_signal: str = "surprisal",
         target_rate: float = 0.1,
+        cache_mode: str = "full",
+        cache_budget: int = 0,
     ):
         super().__init__()
         self.backbone = GDN2LM(vocab_size, d_model, n_layers, head_dim, num_heads)
@@ -80,6 +82,18 @@ class DynamicMoSC(nn.Module):
             self.density_bias = nn.Parameter(torch.tensor(math.log(target_rate / (1.0 - target_rate))))
         self.boundary_threshold = 0.5  # eval-time sigmoid cutoff for firing a boundary (sweepable)
         self.boundary_loss = None  # set per-forward; consumed by the trainer
+        # AXIS-2: bounded-memory cache. 0011 showed a FLAT cache is not constant-memory — capping it to
+        # B most-recent segments and dropping the rest degrades ∝ B/N. cache_mode controls what we do
+        # when #segments N > cache_budget B:
+        #   full   - keep all N (O(N) upper bound / ceiling).
+        #   capped - keep the B most-recent segments, DROP the older (the 0011 baseline).
+        #   hier   - keep B//2 recent FINE + compress the older into <=B//2 COARSE slots via a learned
+        #            adjacent-pair merge (recursive halving = a balanced merge tree), so distant info is
+        #            preserved lossily instead of dropped. Memory stays bounded at B. (cf. Compressive
+        #            Transformer.) The recall–memory tradeoff vs `capped` is the axis-2 experiment.
+        self.cache_mode = cache_mode
+        self.cache_budget = cache_budget
+        self.merge_conv = nn.Conv1d(d_model, d_model, kernel_size=2, stride=2) if cache_mode == "hier" else None
 
     def _segment_summaries(self, hidden: torch.Tensor, boundaries: torch.Tensor) -> torch.Tensor:
         """[B, T, d] hidden + [B, T] boundary mask -> [B, N, d] per-segment summaries.
@@ -125,7 +139,28 @@ class DynamicMoSC(nn.Module):
         gate = base_h.new_zeros(B, N + 1)
         gate.scatter_(1, tgt, gate_f)
         bank = bank[:, :N] * gate[:, :N, None]
+        bank = self._apply_cache_budget(bank)
         return self.router.read(base_h, bank, pool_of=None)
+
+    def _apply_cache_budget(self, bank: torch.Tensor) -> torch.Tensor:
+        """[B, N, d] segment bank -> [B, M, d] with M <= cache_budget (axis-2 bounded memory)."""
+        B, N, d = bank.shape
+        Bc = self.cache_budget
+        if self.cache_mode == "full" or Bc <= 0 or N <= Bc:
+            return bank
+        if self.cache_mode == "capped":
+            return bank[:, -Bc:]                                   # keep most-recent, drop the rest
+        # hier: recent FINE + older COMPRESSED, total <= Bc
+        fine = max(Bc // 2, 1)
+        budget_coarse = max(Bc - fine, 1)
+        fine_part = bank[:, -fine:]
+        x = bank[:, :-fine].transpose(1, 2)                        # [B, d, M_old]
+        while x.shape[-1] > budget_coarse and x.shape[-1] >= 2:    # recursive adjacent-pair merge
+            if x.shape[-1] % 2:
+                x = F.pad(x, (1, 0))                               # pad the oldest end to even length
+            x = self.merge_conv(x)                                 # halve the count, one level coarser
+        coarse = x.transpose(1, 2)                                 # [B, <=budget_coarse, d]
+        return torch.cat([coarse, fine_part], dim=1)
 
     def _seg_bounds(self, oracle_positions, seq_len):
         """(start, end) slices partitioning [0, T], uniform across the batch (oracle/fixed only)."""
@@ -149,6 +184,7 @@ class DynamicMoSC(nn.Module):
             h_full, states = self.backbone.run_segmented(input_ids, bounds)   # [B,T,d], [B,N,state_dim]
             self.boundary_loss = h_full.new_zeros(())
             bank = self.state_proj(states)                                    # [B, N, d]
+            bank = self._apply_cache_budget(bank)                             # axis-2 bounded memory
             read = self.router.read(h_full, bank, pool_of=None)
             return self.lm_head(h_full + read)
 
@@ -231,8 +267,11 @@ class DynamicMoSC(nn.Module):
                 min_gap=self.surprisal_min_gap, oracle_positions=oracle_positions, device=input_ids.device,
             )
 
-        self.last_p = blogits.sigmoid(); self.last_boundaries = bnd                                   # [B, T] for diagnostics
+        # blogits only exists for `learned`; fixed/oracle/surprisal have no boundary predictor.
+        self.last_p = blogits.sigmoid() if self.chunk_mode == "learned" else None
+        self.last_boundaries = bnd                                   # [B, T] for diagnostics
         bank = self._segment_summaries(base_h, bnd)                  # [B, N, d]
-        read = self.router.read(base_h, bank, pool_of=None if self.router.num_pools == 1 else
-                                self.router.write(bank))             # [B, T, d]
+        bank = self._apply_cache_budget(bank)                        # axis-2 bounded memory
+        pool_of = None if self.router.num_pools == 1 else self.router.write(bank)
+        read = self.router.read(base_h, bank, pool_of=pool_of)       # [B, T, d]
         return self.lm_head(base_h + read)
