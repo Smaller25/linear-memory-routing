@@ -60,10 +60,21 @@ stored**, and capacity ≈ head_dim. So "state is full" = rank approaches head_d
 *quantitative cut criterion*. Cheap proxies (no per-token SVD): **stable rank** `‖S‖_F²/‖S‖₂²`,
 effective rank (singular-value entropy `exp(H(σ̃))`), nuclear norm, or the increment `‖ΔS‖/‖S‖`.
 
-**Open questions (for ultraplan).** (a) GDN-2's exact state object + which fullness proxy; (b) cut
-trigger parameter-free (detect saturation) vs lightly learned (threshold on the proxy) — parameter-free
-sidesteps the 0018 co-training drift; (c) post-cut policy (hard reset vs carry/decay residual); (d)
-reuse of the earlier **rank experiment** (state-rank-vs-#facts curve) as the calibration for "full".
+**Already measured — `Smaller25/SSM_Rank_Analysis`.** That repo establishes the exact signal axis-3
+needs: the **effective rank of the SSM hidden state saturates with context length** — rank rises then
+**plateaus at a per-head threshold T\***. So "state is full" is not hypothetical; it is the measured
+plateau, and **T\* is the cut point**. It also finds (i) **head heterogeneity** (Type A/B/C heads with
+different saturation curves → the cut must aggregate across heads, or trigger on a chosen head set),
+and (ii) **state injection replicates oracle retrieval** — independent evidence that a cached state is
+a usable context proxy (grounds our read-out). Caveat: it's **Mamba-2 (370m)**; we must **port the
+effective-rank measurement to GDN-2's state** (`S = Σ kᵢvᵢᵀ`, heads × headdim × d_state).
+
+**Open questions (for ultraplan).** (a) GDN-2 state object + which fullness proxy (align with the repo's
+**effective rank**, plus cheap stable-rank / `‖ΔS‖` variants); (b) cut trigger parameter-free (detect
+the rank plateau T\*) vs lightly learned — parameter-free sidesteps the 0018 co-training drift; (c)
+head heterogeneity: per-head vs aggregated cut (Type A/B/C); (d) post-cut policy (hard reset vs
+carry/decay residual); (e) reuse the repo's effective-rank-vs-T curves / T\* as the calibration for
+"full", and its state-injection result as the read-out sanity check.
 
 ## Two new directions vs the current method (comparison)
 | | current (boundary head) | (1) info-density segmentation | (2) hierarchical re-compression |
