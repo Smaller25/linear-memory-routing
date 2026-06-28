@@ -53,12 +53,24 @@ update rule — no lossy merge (fixes 0019), cut by an intrinsic structural sign
 than 0018), variable-length by information content (axis-1's goal, achieved structurally), and memory
 ≈ #facts / capacity ≪ O(N).
 
-**Fullness = effective rank (connects to the earlier rank experiment).** Linear-attention / DeltaNet /
-GDN states are `S = Σ kᵢ vᵢᵀ` — a sum of rank-1 updates. **effective rank(S) ≈ # distinct associations
-stored**, and capacity ≈ head_dim. So "state is full" = rank approaches head_dim / rank-growth → 0 →
-**cut here**. This turns the project's founding motivation (fixed state saturates at high kv) into a
-*quantitative cut criterion*. Cheap proxies (no per-token SVD): **stable rank** `‖S‖_F²/‖S‖₂²`,
-effective rank (singular-value entropy `exp(H(σ̃))`), nuclear norm, or the increment `‖ΔS‖/‖S‖`.
+**What is the "fullness" signal? — OPEN, and probably NOT rank (owner, 2026-06-28).** The mechanism
+above is signal-agnostic; the cut signal is the real design choice. Candidates, by current promise:
+1. **Perplexity / compression-based (the lean).** Cut when the model can no longer predict/compress the
+   incoming token from the accumulated state — local perplexity spikes = new information the state must
+   start a fresh unit for. This is the functional, content-level signal. NB it is the same family as
+   0018's surprisal, which *drifted when co-trained as a selector* — so use it **frozen / stop-grad /
+   parameter-free** (the 0018 "protected-signal" lead), not as a trained selector.
+2. **Reconstruction / MDL.** A segment is "full" when its state summary stops reconstructing/predicting
+   its own tokens (0016 menu item 5, untried). Ties fullness to retrievable content, resists drift.
+3. **Gate / norm statistics.** GDN forget-gate activity or `‖ΔS‖/‖S‖` — cheap, untested.
+4. **Effective rank — DEPRIORITIZED.** `effective rank(S) ≈ #stored associations` (S = Σ kᵢvᵢᵀ, capacity
+   ≈ head_dim) is the intuitive capacity measure, but the owner's prior rank experiment did **not** show
+   it predicts well, and it is structural (high rank ≠ retrievable) and SVD-expensive. Keep as a
+   diagnostic baseline, not the trigger. (Spike `lmr/analysis/gdn2_effective_rank.py` ports the
+   measurement to GDN-2 — reusable as the state-extraction substrate for *any* of these signals.)
+
+The reusable infra (signal-agnostic): `GDN2LM.run_segmented` threads and exposes the recurrent state at
+any cut, so swapping signal (1)–(4) is a one-function change on top of it.
 
 **Already measured — `Smaller25/SSM_Rank_Analysis`.** That repo establishes the exact signal axis-3
 needs: the **effective rank of the SSM hidden state saturates with context length** — rank rises then
@@ -69,12 +81,12 @@ and (ii) **state injection replicates oracle retrieval** — independent evidenc
 a usable context proxy (grounds our read-out). Caveat: it's **Mamba-2 (370m)**; we must **port the
 effective-rank measurement to GDN-2's state** (`S = Σ kᵢvᵢᵀ`, heads × headdim × d_state).
 
-**Open questions (for ultraplan).** (a) GDN-2 state object + which fullness proxy (align with the repo's
-**effective rank**, plus cheap stable-rank / `‖ΔS‖` variants); (b) cut trigger parameter-free (detect
-the rank plateau T\*) vs lightly learned — parameter-free sidesteps the 0018 co-training drift; (c)
-head heterogeneity: per-head vs aggregated cut (Type A/B/C); (d) post-cut policy (hard reset vs
-carry/decay residual); (e) reuse the repo's effective-rank-vs-T curves / T\* as the calibration for
-"full", and its state-injection result as the read-out sanity check.
+**Open questions (for ultraplan).** (a) **which fullness signal** — perplexity/compression vs
+reconstruction vs gate-norm (rank deprioritized, §candidates); (b) cut trigger **parameter-free /
+frozen** vs lightly learned — frozen sidesteps the 0018 co-training drift (the crux, given 0018); (c)
+head heterogeneity: per-head vs aggregated cut; (d) post-cut policy (hard reset vs carry/decay
+residual); (e) reuse the rank repo as the **state-extraction substrate + a diagnostic baseline**, and
+its state-injection result as the read-out sanity check (not the rank metric as the trigger).
 
 ## Two new directions vs the current method (comparison)
 | | current (boundary head) | (1) info-density segmentation | (2) hierarchical re-compression |
