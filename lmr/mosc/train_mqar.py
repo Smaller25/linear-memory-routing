@@ -31,6 +31,7 @@ from lmr.mosc.backbone import GDN2LM
 from lmr.mosc.dynamic_chunk import mqar_oracle_positions
 from lmr.mosc.mosc_model import DynamicMoSC
 from lmr.tasks.mqar import make_mqar, make_mqar_gapped
+from lmr.tasks.selective_copying import make_selective_copying
 
 IGNORE = -100
 
@@ -46,10 +47,17 @@ def build_model(args, vocab):
                        use_true_state=args.true_state, budget=args.budget)
 
 
-def gen_batch(ctx_filler, n, vocab, k, seq_len, seed):
-    """Return (input_ids, labels, oracle_pos). ctx_filler>0 -> IRREGULAR MQAR (facts at random
-    positions; oracle_pos = the per-row value positions). ctx_filler==0 -> standard MQAR (oracle_pos
-    None, derived from the fixed period at use)."""
+def gen_batch(ctx_filler, n, vocab, k, seq_len, seed, task="mqar", scatter_mult=8):
+    """Return (input_ids, labels, oracle_pos).
+
+    task=selcopy -> Selective Copying (the standard content-vs-position task): k data tokens at random
+    positions among k*scatter_mult noise tokens, reproduced in order; oracle_pos = the data positions.
+    task=mqar: ctx_filler>0 -> IRREGULAR MQAR (facts at random positions; oracle_pos = per-row value
+    positions); ctx_filler==0 -> standard MQAR (oracle_pos None, from the fixed period at use)."""
+    if task == "selcopy":
+        b = make_selective_copying(num_examples=n, n_data=k, vocab_size=vocab,
+                                   scatter_mult=scatter_mult, seed=seed)
+        return b["input_ids"], b["labels"], b["value_pos"]
     if ctx_filler > 0:
         b = make_mqar_gapped(num_examples=n, vocab_size=vocab, num_kv_pairs=k,
                              ctx_filler=ctx_filler, seed=seed)
@@ -75,8 +83,9 @@ def run_model(model, ids, k, is_mosc, distill=0.0, oracle_pos=None):
 
 
 @torch.no_grad()
-def recall_acc(model, k, vocab, device, is_mosc, seq_len=None, ctx_filler=0, n=256):
-    ids, labels, vpos = gen_batch(ctx_filler, n, vocab, k, seq_len, 10_000 + k)
+def recall_acc(model, k, vocab, device, is_mosc, seq_len=None, ctx_filler=0, n=256,
+               task="mqar", scatter_mult=8):
+    ids, labels, vpos = gen_batch(ctx_filler, n, vocab, k, seq_len, 10_000 + k, task, scatter_mult)
     ids, labels = ids.to(device), labels.to(device)
     vpos = vpos.to(device) if vpos is not None else None
     correct = total = 0
@@ -92,6 +101,11 @@ def recall_acc(model, k, vocab, device, is_mosc, seq_len=None, ctx_filler=0, n=2
 
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--task", choices=["mqar", "selcopy"], default="mqar",
+                    help="selcopy = Selective Copying (standard content-vs-position task); train-kv/"
+                         "eval-kv are then #data tokens to copy, scattered among --scatter-mult*k noise")
+    ap.add_argument("--scatter-mult", type=int, default=8,
+                    help="selcopy: noise region length = scatter-mult * (#data tokens)")
     ap.add_argument("--model", choices=["gdn2", "mosc"], default="gdn2")
     ap.add_argument("--chunk-mode", choices=["fixed", "oracle", "surprisal", "learned", "unsup", "unsup_ste"], default="fixed")
     ap.add_argument("--boundary-distill", type=float, default=1.0,
@@ -137,7 +151,8 @@ def main():
 
     for step in range(1, args.steps + 1):
         k = args.train_kv[step % len(args.train_kv)]
-        ids, labels, vpos = gen_batch(args.ctx_filler, args.batch, args.vocab, k, args.seq_len, step)
+        ids, labels, vpos = gen_batch(args.ctx_filler, args.batch, args.vocab, k, args.seq_len, step,
+                                      args.task, args.scatter_mult)
         ids, labels = ids.to(device), labels.to(device)
         vpos = vpos.to(device) if vpos is not None else None
         distill = args.boundary_distill if (args.warmup_steps < 0 or step <= args.warmup_steps) else 0.0
@@ -154,7 +169,7 @@ def main():
     print("=== recall accuracy (vs #kv pairs) ===")
     model.eval()
     for k in args.eval_kv:
-        print(f"  kv={k:4d}  acc={recall_acc(model, k, args.vocab, device, is_mosc, args.seq_len, args.ctx_filler):.3f}")
+        print(f"  kv={k:4d}  acc={recall_acc(model, k, args.vocab, device, is_mosc, args.seq_len, args.ctx_filler, task=args.task, scatter_mult=args.scatter_mult):.3f}")
 
     # learned mode: sweep the eval-time boundary threshold (no retrain). Diagnosis says the head
     # UNDER-FIRES at 0.5 (precision ~1.0, recall low); a lower cutoff should fire more boundaries and
@@ -163,7 +178,7 @@ def main():
         print("=== boundary-threshold sweep (recall-acc across kv) ===")
         for thr in args.eval_thresholds:
             model.boundary_threshold = thr
-            accs = [recall_acc(model, k, args.vocab, device, is_mosc, args.seq_len, args.ctx_filler) for k in args.eval_kv]
+            accs = [recall_acc(model, k, args.vocab, device, is_mosc, args.seq_len, args.ctx_filler, task=args.task, scatter_mult=args.scatter_mult) for k in args.eval_kv]
             print(f"  thr={thr:.2f}  " + "  ".join(f"kv{k}={a:.2f}" for k, a in zip(args.eval_kv, accs)))
         model.boundary_threshold = 0.5
 
@@ -173,7 +188,7 @@ def main():
         from lmr.mosc.dynamic_chunk import positions_to_mask
         print("=== learned-boundary quality (predicted vs oracle) ===")
         for k in args.eval_kv:
-            ids, _, vpos = gen_batch(args.ctx_filler, 64, args.vocab, k, args.seq_len, 20_000 + k)
+            ids, _, vpos = gen_batch(args.ctx_filler, 64, args.vocab, k, args.seq_len, 20_000 + k, args.task, args.scatter_mult)
             ids = ids.to(device); vpos = vpos.to(device) if vpos is not None else None
             with torch.no_grad():
                 model(ids)
@@ -200,7 +215,7 @@ def main():
             import numpy as np
             out = {}
             for k in args.eval_kv:
-                ids, _, _ = gen_batch(args.ctx_filler, 64, args.vocab, k, args.seq_len, 30_000 + k)
+                ids, _, _ = gen_batch(args.ctx_filler, 64, args.vocab, k, args.seq_len, 30_000 + k, args.task, args.scatter_mult)
                 ids = ids.to(device)
                 with torch.no_grad():
                     model(ids)
