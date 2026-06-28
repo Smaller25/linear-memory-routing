@@ -49,6 +49,7 @@ class DynamicMoSC(nn.Module):
         budget: float = 0.05,
         density_signal: str = "surprisal",
         target_rate: float = 0.1,
+        density_fire: str = "quantile",
         cache_mode: str = "full",
         cache_budget: int = 0,
     ):
@@ -77,6 +78,7 @@ class DynamicMoSC(nn.Module):
         # (so it cannot collapse to 0, the 0016 STE+L1 failure). bias init -> initial rate ~= target.
         self.density_signal = density_signal           # surprisal | entropy | cosdist
         self.target_rate = target_rate
+        self.density_fire = density_fire               # quantile (top-rho per row) | threshold (0.5)
         if chunk_mode == "density":
             self.density_scale = nn.Parameter(torch.tensor(2.0))
             self.density_bias = nn.Parameter(torch.tensor(math.log(target_rate / (1.0 - target_rate))))
@@ -219,7 +221,16 @@ class DynamicMoSC(nn.Module):
             d = self._density(base_h, base_logits, input_ids)            # [B, T]
             d = (d - d.mean(1, keepdim=True)) / (d.std(1, keepdim=True) + 1e-5)   # per-row standardize
             p = (self.density_scale * d + self.density_bias).sigmoid()   # [B, T]
-            hard = p > 0.5
+            if self.density_fire == "quantile":
+                # fire the top target_rate fraction PER ROW: a relative cutoff that always commits
+                # ~rho*T boundaries at the highest-density tokens. The fixed-0.5 cutoff fires NOTHING
+                # when p sits diffuse near rho<0.5 (the failure in the first density run), so the
+                # signal's fact-ranking never reaches the cache; the quantile cutoff converts it.
+                k_fire = max(round(self.target_rate * T), 1)
+                thr = p.topk(k_fire, dim=1).values[:, -1:]               # [B,1] per-row k-th largest p
+                hard = p >= thr
+            else:
+                hard = p > 0.5
             hard_f = hard.float() + (p - p.detach())                    # STE
             bnd = hard.clone(); bnd[:, -1] = True
             self.last_p = p; self.last_boundaries = bnd

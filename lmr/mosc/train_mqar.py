@@ -46,6 +46,7 @@ def build_model(args, vocab):
                        num_pools=args.num_pools, topk=args.topk,
                        use_true_state=args.true_state, budget=args.budget,
                        density_signal=args.density_signal, target_rate=args.target_rate,
+                       density_fire=args.density_fire,
                        cache_mode=args.cache_mode, cache_budget=args.cache_budget)
 
 
@@ -115,6 +116,9 @@ def main():
     ap.add_argument("--target-rate", type=float, default=0.1,
                     help="chunk-mode=density: target boundary firing rate (cache budget); the rate loss "
                          "anchors mean(p) to this two-sided so it cannot collapse to 0")
+    ap.add_argument("--density-fire", choices=["quantile", "threshold"], default="quantile",
+                    help="chunk-mode=density: quantile=fire top target-rate fraction per row (robust); "
+                         "threshold=fixed 0.5 cutoff (fires nothing if p is diffuse below 0.5)")
     ap.add_argument("--cache-mode", choices=["full", "capped", "hier"], default="full",
                     help="AXIS-2 bounded memory when #segments > cache-budget: full=keep all (ceiling); "
                          "capped=keep recent B, drop older (0011 baseline); hier=recent fine + older "
