@@ -56,10 +56,19 @@ class GDN2LM(nn.Module):
         # flattened recurrent-state width [H*K*V] of one GDN2 layer (for the true-state read-out)
         self.state_dim = num_heads * head_dim * int(head_dim * expand_v)
 
-    def forward(self, input_ids: torch.Tensor, return_hidden: bool = False) -> torch.Tensor:
+    def forward(self, input_ids: torch.Tensor, return_hidden: bool = False,
+                salience_gate: torch.Tensor | None = None) -> torch.Tensor:
+        """salience_gate [B, T] in [0,1] (optional): scales each token's mixer INPUT, so low-salience
+        (filler) tokens write weakly into the fixed recurrent state while the residual stream still
+        carries them for prediction. This is the constant-memory salience-gated-retention test — no
+        cache: keep the needle in a fixed state by not letting filler overwrite it."""
         h = self.embed(input_ids)
+        g = None if salience_gate is None else salience_gate[..., None].to(h.dtype)  # [B,T,1]
         for i, (norm, mixer) in enumerate(zip(self.mix_norms, self.mixers)):
-            h = h + mixer(hidden_states=norm(h))[0]
+            mix_in = norm(h)
+            if g is not None:
+                mix_in = mix_in * g                       # attenuate low-salience writes to the state
+            h = h + mixer(hidden_states=mix_in)[0]
             if self.mlps is not None:
                 h = h + self.mlps[i](self.mlp_norms[i](h))
         h = self.norm_f(h)

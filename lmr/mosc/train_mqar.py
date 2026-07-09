@@ -28,7 +28,7 @@ import torch
 import torch.nn.functional as F
 
 from lmr.mosc.backbone import GDN2LM
-from lmr.mosc.dynamic_chunk import mqar_oracle_positions
+from lmr.mosc.dynamic_chunk import mqar_oracle_positions, token_surprisal
 from lmr.mosc.mosc_model import DynamicMoSC
 from lmr.tasks.mqar import make_mqar, make_mqar_gapped
 from lmr.tasks.selective_copying import make_selective_copying
@@ -69,9 +69,30 @@ def gen_batch(ctx_filler, n, vocab, k, seq_len, seed, task="mqar", scatter_mult=
     return b["input_ids"], b["labels"], None
 
 
-def run_model(model, ids, k, is_mosc, distill=0.0, oracle_pos=None):
+def build_salience_gate(mode, ids, vpos, model, eps=0.1, scale=2.0):
+    """Per-token retention gate [B,T] in [eps,1] for the constant-memory salience-gated backbone.
+    oracle: 1.0 at value (needle) positions, eps at filler — the upper bound (needs --ctx-filler>0).
+    surprisal: monotone in DETACHED token surprisal (frozen signal -> no co-training drift)."""
+    if mode == "none":
+        return None
+    B, T = ids.shape
+    if mode == "oracle":
+        if vpos is None:
+            raise ValueError("oracle salience needs value positions — use --ctx-filler > 0")
+        gate = torch.full((B, T), eps, device=ids.device)
+        gate.scatter_(1, vpos, 1.0)
+        return gate
+    if mode == "surprisal":
+        with torch.no_grad():
+            s = token_surprisal(model(ids), ids)                 # ungated, detached signal [B,T]
+            s = (s - s.mean(1, keepdim=True)) / (s.std(1, keepdim=True) + 1e-5)
+            return eps + (1 - eps) * torch.sigmoid(scale * s)
+    raise ValueError(mode)
+
+
+def run_model(model, ids, k, is_mosc, distill=0.0, oracle_pos=None, salience_gate=None):
     if not is_mosc:
-        return model(ids)
+        return model(ids, salience_gate=salience_gate)
 
     def _oracle():  # explicit per-row value positions (irregular) or the fixed-period fallback
         return oracle_pos if oracle_pos is not None else mqar_oracle_positions(k, ids.shape[0], device=ids.device)
@@ -87,14 +108,15 @@ def run_model(model, ids, k, is_mosc, distill=0.0, oracle_pos=None):
 
 @torch.no_grad()
 def recall_acc(model, k, vocab, device, is_mosc, seq_len=None, ctx_filler=0, n=256,
-               task="mqar", scatter_mult=8):
+               task="mqar", scatter_mult=8, salience="none", salience_eps=0.1, salience_scale=2.0):
     ids, labels, vpos = gen_batch(ctx_filler, n, vocab, k, seq_len, 10_000 + k, task, scatter_mult)
     ids, labels = ids.to(device), labels.to(device)
     vpos = vpos.to(device) if vpos is not None else None
     correct = total = 0
     for i in range(0, n, 64):
         op = vpos[i:i + 64] if vpos is not None else None
-        logits = run_model(model, ids[i:i + 64], k, is_mosc, oracle_pos=op)
+        sg = build_salience_gate(salience, ids[i:i + 64], op, model, salience_eps, salience_scale)
+        logits = run_model(model, ids[i:i + 64], k, is_mosc, oracle_pos=op, salience_gate=sg)
         pred = logits.argmax(-1)
         m = labels[i:i + 64] != IGNORE
         correct += (pred[m] == labels[i:i + 64][m]).sum().item()
@@ -109,6 +131,12 @@ def main():
                          "eval-kv are then #data tokens to copy, scattered among --scatter-mult*k noise")
     ap.add_argument("--scatter-mult", type=int, default=8,
                     help="selcopy: noise region length = scatter-mult * (#data tokens)")
+    ap.add_argument("--salience", choices=["none", "oracle", "surprisal"], default="none",
+                    help="constant-memory salience-gated retention (--model gdn2): gate each token's "
+                         "mixer input so filler writes weakly to the fixed state. oracle=needle "
+                         "positions (upper bound, needs --ctx-filler>0); surprisal=detached signal")
+    ap.add_argument("--salience-eps", type=float, default=0.1, help="gate floor for non-salient tokens")
+    ap.add_argument("--salience-scale", type=float, default=2.0, help="surprisal gate sigmoid steepness")
     ap.add_argument("--model", choices=["gdn2", "mosc"], default="gdn2")
     ap.add_argument("--chunk-mode", choices=["fixed", "oracle", "surprisal", "learned", "unsup", "unsup_ste", "density"], default="fixed")
     ap.add_argument("--density-signal", choices=["surprisal", "entropy", "cosdist"], default="surprisal",
@@ -174,7 +202,8 @@ def main():
         ids, labels = ids.to(device), labels.to(device)
         vpos = vpos.to(device) if vpos is not None else None
         distill = args.boundary_distill if (args.warmup_steps < 0 or step <= args.warmup_steps) else 0.0
-        logits = run_model(model, ids, k, is_mosc, distill=distill, oracle_pos=vpos)
+        sgate = build_salience_gate(args.salience, ids, vpos, model, args.salience_eps, args.salience_scale)
+        logits = run_model(model, ids, k, is_mosc, distill=distill, oracle_pos=vpos, salience_gate=sgate)
         loss = F.cross_entropy(logits.reshape(-1, args.vocab), labels.reshape(-1), ignore_index=IGNORE)
         if getattr(model, "boundary_loss", None) is not None:
             loss = loss + model.boundary_loss
@@ -187,7 +216,7 @@ def main():
     print("=== recall accuracy (vs #kv pairs) ===")
     model.eval()
     for k in args.eval_kv:
-        print(f"  kv={k:4d}  acc={recall_acc(model, k, args.vocab, device, is_mosc, args.seq_len, args.ctx_filler, task=args.task, scatter_mult=args.scatter_mult):.3f}")
+        print(f"  kv={k:4d}  acc={recall_acc(model, k, args.vocab, device, is_mosc, args.seq_len, args.ctx_filler, task=args.task, scatter_mult=args.scatter_mult, salience=args.salience, salience_eps=args.salience_eps, salience_scale=args.salience_scale):.3f}")
 
     # learned mode: sweep the eval-time boundary threshold (no retrain). Diagnosis says the head
     # UNDER-FIRES at 0.5 (precision ~1.0, recall low); a lower cutoff should fire more boundaries and
