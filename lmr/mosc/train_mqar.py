@@ -184,9 +184,12 @@ def main():
     ap.add_argument("--steps", type=int, default=3000)
     ap.add_argument("--batch", type=int, default=64)
     ap.add_argument("--lr", type=float, default=3e-3)  # MQAR needs the high lr to hit the transition
+    ap.add_argument("--seed", type=int, default=0,
+                    help="MQAR bootstrap is a knife-edge (GPU-nondeterministic near the phase "
+                         "transition) — vary the seed to measure bootstrap-success rate")
     args = ap.parse_args()
 
-    torch.manual_seed(0)
+    torch.manual_seed(args.seed)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     is_mosc = args.model == "mosc"
     model = build_model(args, args.vocab).to(device).train()
