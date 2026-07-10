@@ -69,9 +69,9 @@ def patch_capture_logits(trained, store):
         orig = mod.forward
         def new(y_main, y_cached, x, descriptors):
             if y_cached and descriptors is not None and descriptors.shape[1] > 0:
-                u = mod.router(x)                                        # [b,l,dd]
-                logits = torch.einsum("bld,bid->bli", u, descriptors)    # [b,l,i]
-                store.append((li, logits.detach().float().cpu()))
+                u = mod.router(x)                                        # [b,seg,dd]
+                logits = torch.einsum("bld,bid->bli", u, descriptors)    # [b,seg,i]
+                store.append((li, logits[0].detach().float().cpu()))     # [seg, num_ckpt] (this segment)
             return orig(y_main, y_cached, x, descriptors)
         return new
     i = 0
@@ -134,20 +134,19 @@ def main():
                 if qchunk < 0 or not kc:
                     continue
                 prefix = tok(ex["input"] + ex.get("answer_prefix", ""), add_special_tokens=False).input_ids
-                qpos = len(prefix) - 1                                   # answer position (routes the answer)
                 ids = torch.tensor([prefix], dtype=torch.long, device=args.device)
                 store.clear()
                 with torch.no_grad():
                     seg(ids)
-                # collect per-layer logits at the answer position
+                # logits are captured PER SEGMENT ([seg,num_ckpt]); the answer routes at the LAST token
+                # of the LAST segment. Collect each layer's segment captures, take last-seg last-pos.
                 per_layer = defaultdict(list)
                 for li, lg in store:
-                    if lg.shape[1] > qpos:
-                        per_layer[li].append(lg[0, qpos])               # [num_ckpt]
+                    per_layer[li].append(lg)                            # [seg, num_ckpt]
                 nused += 1; Ks.append(len(kc))
                 key_idx = sorted(kc)
-                for li, lst in per_layer.items():
-                    s = lst[-1]                                          # [num_ckpt] scores over chunks
+                for li, segs in per_layer.items():
+                    s = segs[-1][-1]                                     # last segment, last position [num_ckpt]
                     if s.shape[0] <= qchunk:
                         continue
                     nseen[li] += 1
@@ -156,7 +155,8 @@ def main():
                     ks = torch.tensor([s[c] for c in key_idx])          # restrict to key-chunks
                     if key_idx[int(ks.argmax())] == qchunk:              # top-1 among key-chunks
                         key_hit[li] += 1
-            if nused == 0:
+            if nused == 0 or not nseen:
+                print(f"\n=== {task}@{L}  used={nused}  (no usable routing captures — skipped) ===")
                 continue
             meanK = float(np.mean(Ks))
             layers = sorted(nseen)
