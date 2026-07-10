@@ -147,13 +147,16 @@ def main():
                 key_idx = sorted(kc)
                 for li, segs in per_layer.items():
                     s = segs[-1][-1]                                     # last segment, last position [num_ckpt]
-                    if s.shape[0] <= qchunk:
+                    nck = s.shape[0]
+                    # only chunks that are actually cached as checkpoints (< num_ckpt) are routable
+                    kidx = [c for c in key_idx if c < nck]
+                    if qchunk >= nck or qchunk not in kidx:
                         continue
                     nseen[li] += 1
                     if int(s.argmax()) == qchunk:                        # top-1 among ALL chunks
                         all_hit[li] += 1
-                    ks = torch.tensor([s[c] for c in key_idx])          # restrict to key-chunks
-                    if key_idx[int(ks.argmax())] == qchunk:              # top-1 among key-chunks
+                    ks = torch.tensor([s[c] for c in kidx])             # restrict to (cached) key-chunks
+                    if kidx[int(ks.argmax())] == qchunk:                 # top-1 among key-chunks
                         key_hit[li] += 1
             if nused == 0 or not nseen:
                 print(f"\n=== {task}@{L}  used={nused}  (no usable routing captures — skipped) ===")
