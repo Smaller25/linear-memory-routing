@@ -1,5 +1,9 @@
 # linear-memory-routing — report index & narrative
 
+> **Current honest state (start here):** [`RESEARCH_STATE.md`](RESEARCH_STATE.md) — established vs
+> confounded as of 2026-07-12, the crystallized open problem (query-conditioned selection from
+> compressed memory), and scope. The index below is the Track-A frozen-story narrative (0001–0021).
+
 **Thesis (frozen story).** Take an *already-pretrained, frozen* linear-recurrent LM (Mamba2, Gated
 DeltaNet) and add a small **trained read-out router over cached recurrent-state checkpoints** — no
 backbone retraining. A hard top-k router (**SSC**) lets the frozen model **exceed its fixed-state
