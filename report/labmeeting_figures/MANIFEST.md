@@ -91,3 +91,12 @@ Per-figure: **status**, best form, where the figure/raw-data is, settings, and t
 - PNG: `F7_decomposition.png` / code: `code/F7_decomposition.py`. 방법: 실제 커널(fused_recurrent_gdn2)을 g·k 개입해 재실행(재구현 아님), {real,real} erank 9.88 ≈ F6로 검증.
 - layer-avg erank: real 9.88 → g=1(decay제거) **17.72(+7.84)** → iso-k **11.36(+1.48)** → 둘다 18.39.
 - **판독(중요·정직)**: erank 저하는 **주로 decay(+7.8)**, key-뭉침은 **부차적(+1.5)** → F6/F8의 "뭉침" 강조는 과했음. 실제론 temporal forgetting이 지배. 단 v는 미개입 → 둘 다 제거해도 14%로 낮은 잔여는 value-anisotropy/erase 추정(F7 한계, v-개입 조건 추가가 후속).
+
+---
+## F9 🟢 생성완료 (VESSL A100) — erank의 입력-의존성 + v-등방 (plain GDN2-370m 6B) ★ F6/F7/F8 보정본
+- PNG: `F9_datatypes.png` / code: `code/F9_datatypes.py`. 입력 {natural,math,code,knowledge,repetitive} × 조건 {real,g=1,iso_k,iso_v,all_off}, layer-avg erank.
+- **입력 의존성 큼**: real erank natural 20.5/math 24.2/code 19.6/knowledge 19.8 vs **repetitive 9.9**. → F6/F8이 쓴 반복입력은 degenerate(erank 과소·뭉침 과장). **F9가 보정본.**
+- **decay 지배**: g=1이 real~20→~60(3배). key/value 등방화 각 +10~13(부차, 비등). all_off ~94(≠128)=erase/유한길이 잔여.
+- **v-등방 결과**: iso_v ≈ iso_k 기여 → value도 key만큼 뭉침. 하지만 decay가 압도.
+- 판독: erank 저하 = 주로 temporal forgetting(decay) + 표현 anisotropy(key≈value) 보조 + 입력 다양성 의존. 도메인(nat/math/code/know) 차이는 작음(hand-written 샘플; 실제 benchmark는 후속).
+### NOTE: F6/F8은 repetitive 입력이라 erank 과소평가 → 발표엔 **F9를 정본**으로, F6/F8은 "왜 입력을 통제해야 하는지" 예시로만.
