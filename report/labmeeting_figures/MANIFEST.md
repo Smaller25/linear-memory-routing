@@ -100,3 +100,11 @@ Per-figure: **status**, best form, where the figure/raw-data is, settings, and t
 - **v-등방 결과**: iso_v ≈ iso_k 기여 → value도 key만큼 뭉침. 하지만 decay가 압도.
 - 판독: erank 저하 = 주로 temporal forgetting(decay) + 표현 anisotropy(key≈value) 보조 + 입력 다양성 의존. 도메인(nat/math/code/know) 차이는 작음(hand-written 샘플; 실제 benchmark는 후속).
 ### NOTE: F6/F8은 repetitive 입력이라 erank 과소평가 → 발표엔 **F9를 정본**으로, F6/F8은 "왜 입력을 통제해야 하는지" 예시로만.
+
+---
+## F10 🟢 생성완료 (VESSL A100) — erank 도메인 비교, REAL benchmarks (plain GDN2-370m 6B)
+- PNG: `F10_benchmarks.png` / code: `code/F10_benchmarks.py`. 데이터셋 {wikitext, gsm8k(math), squad(knowledge), mbpp(code), repetitive} × 조건 5개, 데이터셋당 5 window 평균.
+- **도메인 차이 작음**: real erank natural 22.9 / math 23.1 / knowledge 24.4 / code 21.3 (~15% 폭) vs repetitive 9.5. → F9(hand-written) 검증. "knowledge/reasoning면 크게 다를까"=약하게만.
+- **미세**: math(gsm8k) decay 약간 느림(rbar 0.51) = reasoning 더 오래 유지; squad erank 약간 높음.
+- **decay 지배 + key≈value 뭉침 보조**가 모든 실제 도메인에서 robust (g=1: real~22→~66; iso_k/iso_v +10~15; all_off ~95). 실제 데이터로 F7/F9 확증.
+- 판독: erank 사용률·분해는 **도메인 불변으로 견고**, 지배 변수는 **입력 다양성(다양~22 vs 반복~10)**.
