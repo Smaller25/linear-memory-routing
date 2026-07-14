@@ -78,3 +78,10 @@ Per-figure: **status**, best form, where the figure/raw-data is, settings, and t
 ## 용어 정정 (Fable 지적 반영)
 - **epiplexity = 압축가능(구조적) 정보**. UUID/전화번호 같은 exact-recall 항목은 오히려 **time-bounded entropy(압축불가 잔여)** 쪽. dictionary 후보 신호 = **epiplexity 낮고 entropy 높은** 쪽. F5/섹션3 서술 시 이 방향으로.
 - LongMemEval: 1.3B 순수 LM엔 무리 → **knowledge-update 카테고리만 MQAR-style synthetic으로 축소 이식**하면 소형 모델로 검증 가능.
+
+---
+## F8 🟢 생성완료 (VESSL A100) — "실제로 뭉치는지" 직접 확인 (plain GDN2-370m 6B)
+- PNG: `F8_concentration.png` / code: `code/F8_concentration.py`.
+- (좌) state 특이값 스펙트럼: 실제 head vs random Gaussian state — top σ 점유율 head0 **29.3%** vs 등방 **1.8%** → 상태가 소수 방향 집중(뭉침).
+- (우) key 쌍 코사인: 실제 **0.605** vs isotropic null **0.004** → key가 같은 방향으로 뭉침(저rank state의 원인).
+- 판독: F6의 erank-gap(추론)을 직접 시각화. 단, key-cosine은 일반 LM hidden anisotropy도 반영(등방 null은 극단) → state SV 집중이 더 깨끗한 지표.
