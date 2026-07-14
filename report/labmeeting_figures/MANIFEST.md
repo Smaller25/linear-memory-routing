@@ -41,7 +41,7 @@ Per-figure: **status**, best form, where the figure/raw-data is, settings, and t
 - **주의(정직)**: 우리 token-level 실패 증거는 대부분 **from-scratch MQAR density(0018)** + **frozen descriptor(long-gdn)**로 나뉘어 있고, "frozen+SSC 단일 셋업에서 token vs state를 한 판에" 그린 깨끗한 plot은 **아직 없음** → 재생성 시 assemble 필요.
 - raw data: `SSM_Rank_Analysis/notebooks/capacity_results/*.json`, `linear-memory-routing/report/0016,0018` 수치.
 
-## F6 🟡 재생성 가능 — erank 킬러 플롯 (r̄=exp(E[log aₜ]) vs erank, 이론곡선, Type A/B/C)
+## F6 🟢 생성완료 (VESSL A100) — erank 킬러 플롯 (r̄ vs erank, plain GDN2-370m 6B)
 - best: head별 산점도 + 이론곡선 y=min(64, e/(1−x)) 오버레이, Type 색분.
 - **기존 후보(근사)**:
   - `candidates/F6_erank_vs_MQARload.png` — eRank vs MQAR load (양 모델).
