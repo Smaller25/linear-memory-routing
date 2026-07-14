@@ -85,3 +85,9 @@ Per-figure: **status**, best form, where the figure/raw-data is, settings, and t
 - (좌) state 특이값 스펙트럼: 실제 head vs random Gaussian state — top σ 점유율 head0 **29.3%** vs 등방 **1.8%** → 상태가 소수 방향 집중(뭉침).
 - (우) key 쌍 코사인: 실제 **0.605** vs isotropic null **0.004** → key가 같은 방향으로 뭉침(저rank state의 원인).
 - 판독: F6의 erank-gap(추론)을 직접 시각화. 단, key-cosine은 일반 LM hidden anisotropy도 반영(등방 null은 극단) → state SV 집중이 더 깨끗한 지표.
+
+---
+## F7 🟢 생성완료 (VESSL A100) — 반사실 분해: decay vs key-anisotropy (plain GDN2-370m 6B)
+- PNG: `F7_decomposition.png` / code: `code/F7_decomposition.py`. 방법: 실제 커널(fused_recurrent_gdn2)을 g·k 개입해 재실행(재구현 아님), {real,real} erank 9.88 ≈ F6로 검증.
+- layer-avg erank: real 9.88 → g=1(decay제거) **17.72(+7.84)** → iso-k **11.36(+1.48)** → 둘다 18.39.
+- **판독(중요·정직)**: erank 저하는 **주로 decay(+7.8)**, key-뭉침은 **부차적(+1.5)** → F6/F8의 "뭉침" 강조는 과했음. 실제론 temporal forgetting이 지배. 단 v는 미개입 → 둘 다 제거해도 14%로 낮은 잔여는 value-anisotropy/erase 추정(F7 한계, v-개입 조건 추가가 후속).
