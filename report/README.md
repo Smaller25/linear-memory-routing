@@ -51,6 +51,7 @@ router instead of retraining a 1.3–2.7B model.
 | 0015 | **adaptive vs fixed boundaries** | regular MQAR is degenerate (fixed chunk=2 == oracle == 1.0); on **irregular** MQAR fixed-stride **fails (0.00)** while learned ≈ oracle (~1.0, prec/rec 1.0) — boundaries are genuinely content-adaptive |
 | 0016 | unsupervised boundary learning | **fails 3 ways** (soft=attention-bypass, STE+L1=collapse, warm-start=drift to 0.00 top-k(p) overlap) — boundary signal needs oracle supervision; unsupervised is open |
 | 0022 | **decorrelated-write (design idea A)** | write-into-idle-directions **helps multi-key recall ONLY under overload** (H1×16: kv64 0.081→**0.181** w/ decorrelation-reg C4, 2.2×); **neutral w/ slack, hurts near-saturation**. Winner=C4 (loss-only, free). erank↔recall co-move only under load (eRank≠capacity). Testbed has no decay → targets secondary lever only |
+| 0023 | **idea A / C4 on REAL GDN-2 (w/ decay)** | **does NOT transfer — C4 hurts recall in every regime** (hd32 0.497→0.430; λ=0.1 0.497→0.480; hd16 blocks learning) and **collapses state erank (16→3–6)**, opposite of the decay-free 0022 toy. Decay is the dominant rank-limiter (F7); forcing isotropic keys fights the learned key↔gate coupling. **(a) fails → (b) finetuning not run.** Pivot to the **decay/retention** lever |
 
 ## Future work
 - **MoCM (Mixture of Cached Memories)** — combine MoM's *parallel* memory axis with MC's *temporal*
