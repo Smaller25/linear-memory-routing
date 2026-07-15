@@ -50,6 +50,7 @@ router instead of retraining a 1.3–2.7B model.
 | 0014 | **RULER free-gen** (frozen mamba2-370m) | **+SSC net win on real RULER free-gen**: niah_single @2048 vanilla 0.00 → +SSC **36.7** (zero-shot, matched n); multikey near-floor (0010); 4k/8k +SSC timed out (free-gen too slow) |
 | 0015 | **adaptive vs fixed boundaries** | regular MQAR is degenerate (fixed chunk=2 == oracle == 1.0); on **irregular** MQAR fixed-stride **fails (0.00)** while learned ≈ oracle (~1.0, prec/rec 1.0) — boundaries are genuinely content-adaptive |
 | 0016 | unsupervised boundary learning | **fails 3 ways** (soft=attention-bypass, STE+L1=collapse, warm-start=drift to 0.00 top-k(p) overlap) — boundary signal needs oracle supervision; unsupervised is open |
+| 0022 | **decorrelated-write (design idea A)** | write-into-idle-directions **helps multi-key recall ONLY under overload** (H1×16: kv64 0.081→**0.181** w/ decorrelation-reg C4, 2.2×); **neutral w/ slack, hurts near-saturation**. Winner=C4 (loss-only, free). erank↔recall co-move only under load (eRank≠capacity). Testbed has no decay → targets secondary lever only |
 
 ## Future work
 - **MoCM (Mixture of Cached Memories)** — combine MoM's *parallel* memory axis with MC's *temporal*
