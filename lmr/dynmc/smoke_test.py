@@ -104,12 +104,77 @@ def test_train_steps(tmp):
     print(f"[smoke] train steps OK — loss {losses[0]:.3f} -> {losses[-1]:.3f}", flush=True)
 
 
+
+
+def test_read_equivalence():
+    """벡터화 _grm_read가 참조(세그먼트 루프) 구현과 수치 일치하는지."""
+    import torch
+    from lmr.dynmc.model import build_model
+    from lmr.dynmc.segmenting import build_batch_segments
+    torch.manual_seed(1)
+    dev = "cuda"
+    model = build_model("46m", dynmc=True, cache_budget=4).to(dev).eval()
+    layer = model.model.layers[0].attn
+
+    T, S = 1536, 0
+    doc_lens = [[900, 636]]
+    rng = np.random.default_rng(3)
+    segs = build_batch_segments(doc_lens, rng, mode="random")
+    cu = segs["cu_seqlens"].to(dev)
+    doc_ids = segs["seg_doc_ids"]
+    change = torch.ones(len(doc_ids), dtype=torch.bool)
+    change[1:] = doc_ids[1:] != doc_ids[:-1]
+    first_idx = torch.nonzero(change).flatten()
+    first = first_idx[torch.cumsum(change.long(), 0) - 1].to(dev)
+    S = len(doc_ids)
+
+    H, V, K = layer.num_v_heads, layer.head_v_dim, layer.head_k_dim
+    h_in = torch.randn(1, T, layer.hidden_size, device=dev)
+    q = torch.randn(1, T, layer.num_heads, K, device=dev)
+    o = torch.randn(1, T, H, V, device=dev)
+    states = torch.randn(S, H, V, K, device=dev)
+
+    with torch.no_grad():
+        fast = layer._grm_read(h_in, q, o, states, cu, first)
+
+        # 참조 구현 (원 루프)
+        from fla.modules.l2norm import l2norm
+        qn = l2norm(q) * (K ** -0.5)
+        if layer.num_v_heads > layer.num_heads:
+            qn = qn.repeat_interleave(layer.num_v_heads // layer.num_heads, dim=-2)
+        qn = qn.squeeze(0).float()
+        desc = states.mean(dim=2).reshape(S, -1)
+        u = layer.u_proj(h_in).squeeze(0).float()
+        d_scale = layer.descriptor_dim ** -0.5
+        o_flat = o.squeeze(0)
+        ref = o_flat.clone()
+        cul = cu.tolist(); ds = first.tolist()
+        for j in range(S):
+            lo = max(ds[j], j - layer.cache_budget)
+            t0, t1 = cul[j], cul[j + 1]
+            if lo >= j:
+                continue
+            s_e = states[lo:j]
+            logits = u[t0:t1] @ desc[lo:j].t() * d_scale
+            curl = layer.cur_logit.expand(t1 - t0, 1)
+            gam = torch.softmax(torch.cat([curl, logits], dim=-1), dim=-1)
+            z = torch.einsum("ehvk,thk->tehv", s_e, qn[t0:t1])
+            mix = torch.einsum("te,tehv->thv", gam[:, 1:], z)
+            ref[t0:t1] = (gam[:, 0].view(-1, 1, 1) * o_flat[t0:t1].float() + mix).to(o_flat.dtype)
+        # 첫 세그먼트(캐시 없음)는 fast에서 γ_cur<1이 아니라 γ_cur=1이어야 함 — 둘 다 동일 처리 확인
+        err = (fast.squeeze(0).float() - ref.float()).abs().max().item()
+        scale = ref.float().abs().max().item()
+        print(f"[smoke] read equivalence max|Δ|={err:.3e} (scale {scale:.3e})", flush=True)
+        assert err < 1e-3 * max(scale, 1.0), "vectorized read != reference"
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--tmp", default="_workspace/dynmc_smoke")
     a = ap.parse_args()
     os.makedirs(a.tmp, exist_ok=True)
     test_layer_unit()
+    test_read_equivalence()
     test_signals()
     test_train_steps(a.tmp)
     print("[smoke] ALL OK", flush=True)

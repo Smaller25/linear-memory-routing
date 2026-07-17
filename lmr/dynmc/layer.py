@@ -106,10 +106,18 @@ class DynMCGatedDeltaNet(GatedDeltaNet):
         o = self.o_proj(o)
         return o, None, past_key_values
 
-    def _grm_read(self, h_in, q, o, states, cu_seqlens, seg_doc_start):
-        """Mix cached segment states into the online output (plan §2.2)."""
+    def _grm_read(self, h_in, q, o, states, cu_seqlens, seg_doc_start,
+                  bucket_tokens: int = 4096):
+        """Mix cached segment states into the online output (plan §2.2).
+
+        벡터화: γ는 [T, S+1] masked softmax 한 번, S·q 곱은 토큰 버킷 × 세그먼트
+        span의 dense einsum (밴드 밖은 γ=0이라 결과 동일). per-세그먼트 파이썬
+        루프(수만 kernel launch/step) 회피.
+        """
         S = states.shape[0]
         K_budget = self.cache_budget
+        T = q.shape[1]
+        dev = q.device
 
         # q̂ exactly as the kernel treats q (l2norm + scale), GVA-broadcast to HV
         qn = l2norm(q) * (self.head_k_dim ** -0.5)
@@ -121,20 +129,36 @@ class DynMCGatedDeltaNet(GatedDeltaNet):
         d_scale = self.descriptor_dim ** -0.5
         u = self.u_proj(h_in).squeeze(0).float()                # [T, HV*K]
 
-        o_flat = o.squeeze(0)                                   # [T, HV, V]
-        out = o_flat.clone()
-        cu = cu_seqlens.tolist()
-        doc_start = seg_doc_start.tolist()
-        for j in range(S):
-            lo = max(doc_start[j], j - K_budget)
-            if lo >= j:
-                continue  # no eligible cached segment: γ_cur = 1, out = o
-            t0, t1 = cu[j], cu[j + 1]
-            s_e = states[lo:j]                                  # [E, HV, V, K] fp32
-            logits = u[t0:t1] @ desc[lo:j].t() * d_scale        # [T_j, E]
-            cur = self.cur_logit.expand(t1 - t0, 1)
-            gam = torch.softmax(torch.cat([cur, logits], dim=-1), dim=-1)  # [T_j, 1+E]
-            z = torch.einsum("ehvk,thk->tehv", s_e, qn[t0:t1])  # [T_j, E, HV, V]
-            mix = torch.einsum("te,tehv->thv", gam[:, 1:], z)
-            out[t0:t1] = (gam[:, 0].view(-1, 1, 1) * o_flat[t0:t1].float() + mix).to(o_flat.dtype)
-        return out.unsqueeze(0)
+        # 토큰별 세그먼트 id / eligible window [lo_j, j)
+        seg_lens = cu_seqlens[1:] - cu_seqlens[:-1]
+        seg_of_t = torch.repeat_interleave(
+            torch.arange(S, device=dev), seg_lens.to(dev).long())          # [T]
+        lo_seg = torch.maximum(seg_doc_start,
+                               torch.arange(S, device=dev) - K_budget)     # [S]
+
+        # γ: masked softmax over [cur | segments]
+        logits = u @ desc.t() * d_scale                          # [T, S]
+        s_idx = torch.arange(S, device=dev).unsqueeze(0)         # [1, S]
+        valid = (s_idx < seg_of_t.unsqueeze(1)) & (s_idx >= lo_seg[seg_of_t].unsqueeze(1))
+        logits = logits.masked_fill(~valid, float("-inf"))
+        cur_col = self.cur_logit.expand(T, 1)
+        gam = torch.softmax(torch.cat([cur_col, logits], dim=-1), dim=-1)  # [T, 1+S]
+
+        o_flat = o.squeeze(0).float()                            # [T, HV, V]
+        out = gam[:, 0].view(-1, 1, 1) * o_flat
+        # 버킷: 연속 세그먼트를 토큰 수 ≤ bucket_tokens로 묶어 dense einsum
+        cu_list = cu_seqlens.tolist()
+        j = 0
+        while j < S:
+            k = j
+            while k < S and cu_list[k + 1] - cu_list[j] <= bucket_tokens:
+                k += 1
+            k = max(k, j + 1)
+            t0, t1 = cu_list[j], cu_list[k]
+            lo = max(0, int(lo_seg[j:k].min()))
+            hi = k                                              # window 상한 = 마지막 seg 직전까지
+            if hi > lo:
+                z = torch.einsum("thk,shvk->tshv", qn[t0:t1], states[lo:hi])
+                out[t0:t1] += torch.einsum("ts,tshv->thv", gam[t0:t1, 1 + lo:1 + hi], z)
+            j = k
+        return out.to(o.dtype).unsqueeze(0)
