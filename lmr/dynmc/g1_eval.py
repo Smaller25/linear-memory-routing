@@ -34,7 +34,7 @@ def load_ckpt(path, device):
 
 
 @torch.no_grad()
-def eval_ppl(model, corpus, holdout_plan, ctx, n_rows, seg_mode, device, seed=7):
+def eval_ppl(model, corpus, holdout_plan, ctx, n_rows, seg_mode, device, seed=7, merge_docs=False):
     it = PackedDocIterator(corpus, holdout_plan, ctx)
     rng = np.random.default_rng(seed)
     ce_sum, n_tok = 0.0, 0
@@ -45,6 +45,8 @@ def eval_ppl(model, corpus, holdout_plan, ctx, n_rows, seg_mode, device, seed=7)
         if batch is None:
             break
         rows_left -= take
+        if merge_docs:
+            batch["doc_lens_per_row"] = [[ctx] for _ in batch["doc_lens_per_row"]]
         ids = batch["input_ids"].to(device).reshape(1, -1)
         labels = batch["labels"].to(device).reshape(1, -1)
         segs = build_batch_segments(batch["doc_lens_per_row"], rng, mode=seg_mode, fixed_len=256)
@@ -73,6 +75,7 @@ def main():
     ap.add_argument("--data", required=True)
     ap.add_argument("--prefix", default="fineweb-")
     ap.add_argument("--n-rows", type=int, default=64)
+    ap.add_argument("--merge-docs", action="store_true")
     a = ap.parse_args()
     device = "cuda"
 
@@ -91,7 +94,7 @@ def main():
     results = {}
     for mname, model in [("random", m_rand), ("fixed", m_fix)]:
         for emode in ["random", "fixed"]:
-            ppl, n = eval_ppl(model, corpus, holdout, ctx, a.n_rows, emode, device)
+            ppl, n = eval_ppl(model, corpus, holdout, ctx, a.n_rows, emode, device, merge_docs=a.merge_docs)
             results[f"{mname}_model/{emode}_eval"] = ppl
             print(f"model={mname:6s} eval-seg={emode:6s} ppl={ppl:.3f} ({n/1e6:.1f}M tokens)")
 

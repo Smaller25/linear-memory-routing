@@ -31,6 +31,7 @@ DEFAULTS = dict(
     warmup_steps=1000, grad_clip=1.0,
     total_tokens=15_000_000_000, ckpt_interval_tokens=1_000_000_000,
     data_dir="", data_prefix="", plan_path="", uniform_plan_tokens=0,
+    merge_docs_per_row=False,  # G1b: row 전체를 한 문서로 (budget 포화 regime)
     out_dir="", run_name="dynmc", seed=1234,
     log_interval=20, gradient_checkpointing=False,
     peak_flops=312e12,  # A100 bf16 dense
@@ -140,6 +141,8 @@ def main():
                 batch = None
                 break
             rows_done += cfg["rows_per_micro"]
+            if cfg["merge_docs_per_row"]:
+                batch["doc_lens_per_row"] = [[cfg["ctx"]] for _ in batch["doc_lens_per_row"]]
             ids = batch["input_ids"].to(device, non_blocking=True)
             labels = batch["labels"].to(device, non_blocking=True)
             kwargs = {}
