@@ -1,9 +1,20 @@
 {
   "run_name": "0026_dynmc_170m",
-  "size": "170m", "dynmc": true, "seg_mode": "random", "cache_budget": 32,
-  "ctx": 16384, "rows_per_micro": 2, "grad_accum": 4,
-  "lr": 4e-4, "weight_decay": 0.01, "warmup_steps": 1000, "grad_clip": 1.0,
-  "total_tokens": 6000000000, "ckpt_interval_tokens": 1000000000,
-  "data_dir": "/data/dynmc/tokenized", "plan_path": "/data/dynmc/tokenized/plan_upsample_15b.npy",
-  "out_dir": "/data/dynmc/runs/0026", "seed": 1234
+  "size": "170m",
+  "dynmc": true,
+  "seg_mode": "random",
+  "cache_budget": 32,
+  "ctx": 16384,
+  "rows_per_micro": 2,
+  "grad_accum": 4,
+  "lr": 0.0004,
+  "weight_decay": 0.01,
+  "warmup_steps": 1000,
+  "grad_clip": 1.0,
+  "total_tokens": 6000000000,
+  "ckpt_interval_tokens": 1000000000,
+  "data_dir": "/tmp/dynmc_data/tokenized",
+  "plan_path": "/tmp/dynmc_data/tokenized/plan_upsample_15b.npy",
+  "out_dir": "/root/smaller/dynmc/runs/0026",
+  "seed": 1234
 }

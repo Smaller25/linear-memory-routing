@@ -56,7 +56,7 @@ def eval_ppl(model, corpus, holdout_plan, ctx, n_rows, seg_mode, device, seed=7)
         dynmc_segs = {"cu_seqlens": segs["cu_seqlens"].to(device),
                       "seg_doc_start": first.to(device)}
         with torch.autocast("cuda", dtype=torch.bfloat16):
-            logits = model(input_ids=ids, dynmc_segs=dynmc_segs).logits
+            logits = model(input_ids=ids, dynmc_segs=dynmc_segs, use_cache=False).logits
         mask = labels.view(-1) != -100
         ce = torch.nn.functional.cross_entropy(
             logits.float().view(-1, logits.shape[-1])[mask], labels.view(-1)[mask],
