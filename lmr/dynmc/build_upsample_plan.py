@@ -91,10 +91,16 @@ def main():
         long_ids = ids[doc_len[ids] > LONG_THRESHOLD]
         short_ids = ids[doc_len[ids] <= LONG_THRESHOLD]
         nat_long = int(doc_len[long_ids].sum()) / max(toks, 1)
-        b_long = int(round(budget * LONG_TARGET))
-        b_short = budget - b_long
-        pieces += sample_bucket(long_ids, doc_len, b_long, rng)
-        pieces += sample_bucket(short_ids, doc_len, b_short, rng)
+        if nat_long >= LONG_TARGET:
+            # 이미 자연 비율이 목표 이상 (Book/ArXiv): 길이 분포 유지 —
+            # 70%로 "낮추면" 희소한 short 문서를 수백 번 반복하는 병리 발생
+            pieces += sample_bucket(ids, doc_len, budget, rng)
+            b_long = int(round(budget * nat_long))
+        else:
+            b_long = int(round(budget * LONG_TARGET))
+            b_short = budget - b_long
+            pieces += sample_bucket(long_ids, doc_len, b_long, rng)
+            pieces += sample_bucket(short_ids, doc_len, b_short, rng)
         stats["sources"][name] = dict(pool_tokens=toks, share=round(share, 4),
                                       natural_long_frac=round(nat_long, 4),
                                       budget=budget, budget_long=b_long)
