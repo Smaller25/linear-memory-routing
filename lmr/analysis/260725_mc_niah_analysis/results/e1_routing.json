@@ -1,0 +1,1247 @@
+{
+  "meta": {
+    "topk": 2,
+    "chunk": 256,
+    "models": [
+      "mc-30B",
+      "mc-5B"
+    ],
+    "datasets": [
+      "niah_single_1",
+      "niah_multikey_1",
+      "paired_S_multi",
+      "paired_D_multi"
+    ]
+  },
+  "results": {
+    "mc-5B": {
+      "niah_single_1": {
+        "per_layer": [
+          {
+            "layer": 0,
+            "hit_at_2": 0.28888888888888886,
+            "gold_rank_mean": 3.422222222222222,
+            "amongkeys_acc": null,
+            "amongkeys_n": 0,
+            "n_eligible": 45,
+            "n_total": 50
+          },
+          {
+            "layer": 1,
+            "hit_at_2": 0.0,
+            "gold_rank_mean": 5.5777777777777775,
+            "amongkeys_acc": null,
+            "amongkeys_n": 0,
+            "n_eligible": 45,
+            "n_total": 50
+          },
+          {
+            "layer": 2,
+            "hit_at_2": 0.28888888888888886,
+            "gold_rank_mean": 3.2666666666666666,
+            "amongkeys_acc": null,
+            "amongkeys_n": 0,
+            "n_eligible": 45,
+            "n_total": 50
+          },
+          {
+            "layer": 3,
+            "hit_at_2": 0.24444444444444444,
+            "gold_rank_mean": 3.3555555555555556,
+            "amongkeys_acc": null,
+            "amongkeys_n": 0,
+            "n_eligible": 45,
+            "n_total": 50
+          },
+          {
+            "layer": 4,
+            "hit_at_2": 0.4888888888888889,
+            "gold_rank_mean": 2.3333333333333335,
+            "amongkeys_acc": null,
+            "amongkeys_n": 0,
+            "n_eligible": 45,
+            "n_total": 50
+          },
+          {
+            "layer": 5,
+            "hit_at_2": 0.24444444444444444,
+            "gold_rank_mean": 3.3555555555555556,
+            "amongkeys_acc": null,
+            "amongkeys_n": 0,
+            "n_eligible": 45,
+            "n_total": 50
+          },
+          {
+            "layer": 6,
+            "hit_at_2": 0.6,
+            "gold_rank_mean": 2.022222222222222,
+            "amongkeys_acc": null,
+            "amongkeys_n": 0,
+            "n_eligible": 45,
+            "n_total": 50
+          },
+          {
+            "layer": 7,
+            "hit_at_2": 0.24444444444444444,
+            "gold_rank_mean": 3.3555555555555556,
+            "amongkeys_acc": null,
+            "amongkeys_n": 0,
+            "n_eligible": 45,
+            "n_total": 50
+          },
+          {
+            "layer": 8,
+            "hit_at_2": 0.7555555555555555,
+            "gold_rank_mean": 1.3333333333333333,
+            "amongkeys_acc": null,
+            "amongkeys_n": 0,
+            "n_eligible": 45,
+            "n_total": 50
+          },
+          {
+            "layer": 9,
+            "hit_at_2": 0.24444444444444444,
+            "gold_rank_mean": 3.3555555555555556,
+            "amongkeys_acc": null,
+            "amongkeys_n": 0,
+            "n_eligible": 45,
+            "n_total": 50
+          },
+          {
+            "layer": 10,
+            "hit_at_2": 0.24444444444444444,
+            "gold_rank_mean": 3.3555555555555556,
+            "amongkeys_acc": null,
+            "amongkeys_n": 0,
+            "n_eligible": 45,
+            "n_total": 50
+          },
+          {
+            "layer": 11,
+            "hit_at_2": 0.24444444444444444,
+            "gold_rank_mean": 3.3555555555555556,
+            "amongkeys_acc": null,
+            "amongkeys_n": 0,
+            "n_eligible": 45,
+            "n_total": 50
+          },
+          {
+            "layer": 12,
+            "hit_at_2": 0.24444444444444444,
+            "gold_rank_mean": 3.3555555555555556,
+            "amongkeys_acc": null,
+            "amongkeys_n": 0,
+            "n_eligible": 45,
+            "n_total": 50
+          },
+          {
+            "layer": 13,
+            "hit_at_2": 0.3333333333333333,
+            "gold_rank_mean": 3.1555555555555554,
+            "amongkeys_acc": null,
+            "amongkeys_n": 0,
+            "n_eligible": 45,
+            "n_total": 50
+          },
+          {
+            "layer": 14,
+            "hit_at_2": 0.9333333333333333,
+            "gold_rank_mean": 0.4444444444444444,
+            "amongkeys_acc": null,
+            "amongkeys_n": 0,
+            "n_eligible": 45,
+            "n_total": 50
+          },
+          {
+            "layer": 15,
+            "hit_at_2": 0.9111111111111111,
+            "gold_rank_mean": 0.8888888888888888,
+            "amongkeys_acc": null,
+            "amongkeys_n": 0,
+            "n_eligible": 45,
+            "n_total": 50
+          }
+        ],
+        "n_total": 50,
+        "n_eligible": 45,
+        "n_ineligible": 5,
+        "best_layer": 14,
+        "best_layer_hit_at_2": 0.9333333333333333
+      },
+      "niah_multikey_1": {
+        "per_layer": [
+          {
+            "layer": 0,
+            "hit_at_2": 0.3191489361702128,
+            "gold_rank_mean": 1.6808510638297873,
+            "amongkeys_acc": 0.3,
+            "amongkeys_n": 50,
+            "n_eligible": 47,
+            "n_total": 50
+          },
+          {
+            "layer": 1,
+            "hit_at_2": 0.48936170212765956,
+            "gold_rank_mean": 1.5957446808510638,
+            "amongkeys_acc": 0.32,
+            "amongkeys_n": 50,
+            "n_eligible": 47,
+            "n_total": 50
+          },
+          {
+            "layer": 2,
+            "hit_at_2": 0.6595744680851063,
+            "gold_rank_mean": 1.0638297872340425,
+            "amongkeys_acc": 0.5,
+            "amongkeys_n": 50,
+            "n_eligible": 47,
+            "n_total": 50
+          },
+          {
+            "layer": 3,
+            "hit_at_2": 0.6595744680851063,
+            "gold_rank_mean": 1.0638297872340425,
+            "amongkeys_acc": 0.5,
+            "amongkeys_n": 50,
+            "n_eligible": 47,
+            "n_total": 50
+          },
+          {
+            "layer": 4,
+            "hit_at_2": 0.425531914893617,
+            "gold_rank_mean": 1.8936170212765957,
+            "amongkeys_acc": 0.22,
+            "amongkeys_n": 50,
+            "n_eligible": 47,
+            "n_total": 50
+          },
+          {
+            "layer": 5,
+            "hit_at_2": 0.6595744680851063,
+            "gold_rank_mean": 1.0638297872340425,
+            "amongkeys_acc": 0.5,
+            "amongkeys_n": 50,
+            "n_eligible": 47,
+            "n_total": 50
+          },
+          {
+            "layer": 6,
+            "hit_at_2": 0.6595744680851063,
+            "gold_rank_mean": 1.2765957446808511,
+            "amongkeys_acc": 0.44,
+            "amongkeys_n": 50,
+            "n_eligible": 47,
+            "n_total": 50
+          },
+          {
+            "layer": 7,
+            "hit_at_2": 0.6595744680851063,
+            "gold_rank_mean": 1.0638297872340425,
+            "amongkeys_acc": 0.5,
+            "amongkeys_n": 50,
+            "n_eligible": 47,
+            "n_total": 50
+          },
+          {
+            "layer": 8,
+            "hit_at_2": 0.2978723404255319,
+            "gold_rank_mean": 2.0638297872340425,
+            "amongkeys_acc": 0.18,
+            "amongkeys_n": 50,
+            "n_eligible": 47,
+            "n_total": 50
+          },
+          {
+            "layer": 9,
+            "hit_at_2": 0.6595744680851063,
+            "gold_rank_mean": 1.0638297872340425,
+            "amongkeys_acc": 0.5,
+            "amongkeys_n": 50,
+            "n_eligible": 47,
+            "n_total": 50
+          },
+          {
+            "layer": 10,
+            "hit_at_2": 0.6595744680851063,
+            "gold_rank_mean": 1.0638297872340425,
+            "amongkeys_acc": 0.5,
+            "amongkeys_n": 50,
+            "n_eligible": 47,
+            "n_total": 50
+          },
+          {
+            "layer": 11,
+            "hit_at_2": 0.6595744680851063,
+            "gold_rank_mean": 1.0638297872340425,
+            "amongkeys_acc": 0.5,
+            "amongkeys_n": 50,
+            "n_eligible": 47,
+            "n_total": 50
+          },
+          {
+            "layer": 12,
+            "hit_at_2": 0.6595744680851063,
+            "gold_rank_mean": 1.0638297872340425,
+            "amongkeys_acc": 0.5,
+            "amongkeys_n": 50,
+            "n_eligible": 47,
+            "n_total": 50
+          },
+          {
+            "layer": 13,
+            "hit_at_2": 0.6595744680851063,
+            "gold_rank_mean": 1.0425531914893618,
+            "amongkeys_acc": 0.5,
+            "amongkeys_n": 50,
+            "n_eligible": 47,
+            "n_total": 50
+          },
+          {
+            "layer": 14,
+            "hit_at_2": 0.6170212765957447,
+            "gold_rank_mean": 1.4893617021276595,
+            "amongkeys_acc": 0.32,
+            "amongkeys_n": 50,
+            "n_eligible": 47,
+            "n_total": 50
+          },
+          {
+            "layer": 15,
+            "hit_at_2": 0.5957446808510638,
+            "gold_rank_mean": 1.425531914893617,
+            "amongkeys_acc": 0.36,
+            "amongkeys_n": 50,
+            "n_eligible": 47,
+            "n_total": 50
+          }
+        ],
+        "n_total": 50,
+        "n_eligible": 47,
+        "n_ineligible": 3,
+        "best_layer": 2,
+        "best_layer_hit_at_2": 0.6595744680851063
+      },
+      "paired_S_multi": {
+        "per_layer": [
+          {
+            "layer": 0,
+            "hit_at_2": 0.25,
+            "gold_rank_mean": 4.1875,
+            "amongkeys_acc": 0.25,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 1,
+            "hit_at_2": 0.375,
+            "gold_rank_mean": 2.0,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 2,
+            "hit_at_2": 0.1875,
+            "gold_rank_mean": 3.0625,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 3,
+            "hit_at_2": 0.1875,
+            "gold_rank_mean": 3.0625,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 4,
+            "hit_at_2": 0.1875,
+            "gold_rank_mean": 2.6875,
+            "amongkeys_acc": 0.4375,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 5,
+            "hit_at_2": 0.1875,
+            "gold_rank_mean": 3.0625,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 6,
+            "hit_at_2": 0.1875,
+            "gold_rank_mean": 3.1875,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 7,
+            "hit_at_2": 0.1875,
+            "gold_rank_mean": 3.0625,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 8,
+            "hit_at_2": 0.4375,
+            "gold_rank_mean": 2.0625,
+            "amongkeys_acc": 0.75,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 9,
+            "hit_at_2": 0.1875,
+            "gold_rank_mean": 3.0625,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 10,
+            "hit_at_2": 0.1875,
+            "gold_rank_mean": 3.0625,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 11,
+            "hit_at_2": 0.1875,
+            "gold_rank_mean": 3.0625,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 12,
+            "hit_at_2": 0.1875,
+            "gold_rank_mean": 3.0625,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 13,
+            "hit_at_2": 0.3125,
+            "gold_rank_mean": 2.9375,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 14,
+            "hit_at_2": 0.8125,
+            "gold_rank_mean": 0.625,
+            "amongkeys_acc": 0.75,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 15,
+            "hit_at_2": 0.375,
+            "gold_rank_mean": 1.625,
+            "amongkeys_acc": 0.375,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          }
+        ],
+        "n_total": 16,
+        "n_eligible": 16,
+        "n_ineligible": 0,
+        "best_layer": 14,
+        "best_layer_hit_at_2": 0.8125
+      },
+      "paired_D_multi": {
+        "per_layer": [
+          {
+            "layer": 0,
+            "hit_at_2": 0.3125,
+            "gold_rank_mean": 3.1875,
+            "amongkeys_acc": 0.4375,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 1,
+            "hit_at_2": 0.4375,
+            "gold_rank_mean": 2.125,
+            "amongkeys_acc": 0.1875,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 2,
+            "hit_at_2": 0.25,
+            "gold_rank_mean": 3.1875,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 3,
+            "hit_at_2": 0.25,
+            "gold_rank_mean": 3.1875,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 4,
+            "hit_at_2": 0.1875,
+            "gold_rank_mean": 2.875,
+            "amongkeys_acc": 0.1875,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 5,
+            "hit_at_2": 0.25,
+            "gold_rank_mean": 3.1875,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 6,
+            "hit_at_2": 0.3125,
+            "gold_rank_mean": 2.9375,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 7,
+            "hit_at_2": 0.25,
+            "gold_rank_mean": 3.1875,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 8,
+            "hit_at_2": 0.1875,
+            "gold_rank_mean": 2.75,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 9,
+            "hit_at_2": 0.25,
+            "gold_rank_mean": 3.1875,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 10,
+            "hit_at_2": 0.25,
+            "gold_rank_mean": 3.1875,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 11,
+            "hit_at_2": 0.25,
+            "gold_rank_mean": 3.1875,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 12,
+            "hit_at_2": 0.25,
+            "gold_rank_mean": 3.1875,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 13,
+            "hit_at_2": 0.3125,
+            "gold_rank_mean": 3.125,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 14,
+            "hit_at_2": 0.5625,
+            "gold_rank_mean": 2.25,
+            "amongkeys_acc": 0.1875,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 15,
+            "hit_at_2": 0.3125,
+            "gold_rank_mean": 2.4375,
+            "amongkeys_acc": 0.1875,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          }
+        ],
+        "n_total": 16,
+        "n_eligible": 16,
+        "n_ineligible": 0,
+        "best_layer": 14,
+        "best_layer_hit_at_2": 0.5625
+      }
+    },
+    "mc-30B": {
+      "niah_single_1": {
+        "per_layer": [
+          {
+            "layer": 0,
+            "hit_at_2": 0.0,
+            "gold_rank_mean": 5.044444444444444,
+            "amongkeys_acc": null,
+            "amongkeys_n": 0,
+            "n_eligible": 45,
+            "n_total": 50
+          },
+          {
+            "layer": 1,
+            "hit_at_2": 0.06666666666666667,
+            "gold_rank_mean": 4.088888888888889,
+            "amongkeys_acc": null,
+            "amongkeys_n": 0,
+            "n_eligible": 45,
+            "n_total": 50
+          },
+          {
+            "layer": 2,
+            "hit_at_2": 0.26666666666666666,
+            "gold_rank_mean": 3.2888888888888888,
+            "amongkeys_acc": null,
+            "amongkeys_n": 0,
+            "n_eligible": 45,
+            "n_total": 50
+          },
+          {
+            "layer": 3,
+            "hit_at_2": 0.24444444444444444,
+            "gold_rank_mean": 3.3555555555555556,
+            "amongkeys_acc": null,
+            "amongkeys_n": 0,
+            "n_eligible": 45,
+            "n_total": 50
+          },
+          {
+            "layer": 4,
+            "hit_at_2": 0.37777777777777777,
+            "gold_rank_mean": 2.8444444444444446,
+            "amongkeys_acc": null,
+            "amongkeys_n": 0,
+            "n_eligible": 45,
+            "n_total": 50
+          },
+          {
+            "layer": 5,
+            "hit_at_2": 0.24444444444444444,
+            "gold_rank_mean": 3.3555555555555556,
+            "amongkeys_acc": null,
+            "amongkeys_n": 0,
+            "n_eligible": 45,
+            "n_total": 50
+          },
+          {
+            "layer": 6,
+            "hit_at_2": 0.6666666666666666,
+            "gold_rank_mean": 1.4444444444444444,
+            "amongkeys_acc": null,
+            "amongkeys_n": 0,
+            "n_eligible": 45,
+            "n_total": 50
+          },
+          {
+            "layer": 7,
+            "hit_at_2": 0.24444444444444444,
+            "gold_rank_mean": 3.3555555555555556,
+            "amongkeys_acc": null,
+            "amongkeys_n": 0,
+            "n_eligible": 45,
+            "n_total": 50
+          },
+          {
+            "layer": 8,
+            "hit_at_2": 0.9555555555555556,
+            "gold_rank_mean": 0.26666666666666666,
+            "amongkeys_acc": null,
+            "amongkeys_n": 0,
+            "n_eligible": 45,
+            "n_total": 50
+          },
+          {
+            "layer": 9,
+            "hit_at_2": 0.24444444444444444,
+            "gold_rank_mean": 3.3555555555555556,
+            "amongkeys_acc": null,
+            "amongkeys_n": 0,
+            "n_eligible": 45,
+            "n_total": 50
+          },
+          {
+            "layer": 10,
+            "hit_at_2": 0.24444444444444444,
+            "gold_rank_mean": 3.3555555555555556,
+            "amongkeys_acc": null,
+            "amongkeys_n": 0,
+            "n_eligible": 45,
+            "n_total": 50
+          },
+          {
+            "layer": 11,
+            "hit_at_2": 0.24444444444444444,
+            "gold_rank_mean": 3.2,
+            "amongkeys_acc": null,
+            "amongkeys_n": 0,
+            "n_eligible": 45,
+            "n_total": 50
+          },
+          {
+            "layer": 12,
+            "hit_at_2": 0.24444444444444444,
+            "gold_rank_mean": 3.3555555555555556,
+            "amongkeys_acc": null,
+            "amongkeys_n": 0,
+            "n_eligible": 45,
+            "n_total": 50
+          },
+          {
+            "layer": 13,
+            "hit_at_2": 0.24444444444444444,
+            "gold_rank_mean": 3.3555555555555556,
+            "amongkeys_acc": null,
+            "amongkeys_n": 0,
+            "n_eligible": 45,
+            "n_total": 50
+          },
+          {
+            "layer": 14,
+            "hit_at_2": 0.9555555555555556,
+            "gold_rank_mean": 0.17777777777777778,
+            "amongkeys_acc": null,
+            "amongkeys_n": 0,
+            "n_eligible": 45,
+            "n_total": 50
+          },
+          {
+            "layer": 15,
+            "hit_at_2": 1.0,
+            "gold_rank_mean": 0.2,
+            "amongkeys_acc": null,
+            "amongkeys_n": 0,
+            "n_eligible": 45,
+            "n_total": 50
+          }
+        ],
+        "n_total": 50,
+        "n_eligible": 45,
+        "n_ineligible": 5,
+        "best_layer": 15,
+        "best_layer_hit_at_2": 1.0
+      },
+      "niah_multikey_1": {
+        "per_layer": [
+          {
+            "layer": 0,
+            "hit_at_2": 0.48936170212765956,
+            "gold_rank_mean": 1.2553191489361701,
+            "amongkeys_acc": 0.42,
+            "amongkeys_n": 50,
+            "n_eligible": 47,
+            "n_total": 50
+          },
+          {
+            "layer": 1,
+            "hit_at_2": 0.5957446808510638,
+            "gold_rank_mean": 1.4042553191489362,
+            "amongkeys_acc": 0.48,
+            "amongkeys_n": 50,
+            "n_eligible": 47,
+            "n_total": 50
+          },
+          {
+            "layer": 2,
+            "hit_at_2": 0.6382978723404256,
+            "gold_rank_mean": 1.0851063829787233,
+            "amongkeys_acc": 0.5,
+            "amongkeys_n": 50,
+            "n_eligible": 47,
+            "n_total": 50
+          },
+          {
+            "layer": 3,
+            "hit_at_2": 0.6595744680851063,
+            "gold_rank_mean": 1.0638297872340425,
+            "amongkeys_acc": 0.5,
+            "amongkeys_n": 50,
+            "n_eligible": 47,
+            "n_total": 50
+          },
+          {
+            "layer": 4,
+            "hit_at_2": 0.7872340425531915,
+            "gold_rank_mean": 0.723404255319149,
+            "amongkeys_acc": 0.58,
+            "amongkeys_n": 50,
+            "n_eligible": 47,
+            "n_total": 50
+          },
+          {
+            "layer": 5,
+            "hit_at_2": 0.6595744680851063,
+            "gold_rank_mean": 1.0638297872340425,
+            "amongkeys_acc": 0.5,
+            "amongkeys_n": 50,
+            "n_eligible": 47,
+            "n_total": 50
+          },
+          {
+            "layer": 6,
+            "hit_at_2": 0.574468085106383,
+            "gold_rank_mean": 1.425531914893617,
+            "amongkeys_acc": 0.32,
+            "amongkeys_n": 50,
+            "n_eligible": 47,
+            "n_total": 50
+          },
+          {
+            "layer": 7,
+            "hit_at_2": 0.6595744680851063,
+            "gold_rank_mean": 1.0638297872340425,
+            "amongkeys_acc": 0.5,
+            "amongkeys_n": 50,
+            "n_eligible": 47,
+            "n_total": 50
+          },
+          {
+            "layer": 8,
+            "hit_at_2": 0.44680851063829785,
+            "gold_rank_mean": 1.7446808510638299,
+            "amongkeys_acc": 0.28,
+            "amongkeys_n": 50,
+            "n_eligible": 47,
+            "n_total": 50
+          },
+          {
+            "layer": 9,
+            "hit_at_2": 0.6595744680851063,
+            "gold_rank_mean": 1.0638297872340425,
+            "amongkeys_acc": 0.5,
+            "amongkeys_n": 50,
+            "n_eligible": 47,
+            "n_total": 50
+          },
+          {
+            "layer": 10,
+            "hit_at_2": 0.6595744680851063,
+            "gold_rank_mean": 1.0638297872340425,
+            "amongkeys_acc": 0.5,
+            "amongkeys_n": 50,
+            "n_eligible": 47,
+            "n_total": 50
+          },
+          {
+            "layer": 11,
+            "hit_at_2": 0.7021276595744681,
+            "gold_rank_mean": 1.0425531914893618,
+            "amongkeys_acc": 0.48,
+            "amongkeys_n": 50,
+            "n_eligible": 47,
+            "n_total": 50
+          },
+          {
+            "layer": 12,
+            "hit_at_2": 0.6595744680851063,
+            "gold_rank_mean": 1.0638297872340425,
+            "amongkeys_acc": 0.5,
+            "amongkeys_n": 50,
+            "n_eligible": 47,
+            "n_total": 50
+          },
+          {
+            "layer": 13,
+            "hit_at_2": 0.6595744680851063,
+            "gold_rank_mean": 1.0425531914893618,
+            "amongkeys_acc": 0.5,
+            "amongkeys_n": 50,
+            "n_eligible": 47,
+            "n_total": 50
+          },
+          {
+            "layer": 14,
+            "hit_at_2": 0.8085106382978723,
+            "gold_rank_mean": 0.9148936170212766,
+            "amongkeys_acc": 0.44,
+            "amongkeys_n": 50,
+            "n_eligible": 47,
+            "n_total": 50
+          },
+          {
+            "layer": 15,
+            "hit_at_2": 0.6382978723404256,
+            "gold_rank_mean": 1.2553191489361701,
+            "amongkeys_acc": 0.44,
+            "amongkeys_n": 50,
+            "n_eligible": 47,
+            "n_total": 50
+          }
+        ],
+        "n_total": 50,
+        "n_eligible": 47,
+        "n_ineligible": 3,
+        "best_layer": 14,
+        "best_layer_hit_at_2": 0.8085106382978723
+      },
+      "paired_S_multi": {
+        "per_layer": [
+          {
+            "layer": 0,
+            "hit_at_2": 0.125,
+            "gold_rank_mean": 3.0,
+            "amongkeys_acc": 0.125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 1,
+            "hit_at_2": 0.5,
+            "gold_rank_mean": 1.75,
+            "amongkeys_acc": 0.375,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 2,
+            "hit_at_2": 0.25,
+            "gold_rank_mean": 3.0,
+            "amongkeys_acc": 0.375,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 3,
+            "hit_at_2": 0.1875,
+            "gold_rank_mean": 3.0625,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 4,
+            "hit_at_2": 0.5,
+            "gold_rank_mean": 2.1875,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 5,
+            "hit_at_2": 0.1875,
+            "gold_rank_mean": 3.0625,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 6,
+            "hit_at_2": 0.125,
+            "gold_rank_mean": 2.6875,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 7,
+            "hit_at_2": 0.1875,
+            "gold_rank_mean": 3.0625,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 8,
+            "hit_at_2": 0.25,
+            "gold_rank_mean": 3.1875,
+            "amongkeys_acc": 0.25,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 9,
+            "hit_at_2": 0.1875,
+            "gold_rank_mean": 3.0625,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 10,
+            "hit_at_2": 0.1875,
+            "gold_rank_mean": 3.0625,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 11,
+            "hit_at_2": 0.5,
+            "gold_rank_mean": 2.1875,
+            "amongkeys_acc": 0.5,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 12,
+            "hit_at_2": 0.1875,
+            "gold_rank_mean": 3.0625,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 13,
+            "hit_at_2": 0.3125,
+            "gold_rank_mean": 2.75,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 14,
+            "hit_at_2": 0.75,
+            "gold_rank_mean": 1.0,
+            "amongkeys_acc": 0.75,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 15,
+            "hit_at_2": 0.4375,
+            "gold_rank_mean": 2.5625,
+            "amongkeys_acc": 0.4375,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          }
+        ],
+        "n_total": 16,
+        "n_eligible": 16,
+        "n_ineligible": 0,
+        "best_layer": 14,
+        "best_layer_hit_at_2": 0.75
+      },
+      "paired_D_multi": {
+        "per_layer": [
+          {
+            "layer": 0,
+            "hit_at_2": 0.5,
+            "gold_rank_mean": 2.0,
+            "amongkeys_acc": 0.375,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 1,
+            "hit_at_2": 0.3125,
+            "gold_rank_mean": 2.375,
+            "amongkeys_acc": 0.1875,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 2,
+            "hit_at_2": 0.25,
+            "gold_rank_mean": 3.1875,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 3,
+            "hit_at_2": 0.25,
+            "gold_rank_mean": 3.1875,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 4,
+            "hit_at_2": 0.4375,
+            "gold_rank_mean": 2.5,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 5,
+            "hit_at_2": 0.25,
+            "gold_rank_mean": 3.1875,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 6,
+            "hit_at_2": 0.125,
+            "gold_rank_mean": 3.0625,
+            "amongkeys_acc": 0.125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 7,
+            "hit_at_2": 0.25,
+            "gold_rank_mean": 3.1875,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 8,
+            "hit_at_2": 0.3125,
+            "gold_rank_mean": 3.375,
+            "amongkeys_acc": 0.375,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 9,
+            "hit_at_2": 0.25,
+            "gold_rank_mean": 3.1875,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 10,
+            "hit_at_2": 0.25,
+            "gold_rank_mean": 3.1875,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 11,
+            "hit_at_2": 0.25,
+            "gold_rank_mean": 3.3125,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 12,
+            "hit_at_2": 0.25,
+            "gold_rank_mean": 3.1875,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 13,
+            "hit_at_2": 0.25,
+            "gold_rank_mean": 3.0625,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 14,
+            "hit_at_2": 0.25,
+            "gold_rank_mean": 2.75,
+            "amongkeys_acc": 0.25,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          },
+          {
+            "layer": 15,
+            "hit_at_2": 0.25,
+            "gold_rank_mean": 3.4375,
+            "amongkeys_acc": 0.3125,
+            "amongkeys_n": 16,
+            "n_eligible": 16,
+            "n_total": 16
+          }
+        ],
+        "n_total": 16,
+        "n_eligible": 16,
+        "n_ineligible": 0,
+        "best_layer": 0,
+        "best_layer_hit_at_2": 0.5
+      }
+    }
+  },
+  "e2_join": null
+}
