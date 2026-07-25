@@ -6,6 +6,8 @@ export HF_HUB_DISABLE_TELEMETRY=1 TOKENIZERS_PARALLELISM=false HF_HUB_DISABLE_XE
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export MC_LONGGDN_WORKTREE=/data2/sohyung/worktrees/long-gdn-e71713e
 export MC_OUT=/data2/sohyung/mc_niah
+# fla pinned at 4b02d15d (see task-2 report; worktree kernels need pre-0d0a2f9a GLA API)
+export PYTHONPATH=/data2/sohyung/mc_niah/pydeps${PYTHONPATH:+:$PYTHONPATH}
 PY=/data2/sohyung/conda-envs/sh_infocap/bin/python
 LMR=/home/sohyung/linear-memory-routing
 ANA=$LMR/lmr/analysis/260725_mc_niah_analysis
