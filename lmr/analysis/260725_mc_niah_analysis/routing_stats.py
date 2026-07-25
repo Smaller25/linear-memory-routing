@@ -85,7 +85,10 @@ def analyze_sample(model, tok, input_text, topk=TOPK):
         else:
             gold_rank, hit = None, None
         amongkeys = None
-        if len(eligible_key_segs) >= 2:
+        if eligible and len(eligible_key_segs) >= 2:
+            # ineligible samples (gold_seg == cur_seg) can never have gold in
+            # eligible_key_segs (gold's own segment isn't eligible), so
+            # amongkeys would be deterministically False there — gate it out.
             best_key_seg = max(eligible_key_segs, key=lambda ks: float(s[ks]))
             amongkeys = (best_key_seg == ann["gold_seg"])
         per_layer.append({"layer": i, "gold_rank": gold_rank, "hit": hit,
@@ -126,6 +129,8 @@ def run_model(kind):
         layer_agg[dsname] = {i: {"hit_sum": 0, "hit_n": 0, "rank_sum": 0.0, "rank_n": 0,
                                   "ak_sum": 0, "ak_n": 0} for i in range(n_layers)}
         n_eligible = 0
+        cur_seg_sum = 0.0
+        chance_sum = 0.0
         for ri, r in enumerate(rows):
             try:
                 res = analyze_sample(model, tok, r["input"], topk=TOPK)
@@ -134,6 +139,8 @@ def run_model(kind):
                 continue
             if res["eligible"]:
                 n_eligible += 1
+                cur_seg_sum += res["cur_seg"]
+                chance_sum += min(1.0, 2.0 / res["cur_seg"])
             rec = {"sample_id": r["sample_id"], "gold_seg": res["gold_seg"],
                    "n_seg": res["n_seg"], "cur_seg": res["cur_seg"],
                    "eligible": res["eligible"], "per_layer": res["per_layer"]}
@@ -163,8 +170,11 @@ def run_model(kind):
                                   "n_eligible": acc["hit_n"], "n_total": n_total})
             if hit_rate is not None and hit_rate > best_hit:
                 best_hit, best_layer = hit_rate, i
+        mean_cur_seg = cur_seg_sum / n_eligible if n_eligible else None
+        chance_hit2 = chance_sum / n_eligible if n_eligible else None
         layer_agg[dsname] = {"per_layer": per_layer_out, "n_total": n_total,
                              "n_eligible": n_eligible, "n_ineligible": n_total - n_eligible,
+                             "mean_cur_seg": mean_cur_seg, "chance_hit2": chance_hit2,
                              "best_layer": best_layer, "best_layer_hit_at_2": best_hit if best_layer is not None else None}
 
         # annotate per-sample records with the dataset-level best-layer hit
