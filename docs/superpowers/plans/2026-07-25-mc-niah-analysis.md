@@ -15,7 +15,7 @@
 - python = `/data2/sohyung/conda-envs/sh_infocap/bin/python` (1.3B gdn2 평가 검증된 env; smoke 실패 시에만 `~/.conda/envs/sh_routing` 시도)
 - `HF_HOME=/data2/sohyung/hf_home`, 대용량 산출물은 `/data2/sohyung/mc_niah/` (root 디스크 만원)
 - worktree: `/data2/sohyung/worktrees/long-gdn-e71713e` — long-gdn `origin/main@e71713e` 고정, **worktree 내 파일 수정 금지**
-- 모델: `mc-25B`/`mc-5B` = `LLM-OS-Models2/mc-gdn2-370m-fineweb-edu-30b-v2-meanpool`의 `checkpoint-{25B,5B}-model-ckpt.pth` (config `mc_370M`: topk=2, chunk 256); `vanilla-5B` = `LLM-OS-Models2/gdn2-370m-fineweb-edu-5b-vanilla`의 `checkpoint-5B-model-ckpt.pth` (config `gdn2_370M`)
+- 모델: `mc-30B`/`mc-5B` = `LLM-OS-Models2/mc-gdn2-370m-fineweb-edu-30b-v2-meanpool`의 `checkpoint-{30B,5B}-model-ckpt.pth` (config `mc_370M`: topk=2, chunk 256); `vanilla-5B` = `LLM-OS-Models2/gdn2-370m-fineweb-edu-5b-vanilla`의 `checkpoint-5B-model-ckpt.pth` (config `gdn2_370M`)
 - 길이 2048 고정 (=8 segments), Dataset A 50 샘플/태스크, Dataset B 32쌍(S 16 + D 16)
 - tokenizer `TinyLlama/TinyLlama_v1.1`; RULER 프로토콜 = greedy free-gen(n_gen=128) + `string_match_all`; `answer_prefix`는 입력에 넣지 않음(`scripts/ruler.py` 기본과 동일)
 - anti-oracle 없음. 폴더명은 반드시 `260725_mc_niah_analysis` (숫자 시작 → `-m` 불가, 스크립트는 파일 경로 실행; 폴더 내 상호 import는 각 스크립트가 자기 dir을 `sys.path`에 추가)
@@ -90,7 +90,7 @@ git commit -m "mc-niah: env scaffold + pinned long-gdn worktree recipe"
 - Create: `lmr/analysis/260725_mc_niah_analysis/sbatch/smoke.sbatch`
 
 **Interfaces:**
-- Produces: `bootstrap()` (sys.path 주입); `load_model(kind, device="cuda", dtype=torch.bfloat16) -> GPT` (kind ∈ `"mc-25B","mc-5B","vanilla-5B"`); `load_tokenizer()`; 상수 `CKPTS: dict[str, tuple[repo, fname, config_name]]`, `CHUNK=256`, `TOPK=2`
+- Produces: `bootstrap()` (sys.path 주입); `load_model(kind, device="cuda", dtype=torch.bfloat16) -> GPT` (kind ∈ `"mc-30B","mc-5B","vanilla-5B"`); `load_tokenizer()`; 상수 `CKPTS: dict[str, tuple[repo, fname, config_name]]`, `CHUNK=256`, `TOPK=2`
 
 - [ ] **Step 1: load_mc.py 작성**
 
@@ -102,8 +102,8 @@ import torch
 WORKTREE = os.environ.get("MC_LONGGDN_WORKTREE", "/data2/sohyung/worktrees/long-gdn-e71713e")
 CHUNK, TOPK = 256, 2
 CKPTS = {
-    "mc-25B": ("LLM-OS-Models2/mc-gdn2-370m-fineweb-edu-30b-v2-meanpool",
-               "checkpoint-25B-model-ckpt.pth", "mc_370M"),
+    "mc-30B": ("LLM-OS-Models2/mc-gdn2-370m-fineweb-edu-30b-v2-meanpool",
+               "checkpoint-30B-model-ckpt.pth", "mc_370M"),
     "mc-5B": ("LLM-OS-Models2/mc-gdn2-370m-fineweb-edu-30b-v2-meanpool",
               "checkpoint-5B-model-ckpt.pth", "mc_370M"),
     "vanilla-5B": ("LLM-OS-Models2/gdn2-370m-fineweb-edu-5b-vanilla",
@@ -154,7 +154,7 @@ import load_mc
 
 tok = load_mc.load_tokenizer()
 ids = torch.tensor([tok("The grass is green. " * 120).input_ids[:512]], device="cuda")
-for kind in ("vanilla-5B", "mc-5B", "mc-25B"):
+for kind in ("vanilla-5B", "mc-5B", "mc-30B"):
     model = load_mc.load_model(kind)
     with torch.no_grad(), torch.autocast("cuda", dtype=torch.bfloat16):
         logits = model(ids)
@@ -657,7 +657,7 @@ REPO_RES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results")
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--models", nargs="+",
-                    default=["vanilla-5B", "mc-5B", "mc-25B"])
+                    default=["vanilla-5B", "mc-5B", "mc-30B"])
     ap.add_argument("--tasks", nargs="+",
                     default=["niah_single_1", "niah_multikey_1"])
     a = ap.parse_args()
@@ -688,7 +688,7 @@ if __name__ == "__main__":
 - [ ] **Step 4: 제출·확인**
 
 Run: `sbatch .../sbatch/e0.sbatch`; 로그와 `results/e0_scores.json` 확인
-Expected: 6개 셀 완주. **앵커 판정**: vanilla single≈88/multikey≈20, mc-5B single≈60/multikey≈2 (±15pt 허용 — 생성 경로 차이 감안). mc-25B는 신규 수치. 크게 어긋나면(예: vanilla multikey 0 또는 mc single 20) **E1 진행 전 사용자 보고** (spec §7).
+Expected: 6개 셀 완주. **앵커 판정**: vanilla single≈88/multikey≈20, mc-5B single≈60/multikey≈2 (±15pt 허용 — 생성 경로 차이 감안). mc-30B는 신규 수치. 크게 어긋나면(예: vanilla multikey 0 또는 mc single 20) **E1 진행 전 사용자 보고** (spec §7).
 
 - [ ] **Step 5: 커밋**
 
@@ -784,12 +784,12 @@ def analyze_sample(model, tok, input_text, topk=2):
     return {"gold_seg": ann["gold_seg"], "n_seg": ann["n_seg"], "per_layer": per_layer}
 ```
 
-드라이버(같은 파일 `__main__`): `--model {mc-5B,mc-25B}` 별로 (i) Dataset A 두 태스크 50샘플, (ii) Dataset B S/D×multi 32샘플을 `analyze_sample`로 처리. 집계:
+드라이버(같은 파일 `__main__`): `--model {mc-5B,mc-30B}` 별로 (i) Dataset A 두 태스크 50샘플, (ii) Dataset B S/D×multi 32샘플을 `analyze_sample`로 처리. 집계:
 - layer별 `hit@2`율, `gold_rank` 평균, `amongkeys` 정답률(multi만) — 태스크·조건(S/D)별
 - E0 `rows`에서 같은 index의 `correct`를 붙여, "best layer 기준 hit인 샘플의 정답률 vs miss인 샘플의 정답률" 교차표
 - matplotlib로 layer(x) × hit@2(y) 곡선을 태스크·조건별 오버레이 → `results/e1_routing.png`; 수치 전체 `results/e1_routing.json`
 
-- [ ] **Step 2: sbatch/e1.sbatch 작성·제출** (`-t 02:00:00`; 실행줄 `$PY "$ANA/routing_stats.py" --model mc-5B && $PY "$ANA/routing_stats.py" --model mc-25B`)
+- [ ] **Step 2: sbatch/e1.sbatch 작성·제출** (`-t 02:00:00`; 실행줄 `$PY "$ANA/routing_stats.py" --model mc-5B && $PY "$ANA/routing_stats.py" --model mc-30B`)
 
 Expected: json에 single hit@2 高(≥0.8 예상, report의 S-NIAH 우세와 부합) vs multikey/D 조건 저하 여부가 드러남. 판정 기준이 아니라 **측정**이므로 수치 자체가 산출물.
 
@@ -939,7 +939,7 @@ def patch_oracle(model):
 
 주의: `GDN2SSC.__init__`은 `normalize_queries=True`를 강제하므로 추가 인자 불필요. `_make_oracle_class`가 import 시점이 아니라 호출 시점에 dsc를 import하므로 CPU 테스트(`inject_gold`만)는 worktree 없이도 통과.
 
-드라이버(`__main__`): `--model {mc-5B,mc-25B}` × Dataset B `{S,D}.jsonl`의 **multi** 행만: (1) oracle 없이(baseline, `gold_segment=None`) run_file, (2) 각 샘플 forward 전 모든 oracle의 `gold_segment = row["gold_seg"]` 설정 후 생성. gen_eval.run_file은 샘플별 콜백이 없으므로 oracle 드라이버는 run_file을 쓰지 말고 jsonl 루프를 직접 돌며 `greedy_generate` 호출(≈15줄). S/D × {baseline, oracle} 4셀 score + per-sample을 `results/e2_oracle.json`에 저장.
+드라이버(`__main__`): `--model {mc-5B,mc-30B}` × Dataset B `{S,D}.jsonl`의 **multi** 행만: (1) oracle 없이(baseline, `gold_segment=None`) run_file, (2) 각 샘플 forward 전 모든 oracle의 `gold_segment = row["gold_seg"]` 설정 후 생성. gen_eval.run_file은 샘플별 콜백이 없으므로 oracle 드라이버는 run_file을 쓰지 말고 jsonl 루프를 직접 돌며 `greedy_generate` 호출(≈15줄). S/D × {baseline, oracle} 4셀 score + per-sample을 `results/e2_oracle.json`에 저장.
 
 - [ ] **Step 4: 테스트 통과 확인** — `$PY -m pytest tests/lmr/test_mc_niah_oracle.py -x -q` → 2 passed
 
@@ -1032,7 +1032,7 @@ def sample_metrics(model, tok, row):
     return out
 ```
 
-드라이버(`__main__`): `--model {mc-5B,mc-25B}` × `{S,D}.jsonl` 전 행(single+multi). pair_id로 single/multi를 짝지어 `b2_read_cos_vs_single = cos(r_multi, r_single)`을 layer별 계산(`_r` 사용 후 폐기, json에는 저장 안 함). 집계: 조건(S/D)·variant별 layer 곡선 평균 → json + png (2×2 subplot: b1_final, b1_after, b2_qk_align, b2_read_cos_vs_single).
+드라이버(`__main__`): `--model {mc-5B,mc-30B}` × `{S,D}.jsonl` 전 행(single+multi). pair_id로 single/multi를 짝지어 `b2_read_cos_vs_single = cos(r_multi, r_single)`을 layer별 계산(`_r` 사용 후 폐기, json에는 저장 안 함). 집계: 조건(S/D)·variant별 layer 곡선 평균 → json + png (2×2 subplot: b1_final, b1_after, b2_qk_align, b2_read_cos_vs_single).
 
 - [ ] **Step 2: sbatch/e3.sbatch 작성·제출** (`-t 03:00:00`)
 

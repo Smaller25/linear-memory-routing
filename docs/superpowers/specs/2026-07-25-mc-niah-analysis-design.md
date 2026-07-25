@@ -22,7 +22,7 @@ single-NIAH 대비 multi-NIAH(MK-NIAH-1)에서 크게 실패하는 원인을,
 
 | 이름 | HF repo / 파일 | config |
 |---|---|---|
-| MC-25B | `LLM-OS-Models2/mc-gdn2-370m-fineweb-edu-30b-v2-meanpool` / `checkpoint-25B-model-ckpt.pth` | `mc_370M` |
+| MC-30B | `LLM-OS-Models2/mc-gdn2-370m-fineweb-edu-30b-v2-meanpool` / `checkpoint-30B-model-ckpt.pth` | `mc_370M` |
 | MC-5B | 같은 repo / `checkpoint-5B-model-ckpt.pth` | `mc_370M` |
 | Vanilla-5B | `LLM-OS-Models2/gdn2-370m-fineweb-edu-5b-vanilla` / `checkpoint-5B-model-ckpt.pth` | `gdn2_370M` |
 
@@ -92,7 +92,7 @@ top-k에 강제 주입** 후 재생성 → 점수 회복량 측정 (Dataset B, S
 - r에서 (q·k)v_needle 성분 vs 간섭 잔차 크기 비율
 
 state 재구성은 학습과 동일한 `chunk_gdn2` + `scan_segments` 경로 사용 (수치 일치 보장).
-대상: MC-25B, MC-5B. 산출: layer(16) × 지표 프로파일, single vs multi 오버레이, S/D 층화.
+대상: MC-30B, MC-5B. 산출: layer(16) × 지표 프로파일, single vs multi 오버레이, S/D 층화.
 
 ### 판정표 (최종 결론 프레임)
 
