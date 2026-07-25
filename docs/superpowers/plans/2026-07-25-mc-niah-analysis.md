@@ -578,16 +578,19 @@ git commit -m "mc-niah: Dataset B paired-controlled generator (S/D placement)"
 
 ---
 
-### Task 5: E0 — free-gen 평가 (`gen_eval.py`, `eval_niah.py`)
+### Task 5: 생성 유틸 `gen_eval.py` (E0 앵커 재현은 **생략** — 2026-07-25 사용자 지시)
+
+> E0 성능 재현 평가는 하지 않는다. anchor 수치는 collaborator 종합 성적표(spec §1 표:
+> @2K에서 vanilla-5B 90/20, MC-5B 60/2, MC-30B 92/32)를 그대로 사용한다.
+> `eval_niah.py`/`e0.sbatch`는 만들지 않는다. 이 task는 E2(Task 7)가 소비하는
+> 생성·채점 유틸 `gen_eval.py`만 작성한다 (GPU 불필요, import 문법 확인만).
 
 **Files:**
 - Create: `lmr/analysis/260725_mc_niah_analysis/gen_eval.py`
-- Create: `lmr/analysis/260725_mc_niah_analysis/eval_niah.py`
-- Create: `lmr/analysis/260725_mc_niah_analysis/sbatch/e0.sbatch`
 
 **Interfaces:**
-- Consumes: `load_mc.load_model/load_tokenizer`
-- Produces: `greedy_generate(model, ids, n_gen=128) -> list[int]`; `string_match_all(preds, refs) -> float`; `run_file(model, tok, jsonl_path, n_gen=128, variant_filter=None, tag="") -> dict(score, rows=[{index, pred, outputs, correct}])`; 결과 `$MC_OUT/results/e0_scores.json` + repo `lmr/analysis/260725_mc_niah_analysis/results/e0_scores.json`
+- Consumes: (없음 — 순수 유틸)
+- Produces: `greedy_generate(model, ids, n_gen=128) -> list[int]`; `string_match_all(preds, refs) -> float`; `run_file(model, tok, jsonl_path, n_gen=128, variant_filter=None, tag="") -> dict(score, rows=[{index, pred, outputs, correct}])`
 
 - [ ] **Step 1: gen_eval.py 작성**
 
@@ -643,58 +646,16 @@ def run_file(model, tok, jsonl_path, n_gen=128, variant_filter=None, tag=""):
     return {"score": score, "n": len(rows), "rows": rows}
 ```
 
-- [ ] **Step 2: eval_niah.py 작성**
+- [ ] **Step 2: 문법 확인 및 커밋**
 
-```python
-"""E0: 3 모델 × {niah_single_1, niah_multikey_1} @2048 앵커 재현."""
-import argparse, json, os, sys, torch
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import load_mc, gen_eval
-
-MC_OUT = os.environ.get("MC_OUT", "/data2/sohyung/mc_niah")
-REPO_RES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results")
-
-if __name__ == "__main__":
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--models", nargs="+",
-                    default=["vanilla-5B", "mc-5B", "mc-30B"])
-    ap.add_argument("--tasks", nargs="+",
-                    default=["niah_single_1", "niah_multikey_1"])
-    a = ap.parse_args()
-    tok = load_mc.load_tokenizer()
-    results = {}
-    out_path = os.path.join(MC_OUT, "results", "e0_scores.json")
-    if os.path.exists(out_path):
-        results = json.load(open(out_path))          # 재실행 시 skip-existing
-    for kind in a.models:
-        model = load_mc.load_model(kind)
-        for task in a.tasks:
-            key = f"{kind}/{task}"
-            if key in results:
-                print(f"[skip] {key}"); continue
-            p = os.path.join(MC_OUT, "data", "2048", task, "validation.jsonl")
-            results[key] = gen_eval.run_file(model, tok, p, tag=key)
-            print(f"[E0] {key}: {results[key]['score']}")
-            json.dump(results, open(out_path, "w"), indent=1)
-        del model; torch.cuda.empty_cache()
-    os.makedirs(REPO_RES, exist_ok=True)
-    slim = {k: {"score": v["score"], "n": v["n"]} for k, v in results.items()}
-    json.dump(slim, open(os.path.join(REPO_RES, "e0_scores.json"), "w"), indent=1)
-    print(json.dumps(slim, indent=1))
-```
-
-- [ ] **Step 3: sbatch/e0.sbatch 작성** (smoke.sbatch 복제, `-J mc_e0`, `-t 05:50:00`, 실행줄만 `$PY "$ANA/eval_niah.py"`)
-
-- [ ] **Step 4: 제출·확인**
-
-Run: `sbatch .../sbatch/e0.sbatch`; 로그와 `results/e0_scores.json` 확인
-Expected: 6개 셀 완주. **앵커 판정**: vanilla single≈88/multikey≈20, mc-5B single≈60/multikey≈2 (±15pt 허용 — 생성 경로 차이 감안). mc-30B는 신규 수치. 크게 어긋나면(예: vanilla multikey 0 또는 mc single 20) **E1 진행 전 사용자 보고** (spec §7).
+Run: `$PY -c "import sys; sys.path.insert(0,'lmr/analysis/260725_mc_niah_analysis'); import gen_eval; print(gen_eval.string_match_all(['x 123'],[['123']]))"`
+Expected: `100.0`
 
 - [ ] **Step 5: 커밋**
 
 ```bash
 git add lmr/analysis/260725_mc_niah_analysis/
-git commit -m "mc-niah: E0 free-gen anchor eval (3 models x 2 tasks @2k)"
+git commit -m "mc-niah: gen_eval util (greedy free-gen + RULER string match; E0 skipped per user)"
 ```
 
 ---
@@ -706,7 +667,7 @@ git commit -m "mc-niah: E0 free-gen anchor eval (3 models x 2 tasks @2k)"
 - Create: `lmr/analysis/260725_mc_niah_analysis/sbatch/e1.sbatch`
 
 **Interfaces:**
-- Consumes: `load_mc`, `data.annotate`, Dataset A/B jsonl, `$MC_OUT/results/e0_scores.json` (per-sample correctness)
+- Consumes: `load_mc`, `data.annotate`, Dataset A/B jsonl (correctness join은 E2 산출물 `results/e2_oracle.json`에서 — 없으면 생략하고 나중에 채움)
 - Produces: `capture_hidden(model, ids) -> list[Tensor[T,D]]` (layer별 attn 입력; E3도 재사용); `routing_scores_at(attn, h, t) -> Tensor[n_seg]` ; 결과 `results/e1_routing.json` + `results/e1_routing.png`
 
 - [ ] **Step 1: routing_stats.py 작성**
@@ -786,7 +747,7 @@ def analyze_sample(model, tok, input_text, topk=2):
 
 드라이버(같은 파일 `__main__`): `--model {mc-5B,mc-30B}` 별로 (i) Dataset A 두 태스크 50샘플, (ii) Dataset B S/D×multi 32샘플을 `analyze_sample`로 처리. 집계:
 - layer별 `hit@2`율, `gold_rank` 평균, `amongkeys` 정답률(multi만) — 태스크·조건(S/D)별
-- E0 `rows`에서 같은 index의 `correct`를 붙여, "best layer 기준 hit인 샘플의 정답률 vs miss인 샘플의 정답률" 교차표
+- Dataset B multi에 한해, E2(Task 7) baseline 생성 결과(`results/e2_oracle.json`의 baseline rows)의 `correct`와 pair_id로 join해 "best layer 기준 hit인 샘플의 정답률 vs miss" 교차표 (E0 생략에 따라 Dataset A 상관 분석은 제외; E2보다 먼저 실행되는 경우 이 교차표만 나중에 채움)
 - matplotlib로 layer(x) × hit@2(y) 곡선을 태스크·조건별 오버레이 → `results/e1_routing.png`; 수치 전체 `results/e1_routing.json`
 
 - [ ] **Step 2: sbatch/e1.sbatch 작성·제출** (`-t 02:00:00`; 실행줄 `$PY "$ANA/routing_stats.py" --model mc-5B && $PY "$ANA/routing_stats.py" --model mc-30B`)

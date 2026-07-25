@@ -11,12 +11,16 @@ single-NIAH 대비 multi-NIAH(MK-NIAH-1)에서 크게 실패하는 원인을,
 **write → read → route → 생성** 4단계 인과 사슬로 분해해 지목한다.
 결론은 후속 memory-routing 알고리즘 개선의 근거가 된다.
 
-배경 수치 (collaborator 성적표, 5B ckpt, RULER 표준 프로토콜 @2048):
+배경 수치 (collaborator 종합 성적표 2026-07-25, RULER 표준 프로토콜 @2048, 50 samples/cell):
 
-| 태스크 | vanilla | MC v2 |
-|---|---|---|
-| S-NIAH-1 | 88 | 60 |
-| MK-NIAH-1 | 20 | 2 |
+| 태스크 @2K | vanilla 5B | MC 5B | MC 30B |
+|---|---|---|---|
+| S-NIAH-1 | 90 | 60 | 92 |
+| MK-NIAH-1 | 20 | 2 | 32 |
+
+(출처: long-gdn repo `results/mc_v2_30bt_eval/` — **본 분석은 이 수치를 그대로 anchor로 사용하며
+E0 재현 평가는 수행하지 않는다** (2026-07-25 사용자 지시). 30B에서 multi가 2→32로 크게 개선된
+점이 5B vs 30B 대비축의 핵심 관측 대상.)
 
 ## 2. 대상 모델 (3개)
 
@@ -24,7 +28,7 @@ single-NIAH 대비 multi-NIAH(MK-NIAH-1)에서 크게 실패하는 원인을,
 |---|---|---|
 | MC-30B | `LLM-OS-Models2/mc-gdn2-370m-fineweb-edu-30b-v2-meanpool` / `checkpoint-30B-model-ckpt.pth` | `mc_370M` |
 | MC-5B | 같은 repo / `checkpoint-5B-model-ckpt.pth` | `mc_370M` |
-| Vanilla-5B | `LLM-OS-Models2/gdn2-370m-fineweb-edu-5b-vanilla` / `checkpoint-5B-model-ckpt.pth` | `gdn2_370M` |
+| Vanilla-5B | `LLM-OS-Models2/gdn2-370m-fineweb-edu-5b-vanilla` / `checkpoint-5B-model-ckpt.pth` | `gdn2_370M` | (loader/smoke 검증용만 — E0 생략으로 실험 미사용) |
 
 - MC 설정: topk=2, mc_chunk_size=256, descriptor = **mean-pool of L2-normalized keys**
   (commit `4ef4942` 이후 코드), 16 layers, tokenizer `TinyLlama/TinyLlama_v1.1`.
@@ -54,9 +58,9 @@ single-NIAH 대비 multi-NIAH(MK-NIAH-1)에서 크게 실패하는 원인을,
 
 ## 4. 실험
 
-### E0 — 앵커 재현
-3 모델 × {single_1, multikey_1} @2048, Dataset A, RULER 표준 스코어.
-성적표(MC 60/2, vanilla 88/20)와 대략 일치 확인 — 이후 분석의 전제 검증.
+### E0 — 앵커 재현: **생략** (2026-07-25 사용자 지시)
+collaborator 종합 성적표(§1 표)를 anchor로 그대로 사용. 자체 성능 재현 평가는 하지 않는다.
+단, E2의 Dataset B baseline 생성(개입 대조군)은 성능 테스트가 아니라 인과 실험의 일부이므로 유지.
 
 ### E1 — Routing 정확도 (질문 1: 정답 chunk를 찾는가)
 MC 모델만. `forward_with_diagnostics`의 `route_indices`/`route_scores`를
@@ -64,7 +68,8 @@ answer position에서 layer별(16개) 수집:
 - `hit@topk`: 정답 chunk ∈ 선택된 top-2 비율
 - `gold rank`: route_scores 내 정답 chunk 순위 (top1_all)
 - multi 전용 `top1_amongkeys`: key 보유 chunk들 중 질의된 key의 chunk가 1등인가 (chance=1/K)
-- 샘플별 routing hit ↔ 최종 정답 여부 상관 (routing이 맞아도 틀리는가?)
+- 샘플별 routing hit ↔ 최종 정답 여부 상관 (routing이 맞아도 틀리는가?) — 정답 여부는
+  **E2의 Dataset B baseline 생성 결과**에서 취함 (E0 생략에 따른 변경)
 - Dataset A로 전체 집계 + Dataset B로 S/D 조건별 집계
 
 ### E2 — Oracle routing 개입 (인과 주실험)
