@@ -45,5 +45,7 @@ def run_file(model, tok, jsonl_path, n_gen=128, variant_filter=None, tag=""):
                      "outputs": r["outputs"], "correct": correct,
                      **{k: r[k] for k in ("condition", "gold_seg", "variant") if k in r}})
         print(f"[{tag}] {len(rows)}: correct={correct}", flush=True)
+    if not rows:
+        return {"score": 0.0, "n": 0, "rows": []}
     score = string_match_all([r["pred"] for r in rows], [r["outputs"] for r in rows])
     return {"score": score, "n": len(rows), "rows": rows}
