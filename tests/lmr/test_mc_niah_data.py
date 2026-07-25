@@ -71,3 +71,48 @@ def test_paired_gen_invariants(tok):
         assert len(ann_s["needles"]) == 1
         # 길이 제약: 전체 ≤ 2048-128
         assert ann_s["n_tok"] <= 1920 and ann_m["n_tok"] <= 1920
+
+
+def test_paired_gen_shared_haystack(tok):
+    """single/multi가 같은 haystack을 공유하는지: 전체 토큰 수 일치, gold 위치·segment
+    완전 동일, distractor 문장이 들어가는 span을 제외한 나머지 토큰이 완전히 동일한지."""
+    import paired_gen
+    rows = paired_gen.build_pairs(tok, n_pairs=3, condition="S", seed=11) \
+         + paired_gen.build_pairs(tok, n_pairs=3, condition="D", seed=11)
+    by_pair = {}
+    for r in rows:
+        by_pair.setdefault((r["condition"], r["pair_id"]), {})[r["variant"]] = r
+    assert len(by_pair) == 6
+
+    def tok_at(offsets, p):
+        return next(i for i, (s, e) in enumerate(offsets) if s <= p < e)
+
+    for (_cond, _pid), pair in by_pair.items():
+        s, m = pair["single"], pair["multi"]
+        enc_s = tok(s["input"], return_offsets_mapping=True, add_special_tokens=False)
+        enc_m = tok(m["input"], return_offsets_mapping=True, add_special_tokens=False)
+        # (a) 전체 토큰 수 완전 일치
+        assert len(enc_s.input_ids) == len(enc_m.input_ids)
+
+        ann_s = mcdata.annotate(s["input"], tok)
+        ann_m = mcdata.annotate(m["input"], tok)
+        gold_s = next(n for n in ann_s["needles"] if n["key"] == s["needle_key"])
+        gold_m = next(n for n in ann_m["needles"] if n["key"] == m["needle_key"])
+        # (b) gold의 실제 토큰 시작 위치·segment가 single/multi 간 완전 동일
+        assert gold_s["tok_start"] == gold_m["tok_start"]
+        assert gold_s["seg"] == gold_m["seg"]
+
+        # (c) distractor 문장이 차지하는 토큰 span을 제외하면 나머지 토큰 시퀀스가 완전 동일
+        distractor_matches = [mm for mm in mcdata.NEEDLE_RE.finditer(m["input"])
+                               if mm.group(1) != m["needle_key"]]
+        assert len(distractor_matches) == len(m["distractor_segs"])
+        excluded = set()
+        for mm in distractor_matches:
+            lo = tok_at(enc_m.offset_mapping, mm.start())
+            hi = tok_at(enc_m.offset_mapping, mm.end() - 1)
+            excluded.update(range(lo, hi + 1))
+        outside = [i for i in range(len(enc_m.input_ids)) if i not in excluded]
+        assert outside, "no tokens outside distractor spans to compare"
+        for i in outside:
+            assert enc_s.input_ids[i] == enc_m.input_ids[i], (
+                f"token mismatch outside distractor span at index {i}")
