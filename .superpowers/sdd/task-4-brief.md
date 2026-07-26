@@ -1,0 +1,201 @@
+### Task 4: Dataset B paired-controlled 생성기 (CPU 테스트)
+
+**Files:**
+- Create: `lmr/analysis/260725_mc_niah_analysis/paired_gen.py`
+- Modify: `tests/lmr/test_mc_niah_data.py` (테스트 추가)
+
+**Interfaces:**
+- Consumes: `data.annotate`, `data.MC_OUT`, `data.TOKENIZER`, `data.CHUNK`
+- Produces: `prepare_b(n_pairs_per_cond=16, seq_len=2048, n_gen=128, seed=42)` → `$MC_OUT/data/paired/{S,D}.jsonl`. 각 줄 = `{"pair_id", "condition": "S"|"D", "variant": "single"|"multi", "input", "outputs": [value], "gold_seg", "distractor_segs": [int], "needle_key", "codist_tok_dist": int|null}` (같은 pair_id의 single/multi 연속 2줄)
+
+- [ ] **Step 1: 실패하는 테스트 추가** (tests/lmr/test_mc_niah_data.py에 append)
+
+```python
+def test_paired_gen_invariants(tok):
+    import paired_gen
+    rows = paired_gen.build_pairs(tok, n_pairs=3, condition="S", seed=7) \
+         + paired_gen.build_pairs(tok, n_pairs=3, condition="D", seed=7)
+    by_pair = {}
+    for r in rows:
+        by_pair.setdefault((r["condition"], r["pair_id"]), {})[r["variant"]] = r
+    assert len(by_pair) == 6
+    for (cond, _), pair in by_pair.items():
+        s, m = pair["single"], pair["multi"]
+        # 쌍 불변식: 같은 needle/answer/gold segment
+        assert s["needle_key"] == m["needle_key"] and s["outputs"] == m["outputs"]
+        assert s["gold_seg"] == m["gold_seg"]
+        # annotate로 실측 재검증
+        ann_m = mcdata.annotate(m["input"], tok)
+        assert ann_m["gold_seg"] == m["gold_seg"]
+        assert ann_m["query_key"] == m["needle_key"]
+        assert len(ann_m["needles"]) == 4          # gold + distractor 3
+        dsegs = sorted(n["seg"] for n in ann_m["needles"] if n["key"] != m["needle_key"])
+        assert dsegs == sorted(m["distractor_segs"])
+        if cond == "S":
+            assert m["gold_seg"] in m["distractor_segs"]      # 1개는 같은 segment
+            assert m["codist_tok_dist"] is not None
+        else:
+            assert m["gold_seg"] not in m["distractor_segs"]  # 전부 다른 segment
+        ann_s = mcdata.annotate(s["input"], tok)
+        assert len(ann_s["needles"]) == 1
+        # 길이 제약: 전체 ≤ 2048-128
+        assert ann_s["n_tok"] <= 1920 and ann_m["n_tok"] <= 1920
+```
+
+- [ ] **Step 2: 테스트 실패 확인**
+
+Run: `HF_HOME=/data2/sohyung/hf_home $PY -m pytest tests/lmr/test_mc_niah_data.py::test_paired_gen_invariants -x -q`
+Expected: FAIL (`paired_gen` 없음)
+
+- [ ] **Step 3: paired_gen.py 작성**
+
+```python
+"""Dataset B: single/multi paired NIAH, distractor 배치 통제(S=같은 segment, D=다른 segment).
+
+토큰 정밀 배치: 문장 단위로 토큰 수를 누적하며 목표 offset에 needle 삽입 후
+annotate()로 실측 segment를 검증, 어긋나면 삽입점을 한 문장씩 밀며 재시도.
+"""
+import json, os, random, re, sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import data as mcdata
+
+WORDS = ("apple bridge candle dragon engine forest guitar harbor island jungle kettle "
+         "ladder magnet needle orchid pillow quartz rocket saddle temple umbrella violin "
+         "walnut yonder zephyr anchor bamboo canyon dolphin ember falcon glacier").split()
+NEEDLE_FMT = "One of the special magic numbers for {key} is: {value}."
+TEMPLATE = ("Some special magic numbers are hidden within the following text. "
+            "Make sure to memorize it. I will quiz you about the numbers afterwards.\n"
+            "{context}\n"
+            "What is the special magic number for {query} mentioned in the provided text?")
+CHUNK = mcdata.CHUNK
+
+
+def _essay_sentences(tokenizer, budget_toks):
+    essays = json.load(open(os.path.join(mcdata.REPO, "data", "PaulGrahamEssays.json")))["text"]
+    sents, total = [], 0
+    for s in re.split(r"(?<=[.!?]) +", essays):
+        s = s.strip()
+        if not s:
+            continue
+        n = len(tokenizer(s, add_special_tokens=False).input_ids)
+        sents.append((s, n)); total += n
+        if total > budget_toks * 3:
+            break
+    return sents
+
+
+def _compose(sents, inserts, tokenizer, body_budget):
+    """inserts: [(target_tok_offset, text)] 오름차순. 문장 누적으로 배치."""
+    inserts = sorted(inserts)
+    out, cum, ii = [], 0, 0
+    for s, n in sents:
+        while ii < len(inserts) and cum >= inserts[ii][0]:
+            out.append(inserts[ii][1]); ii += 1
+            cum += len(tokenizer(inserts[ii - 1][1], add_special_tokens=False).input_ids)
+        if cum + n > body_budget:
+            break
+        out.append(s); cum += n
+    while ii < len(inserts):          # budget 끝에 못 넣었으면 마지막에
+        out.append(inserts[ii][1]); ii += 1
+    return " ".join(out)
+
+
+def _make_one(tokenizer, sents, rng, condition, seq_len=2048, n_gen=128, num_keys=4):
+    overhead = 96                      # 템플릿+질문 여유
+    body = seq_len - n_gen - overhead  # ≈1824 tokens
+    n_seg_body = body // CHUNK         # 7 — gold는 1..n_seg_body-2에서 선택
+    keys = rng.sample(WORDS, num_keys)
+    vals = [str(rng.randint(1000000, 9999999)) for _ in range(num_keys)]
+    gold_key, gold_val = keys[0], vals[0]
+
+    for attempt in range(8):
+        gold_seg = rng.randint(1, n_seg_body - 2)
+        others = [s for s in range(1, n_seg_body - 1) if s != gold_seg]
+        if condition == "S":
+            d_segs = [gold_seg] + rng.sample(others, num_keys - 2)
+        else:
+            d_segs = rng.sample(others, num_keys - 1)
+        gold_off = gold_seg * CHUNK + rng.randint(16, CHUNK - 96)
+        ins = [(gold_off, NEEDLE_FMT.format(key=gold_key, value=gold_val))]
+        codist_dist = None
+        for k, v, s in zip(keys[1:], vals[1:], d_segs):
+            if s == gold_seg:
+                delta = rng.choice([-64, 64])
+                off = min(max(s * CHUNK + 8, gold_off + delta), (s + 1) * CHUNK - 40)
+                codist_dist = abs(off - gold_off)
+            else:
+                off = s * CHUNK + rng.randint(16, CHUNK - 96)
+            ins.append((off, NEEDLE_FMT.format(key=k, value=v)))
+
+        ctx_multi = _compose(sents, ins, tokenizer, body)
+        ctx_single = _compose(sents, ins[:1], tokenizer, body)
+        row_m = {"input": TEMPLATE.format(context=ctx_multi, query=gold_key),
+                 "outputs": [gold_val]}
+        row_s = {"input": TEMPLATE.format(context=ctx_single, query=gold_key),
+                 "outputs": [gold_val]}
+        try:
+            am = mcdata.annotate(row_m["input"], tokenizer)
+            asg = mcdata.annotate(row_s["input"], tokenizer)
+        except ValueError:
+            continue
+        d_actual = sorted(n["seg"] for n in am["needles"] if n["key"] != gold_key)
+        ok_cond = ((gold_seg in d_actual) if condition == "S"
+                   else (am["gold_seg"] not in d_actual))
+        # single/multi에서 gold가 같은 segment에 실측 배치됐는지까지 확인
+        if (len(am["needles"]) == num_keys and am["gold_seg"] == asg["gold_seg"]
+                and ok_cond and am["n_tok"] <= seq_len - n_gen
+                and asg["n_tok"] <= seq_len - n_gen):
+            meta = {"gold_seg": am["gold_seg"], "distractor_segs": d_actual,
+                    "needle_key": gold_key, "condition": condition,
+                    "codist_tok_dist": codist_dist}
+            return {**row_s, **meta, "variant": "single"}, {**row_m, **meta, "variant": "multi"}
+    raise RuntimeError(f"placement failed after 8 attempts (condition={condition})")
+
+
+def build_pairs(tokenizer, n_pairs, condition, seed=42, seq_len=2048, n_gen=128):
+    rng = random.Random(seed + (0 if condition == "S" else 1000))
+    sents = _essay_sentences(tokenizer, seq_len)
+    rows = []
+    for pid in range(n_pairs):
+        s, m = _make_one(tokenizer, sents, rng, condition, seq_len, n_gen)
+        s["pair_id"] = m["pair_id"] = pid
+        rows += [s, m]
+    return rows
+
+
+def prepare_b(n_pairs_per_cond=16, seq_len=2048, n_gen=128, seed=42):
+    from transformers import AutoTokenizer
+    tok = AutoTokenizer.from_pretrained(mcdata.TOKENIZER)
+    out_dir = os.path.join(mcdata.MC_OUT, "data", "paired")
+    os.makedirs(out_dir, exist_ok=True)
+    for cond in ("S", "D"):
+        rows = build_pairs(tok, n_pairs_per_cond, cond, seed, seq_len, n_gen)
+        p = os.path.join(out_dir, f"{cond}.jsonl")
+        with open(p, "w") as f:
+            for r in rows:
+                f.write(json.dumps(r) + "\n")
+        print(f"[prepare-b] {cond}: {len(rows)} rows ({n_pairs_per_cond} pairs) -> {p}")
+```
+
+essays가 dict가 아니라 다른 구조면 (`json.load(...)["text"]` 실패) 실제 파일 구조를 보고 맞출 것 — `python -c "import json; d=json.load(open('data/PaulGrahamEssays.json')); print(type(d), list(d)[:3] if isinstance(d,dict) else d[0].keys())"`.
+
+- [ ] **Step 4: 테스트 통과 확인**
+
+Run: `HF_HOME=/data2/sohyung/hf_home $PY -m pytest tests/lmr/test_mc_niah_data.py -x -q`
+Expected: 3 passed (essays 파일 필요 — Task 3 Step 5에서 download 완료 상태)
+
+- [ ] **Step 5: prepare-b 실행 (CPU)**
+
+Run: `source .../env_common.sh && $PY lmr/analysis/260725_mc_niah_analysis/data.py prepare-b`
+Expected: `S: 32 rows`, `D: 32 rows`
+
+- [ ] **Step 6: 커밋**
+
+```bash
+git add lmr/analysis/260725_mc_niah_analysis/paired_gen.py tests/lmr/test_mc_niah_data.py
+git commit -m "mc-niah: Dataset B paired-controlled generator (S/D placement)"
+```
+
+---
+

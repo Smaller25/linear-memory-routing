@@ -1,0 +1,8 @@
+Task 1: complete (commits 6809ee20..27ba5601, review clean; note: repo .gitignore has *.sh → use git add -f for .sh files)
+Task 2: complete (commit 31d2802d, review clean; fla pinned 4b02d15d at /data2/sohyung/mc_niah/pydeps via PYTHONPATH — rebuild from pin if wiped)
+Task 3: complete (commit 8d73ed0e, review clean; minors: tok_at StopIteration edge, unused json import, gold_seg uses tok_end; note for E1: Dataset A single has gold_seg up to 7 == current seg → ineligible for routing, handle separately)
+Task 4: complete (commits 47f94ebd+b6b32817, review clean after fix; minor: gold/distractor segs confined to 1-5 of 7 — note for E3 coverage)
+Task 5: complete (commit a974e6cd, review clean; carried minors: run_file empty-rows ZeroDivision guard → add in Task 7, unused sys import)
+Task 6: complete (commits 3d43d2b9,9db45169,f4cc0974,8554e81f, review clean after fixes; headline: hit@2 best-layer mc-5B single .933/multi .660/S .812/D .562; mc-30B 1.0/.809/.75/.50; chance single .288 multi .486 paired .286; amongkeys ~0.5 near chance; minor: per-layer run-to-run FP noise ~1 sample at non-peak layers → caveat in Task 9)
+Task 7: complete (commits 20d8710b,bbb4da5c, review clean; 2x2x2: mc-5B S .125→.312 D .188→.500; mc-30B S .000→.312 D .062→.562, oracle>=baseline all cells; KNOWN DEFECT: e1_routing.json e2_join conflates models (mc-5B wins collision) — fix in flight; Task 9: cite e2_oracle.json only unless fixed)
+e2_join fix: complete (commits 1f5a0e02,5a84af7a; model-separated join verified, headline unchanged)
