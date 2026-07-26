@@ -234,11 +234,9 @@ def main():
     merged["meta"]["models"] = sorted(merged["results"].keys())
 
     # Flat "rows" (baseline correctness only, condition+pair_id keyed) for
-    # backward-compat with routing_stats.py's lenient e2_oracle.json parser
-    # (`_load_e2_baseline`), which only understands a top-level {"rows":[...]}
-    # list or a cond-keyed dict — it does not distinguish models, so when both
-    # models are present the later model in iteration order (mc-30B, since
-    # sorted() puts it after mc-5B) wins any (condition, pair_id) collision.
+    # convenience flat view (model-tagged); routing_stats._load_e2_baseline
+    # reads results[model][cond]["baseline"]["rows"] directly and does not
+    # consume this.
     flat_rows = []
     for mk in merged["meta"]["models"]:
         for cond, cell in merged["results"][mk].items():
