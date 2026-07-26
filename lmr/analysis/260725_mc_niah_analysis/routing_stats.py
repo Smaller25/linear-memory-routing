@@ -188,11 +188,16 @@ def run_model(kind):
     return layer_agg, per_sample, n_layers
 
 
-def _load_e2_baseline():
-    """Task 7 산출물 results/e2_oracle.json (baseline rows, gen_eval.run_file 형식:
-    {"rows": [{"index"/pair_id, "correct", "condition", ...}]} 류)을 관대하게 파싱해
-    (condition, pair_id) -> correct 매핑을 만든다. 파일이 없거나 스키마를 못 알아보면
-    None을 반환 — 호출부는 이를 e2_join: null 로 기록한다."""
+def _load_e2_baseline(model):
+    """Task 7 산출물 results/e2_oracle.json에서 해당 `model`의 baseline rows만
+    읽어 (condition, pair_id) -> correct 매핑을 만든다. 실제 스키마:
+    {"results": {model: {condition: {"baseline": {"rows": [...]}, "oracle": {...}}}},
+     "rows": [...]}  — top-level "rows"는 전 모델을 model 구분 없이 평평하게
+    이어붙인 것이라, (condition, pair_id)만으로 매핑하면 나중에 나오는 모델이
+    앞 모델을 덮어쓴다(실측: mc-30B가 먼저, mc-5B가 나중에 나와 mc-5B가 항상
+    이김 — Task 7 리뷰에서 발견된 버그). 반드시 results[model][condition]
+    ["baseline"]["rows"]로 모델별로 읽는다. 파일/모델 키가 없으면 None
+    (호출부는 이를 e2_join: null 로 기록)."""
     path = os.path.join(RES, "e2_oracle.json")
     if not os.path.exists(path):
         path = os.path.join(MC_OUT, "results", "e2_oracle.json")
@@ -200,38 +205,33 @@ def _load_e2_baseline():
         return None
     try:
         obj = json.load(open(path))
+        model_results = obj.get("results", {}).get(model)
+        if not model_results:
+            return None
         mapping = {}
-
-        def ingest(rows, cond=None):
+        for cond, sub in model_results.items():
+            baseline = sub.get("baseline") if isinstance(sub, dict) else None
+            rows = baseline.get("rows", []) if isinstance(baseline, dict) else []
             for r in rows:
-                c = r.get("condition", cond)
                 pid = r.get("pair_id", r.get("index"))
-                if c is not None and pid is not None and "correct" in r:
-                    mapping[(c, pid)] = bool(r["correct"])
-
-        if isinstance(obj, dict) and "rows" in obj:
-            ingest(obj["rows"])
-        elif isinstance(obj, dict):
-            for cond, sub in obj.items():
-                if isinstance(sub, dict) and "rows" in sub:
-                    ingest(sub["rows"], cond=cond)
-                elif isinstance(sub, list):
-                    ingest(sub, cond=cond)
-        elif isinstance(obj, list):
-            ingest(obj)
+                if pid is not None and "correct" in r:
+                    mapping[(cond, pid)] = bool(r["correct"])
         return mapping or None
     except Exception as e:
-        print(f"[e1][warn] e2_oracle.json found but unparseable: {e}", flush=True)
+        print(f"[e1][warn] e2_oracle.json found but unparseable for model={model}: {e}",
+              flush=True)
         return None
 
 
 def _compute_e2_join(per_sample_all):
-    """model -> dataset(paired_*_multi) -> {"hit":{"correct":n,"n":n}, "miss":{...}}"""
-    baseline = _load_e2_baseline()
-    if baseline is None:
-        return None
+    """model -> dataset(paired_*_multi) -> {"hit":{"correct":n,"n":n}, "miss":{...}}.
+    Baseline is loaded per-model (see _load_e2_baseline) so the two models'
+    join tables never collide/overwrite each other."""
     out = {}
     for model, by_ds in per_sample_all.items():
+        baseline = _load_e2_baseline(model)
+        if baseline is None:
+            continue
         for dsname, recs in by_ds.items():
             if not dsname.startswith("paired_"):
                 continue
