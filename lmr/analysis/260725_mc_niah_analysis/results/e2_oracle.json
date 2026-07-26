@@ -1,0 +1,1290 @@
+{
+  "meta": {
+    "models": [
+      "mc-30B",
+      "mc-5B"
+    ],
+    "n_gen": 128,
+    "injection_score_mode": "max(top,online)"
+  },
+  "results": {
+    "mc-5B": {
+      "S": {
+        "baseline": {
+          "score": 0.125,
+          "n": 16,
+          "rows": [
+            {
+              "pair_id": 0,
+              "gold_seg": 5,
+              "pred": "\n[4]The special magic number for harbor is: 2719583.\n[5]The special magic number for harbor is: 2719583.\n[6]The special magic number for harbor is: 2719583.\n[7]The special magic number for harbor is: 2719583.\n[8]The special magic number for harbor is: 2719583.\n[9]The special magic number for harbor is: 2719",
+              "correct": false
+            },
+            {
+              "pair_id": 1,
+              "gold_seg": 4,
+              "pred": "\n[1] I'm not sure what the special magic number for bridge is.\n[2] I'm not sure what the special magic number for bridge is.\n[3] I'm not sure what the special magic number for bridge is.\n[4] I'm not sure what the special magic number for bridge is.\n[5] I'm not sure what the special magic number for bridge is.\n[6] I'm not sure what the special magic number for bridge is.\n[7] I'm not sure what the special magic number for bridge is.\n[",
+              "correct": false
+            },
+            {
+              "pair_id": 2,
+              "gold_seg": 5,
+              "pred": "\n[4]The special magic number for forest is: 6770619.\n[5]The special magic number for forest is: 6770619.\n[6]The special magic number for forest is: 6770619.\n[7]The special magic number for forest is: 6770619.\n[8]The special magic number for forest is: 6770619.\n[9]The special magic number for forest is: 6770619.\n[",
+              "correct": true
+            },
+            {
+              "pair_id": 3,
+              "gold_seg": 3,
+              "pred": "\n[4]The special magic number for the engine is: 2694522.\n[5]The special magic number for the engine is: 2694522.\n[6]The special magic number for the engine is: 2694522.\n[7]The special magic number for the engine is: 2694522.\n[8]The special magic number for the engine is: 2694522.\n[9]The special magic number for the engine is: 2694",
+              "correct": false
+            },
+            {
+              "pair_id": 4,
+              "gold_seg": 4,
+              "pred": "\n[1]The special magic number for needle is 1000.\n[2]The special magic number for needle is 1000.\n[3]The special magic number for needle is 1000.\n[4]The special magic number for needle is 1000.\n[5]The special magic number for needle is 1000.\n[6]The special magic number for needle is 1000.\n[7]The special magic number for needle is 1000.\n[",
+              "correct": false
+            },
+            {
+              "pair_id": 5,
+              "gold_seg": 2,
+              "pred": "\n[1]The special magic number for orchid is 2110460.\n[2]The special magic number for orchid is 2110460.\n[3]The special magic number for orchid is 2110460.\n[4]The special magic number for orchid is 2110460.\n[5]The special magic number for orchid is 2110460.\n[6]The special magic number for orchid is 2110460.\n[",
+              "correct": false
+            },
+            {
+              "pair_id": 6,
+              "gold_seg": 4,
+              "pred": "\n[1]The special magic number for pillow is: 9543292.\n[2]The special magic number for pillow is: 9543292.\n[3]The special magic number for pillow is: 9543292.\n[4]The special magic number for pillow is: 9543292.\n[5]The special magic number for pillow is: 9543292.\n[6]The special magic number for pillow is: 9543",
+              "correct": false
+            },
+            {
+              "pair_id": 7,
+              "gold_seg": 1,
+              "pred": "\n[1]The number of things that can be manufactured in a given\ntime period is called the number of things that can be manufactured\nin a given time period.\n[2]The number of things that can be manufactured in a given time\nperiod is called the number of things that can be manufactured\nin a given time period.\n[3]The number of things that can be manufactured in a given time\nperiod is called the number of things that can be manufactured\nin a given time period.\n[4]The number of things that can be manufactured in a given time",
+              "correct": false
+            },
+            {
+              "pair_id": 8,
+              "gold_seg": 1,
+              "pred": "\n[1]The special magic number for ladder is: 3710371.\n[2]The special magic number for ladder is: 3710371.\n[3]The special magic number for ladder is: 3710371.\n[4]The special magic number for ladder is: 3710371.\n[5]The special magic number for ladder is: 3710371.\n[6]The special magic number for ladder is: 3710",
+              "correct": false
+            },
+            {
+              "pair_id": 9,
+              "gold_seg": 2,
+              "pred": "\n[1]The special magic number for pillow is 2161193.\n[2]The special magic number for pillow is 2161193.\n[3]The special magic number for pillow is 2161193.\n[4]The special magic number for pillow is 2161193.\n[5]The special magic number for pillow is 2161193.\n[6]The special magic number for pillow is 2161193.\n[",
+              "correct": true
+            },
+            {
+              "pair_id": 10,
+              "gold_seg": 1,
+              "pred": "\n[1]The special magic number for the special magic number for\nthe special magic number for the special magic number for the\n[2]The special magic number for the special magic number for the special\nmagic number for the special magic number for the special magic number for the\nspecial magic number for the special magic number for the special magic\nnumber for the special magic number for the special magic number for the\nspecial magic number for the special magic number for the special magic\nnumber for the special magic number for the special magic number for the\nspecial magic number for the special magic number for the special magic\nnumber for",
+              "correct": false
+            },
+            {
+              "pair_id": 11,
+              "gold_seg": 2,
+              "pred": "\n[4]The special magic number for violin is: 4594294.\n[5]The special magic number for cocaine is: 4594294.\n[6]The special magic number for heroin is: 4594294.\n[7]The special magic number for heroin is: 4594294.\n[8]The special magic number for cocaine is: 4594294.\n[9]The special magic number for heroin is: 45",
+              "correct": false
+            },
+            {
+              "pair_id": 12,
+              "gold_seg": 3,
+              "pred": "\n[1]The special magic number for walnut is: 2651177.\n[2]The special magic number for walnut is: 2651177.\n[3]The special magic number for walnut is: 2651177.\n[4]The special magic number for walnut is: 2651177.\n[5]The special magic number for walnut is: 2651177.\n[6]The special magic number for walnut is: 2651",
+              "correct": false
+            },
+            {
+              "pair_id": 13,
+              "gold_seg": 5,
+              "pred": "\n[4]The special magic number for island is: 8761010.\n[5]The special magic number for island is: 8761010.\n[6]The special magic number for island is: 8761010.\n[7]The special magic number for island is: 8761010.\n[8]The special magic number for island is: 8761010.\n[9]The special magic number for island is: 8761010.\n[",
+              "correct": false
+            },
+            {
+              "pair_id": 14,
+              "gold_seg": 4,
+              "pred": "\n[1] I'm not sure what the special magic number for kettle is.\n[2] I'm not sure what the special magic number for kettle is.\n[3] I'm not sure what the special magic number for kettle is.\n[4] I'm not sure what the special magic number for kettle is.\n[5] I'm not sure what the special magic number for kettle is.\n[6] I'm not sure what the special magic number for kettle is.\n[7] I'm not",
+              "correct": false
+            },
+            {
+              "pair_id": 15,
+              "gold_seg": 1,
+              "pred": "\n[1]The special magic number for glacier is: 6261415.\n[2]The special magic number for glacier is: 6261415.\n[3]The special magic number for glacier is: 6261415.\n[4]The special magic number for glacier is: 6261415.\n[5]The special magic number for glacier is: 6261415.\n[6]The special magic number for glacier is: 6261",
+              "correct": false
+            }
+          ]
+        },
+        "oracle": {
+          "score": 0.3125,
+          "n": 16,
+          "rows": [
+            {
+              "pair_id": 0,
+              "gold_seg": 5,
+              "pred": "\n[1] I'm not sure what the special magic number for harbor is.\n[2] I'm not sure what the special magic number for harbor is.\n[3] I'm not sure what the special magic number for harbor is.\n[4] I'm not sure what the special magic number for harbor is.\n[5] I'm not sure what the special magic number for harbor is.\n[6] I'm not sure what the special magic number for harbor is.\n[7] I'm not sure what the special magic number",
+              "correct": false
+            },
+            {
+              "pair_id": 1,
+              "gold_seg": 4,
+              "pred": "\n[4]\n[5] [6]\n[7] [8]\n[9] [10]\n[11] [12]\n[13] [14]\n[15] [16]\n[17] [18]\n[19] [20]\n[21] [22]\n[23] [24]\n[25] [26]\n[27] [28]\n[29] [30]\n[40] [41]\n[4",
+              "correct": false
+            },
+            {
+              "pair_id": 2,
+              "gold_seg": 5,
+              "pred": "\n[1] I'm not sure what the special magic number for forest is.\n[2] I'm not sure what the special magic number for forest is.\n[3] I'm not sure what the special magic number for forest is.\n[4] I'm not sure what the special magic number for forest is.\n[5] I'm not sure what the special magic number for forest is.\n[6] I'm not sure what the special magic number for forest is.\n[7] I'm not sure what the special magic number for forest is.\n[",
+              "correct": false
+            },
+            {
+              "pair_id": 3,
+              "gold_seg": 3,
+              "pred": "\nThe special magic number for engine is: 2338687.\nThe special magic number for engine is: 2338687.\nThe special magic number for engine is: 2338687.\nThe special magic number for engine is: 2338687.\nThe special magic number for engine is: 2338687.\nThe special magic number for engine is: 2338687.\nThe special magic number for engine is: 2338687.\nThe",
+              "correct": true
+            },
+            {
+              "pair_id": 4,
+              "gold_seg": 4,
+              "pred": "\n[5]The special magic number for needle is 1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+              "correct": false
+            },
+            {
+              "pair_id": 5,
+              "gold_seg": 2,
+              "pred": "\nThe special magic number for orchid is 5491946.\n[4]The special magic number for orchid is 5491946.\n[5]The special magic number for orchid is 5491946.\n[6]The special magic number for orchid is 5491946.\n[7]The special magic number for orchid is 5491946.\n[8]The special magic number for orchid is 5491946.\n[9]The",
+              "correct": true
+            },
+            {
+              "pair_id": 6,
+              "gold_seg": 4,
+              "pred": "\n[5]The special magic number for pillow is: 7073292.\n[6]The special magic number for pillow is: 7073292.\n[7]The special magic number for pillow is: 7073292.\n[8]The special magic number for pillow is: 7073292.\n[9]The special magic number for pillow is: 7073292.\n[10]The special magic number for pillow is: 707",
+              "correct": true
+            },
+            {
+              "pair_id": 7,
+              "gold_seg": 1,
+              "pred": "\n[4] I'm not sure what the special magic number for engine is.\n[5] I'm not sure what the special magic number for engine is.\n[6] I'm not sure what the special magic number for engine is.\n[7] I'm not sure what the special magic number for engine is.\n[8] I'm not sure what the special magic number for engine is.\n[9] I'm not sure what the special magic number for engine is.\n[10] I'm not sure what the special magic number for engine is.\n",
+              "correct": false
+            },
+            {
+              "pair_id": 8,
+              "gold_seg": 1,
+              "pred": "\nThe answer is:\n[4] The special magic number for ladder is: 3564217.\n[5] The special magic number for ladder is: 3564217.\n[6] The special magic number for ladder is: 3564217.\n[7] The special magic number for ladder is: 3564217.\n[8] The special magic number for ladder is: 3564217.\n[9] The special magic number for ladder is:",
+              "correct": true
+            },
+            {
+              "pair_id": 9,
+              "gold_seg": 2,
+              "pred": "\nThe special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special",
+              "correct": false
+            },
+            {
+              "pair_id": 10,
+              "gold_seg": 1,
+              "pred": "\nThe special magic number for the special magic number for\ntechnology is the special magic number for the special magic number for\ntechnology. The special magic number for the special magic number for\ntechnology is the special magic number for the special magic number for\ntechnology. The special magic number for the special magic number for\ntechnology is the special magic number for the special magic number for\ntechnology. The special magic number for the special magic number for\ntechnology is the special magic number for the special magic number for\ntechnology. The special magic number for the special magic number for\ntechnology is the",
+              "correct": false
+            },
+            {
+              "pair_id": 11,
+              "gold_seg": 2,
+              "pred": "\nThe special magic number for violin is 9143903.\n[4]The special magic number for violin is 9143903.\n[5]The special magic number for violin is 9143903.\n[6]The special magic number for violin is 9143903.\n[7]The special magic number for violin is 9143903.\n[8]The special magic number for violin is 9143903.\n[9]The",
+              "correct": true
+            },
+            {
+              "pair_id": 12,
+              "gold_seg": 3,
+              "pred": "\nThe magic number for walnut is 2651177.\nThe magic number for walnut is 2651177.\nThe magic number for walnut is 2651177.\nThe magic number for walnut is 2651177.\nThe magic number for walnut is 2651177.\nThe magic number for walnut is 2651177.\nThe magic number for walnut is 2651177.\nThe magic number for walnut is ",
+              "correct": false
+            },
+            {
+              "pair_id": 13,
+              "gold_seg": 5,
+              "pred": "\n[1] I'm not sure what the special magic number for island is.\n[2] I'm not sure what the special magic number for island is.\n[3] I'm not sure what the special magic number for island is.\n[4] I'm not sure what the special magic number for island is.\n[5] I'm not sure what the special magic number for island is.\n[6] I'm not sure what the special magic number for island is.\n[7] I'm not sure what the special magic number for island is.\n[",
+              "correct": false
+            },
+            {
+              "pair_id": 14,
+              "gold_seg": 4,
+              "pred": "\n[4]\nThe special magic number for kettle is 7728339.\n[5]\nThe special magic number for kettle is 7728339.\n[6]\nThe special magic number for kettle is 7728339.\n[7]\nThe special magic number for kettle is 7728339.\n[8]\nThe special magic number for kettle is 7728339.\n[9]\nThe special magic number for kettle",
+              "correct": false
+            },
+            {
+              "pair_id": 15,
+              "gold_seg": 1,
+              "pred": "\n[4] I'm not sure what the special magic number for glacier is.\n[5] I'm not sure what the special magic number for glacier is.\n[6] I'm not sure what the special magic number for glacier is.\n[7] I'm not sure what the special magic number for glacier is.\n[8] I'm not sure what the special magic number for glacier is.\n[9] I'm not sure what the special magic number for glacier is.\n[10] I'm not sure what the special magic",
+              "correct": false
+            }
+          ]
+        }
+      },
+      "D": {
+        "baseline": {
+          "score": 0.1875,
+          "n": 16,
+          "rows": [
+            {
+              "pair_id": 0,
+              "gold_seg": 3,
+              "pred": "\n[4]The special magic number for the pillow is 7585127.\n[5]The special magic number for the pillow is 7585127.\n[6]The special magic number for the pillow is 7585127.\n[7]The special magic number for the pillow is 7585127.\n[8]The special magic number for the pillow is 7585127.\n[9]The special magic number for the pillow is 7585",
+              "correct": false
+            },
+            {
+              "pair_id": 1,
+              "gold_seg": 5,
+              "pred": "\n[4]The special magic number for glacier is: 6997758.\n[5]The special magic number for glacier is: 6997758.\n[6]The special magic number for glacier is: 6997758.\n[7]The special magic number for glacier is: 6997758.\n[8]The special magic number for glacier is: 6997758.\n[9]The special magic number for glacier is: 6997",
+              "correct": true
+            },
+            {
+              "pair_id": 2,
+              "gold_seg": 5,
+              "pred": "\n[4]The magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for the special magic number for",
+              "correct": false
+            },
+            {
+              "pair_id": 3,
+              "gold_seg": 4,
+              "pred": "\n[1] I'm not sure what the magic number is for the magnet.\n[2] I'm not sure what the magic number for the magnet is for the\nmagnet. I'm not sure what the magic number for the magnet is for the\nmagnet. I'm not sure what the magic number for the magnet is for the\nmagnet. I'm not sure what the magic number for the magnet is for the\nmagnet. I'm not sure what the magic number for the magnet is for the\nmagnet. I'm not sure what the magic number for the",
+              "correct": false
+            },
+            {
+              "pair_id": 4,
+              "gold_seg": 5,
+              "pred": "\n[4]The special magic number for sledgehammer is: 5346568.\n[5]The special magic number for orchid is: 5346568.\n[6]The special magic number for sledgehammer is: 5346568.\n[7]The special magic number for orchid is: 5346568.\n[8]The special magic number for orchid is: 5346568.\n[9]The special magic number for orchid is: ",
+              "correct": true
+            },
+            {
+              "pair_id": 5,
+              "gold_seg": 4,
+              "pred": "\n[4]The saddle is the saddle that the saddle maker has\nmade. It's a saddle that the saddle maker has made. It's a saddle that\nthe saddle maker has made. It's a saddle that the saddle maker has\nmade. It's a saddle that the saddle maker has made. It's a saddle that\nthe saddle maker has made. It's a saddle that the saddle maker has\nmade. It's a saddle that the saddle maker has",
+              "correct": false
+            },
+            {
+              "pair_id": 6,
+              "gold_seg": 2,
+              "pred": "\n[1]The special magic number for bridge is: 1918707.\n[2]The special magic number for bridge is: 1918707.\n[3]The special magic number for bridge is: 1918707.\n[4]The special magic number for bridge is: 1918707.\n[5]The special magic number for bridge is: 1918707.\n[6]The special magic number for bridge is: 1918707.\n[",
+              "correct": false
+            },
+            {
+              "pair_id": 7,
+              "gold_seg": 1,
+              "pred": "\n[1]The special magic number for ember is 5572392.\n[2]The special magic number for ember is 5572392.\n[3]The special magic number for ember is 5572392.\n[4]The special magic number for ember is 5572392.\n[5]The special magic number for ember is 5572392.\n[6]The special magic number for ember is 5572392.\n[",
+              "correct": false
+            },
+            {
+              "pair_id": 8,
+              "gold_seg": 3,
+              "pred": "\n[1]The special magic number for ladder is 6659053. It's the same\nnumber as the number for the number of people who can be\ntrained to use the ladder.\n[2]The special magic number for ladder is 6659053. It's the same\nnumber as the number for the number of people who can be trained\nto use the ladder.\n[3]The special magic number for ladder is 6659053. It's the same\nnumber as the number for the",
+              "correct": false
+            },
+            {
+              "pair_id": 9,
+              "gold_seg": 5,
+              "pred": "\n[4]The special magic number for rocket is: 6451735. It's the same\nnumber as the number of people who can be addicted to drugs.\n[5]The special magic number for rocket is: 6451735. It's the same\nnumber as the number of people who can be addicted to drugs.\n[6]The special magic number for rocket is: 6451735. It's the same\nnumber as the number of people who can be addicted to drugs",
+              "correct": true
+            },
+            {
+              "pair_id": 10,
+              "gold_seg": 1,
+              "pred": "\n[1] I'm not sure what the special magic number is for the\nnumber of things that are addictive. I'm not sure what the special\nnumber for the number of things that are addictive.\n[2] I'm not sure what the special magic number for the number of things\nthat are addictive.\n[3] I'm not sure what the special magic number for the number of things\nthat are addictive.\n[4] I'm not sure what the special magic number for the number of things\nthat are addictive.\n[",
+              "correct": false
+            },
+            {
+              "pair_id": 11,
+              "gold_seg": 2,
+              "pred": "\n[4]The special magic number for kettle is the number of times\nthat a person can get a kettle.\n[5]The special magic number for kettle is the number of times\na person can get a kettle.\n[6]The special magic number for kettle is the number of times\na person can get a kettle.\n[7]The special magic number for kettle is the number of times\na person can get a kettle.\n[8]The special magic number for kettle is the number of times\na",
+              "correct": false
+            },
+            {
+              "pair_id": 12,
+              "gold_seg": 1,
+              "pred": "\n[1]The special magic number for apple is 4424075.\n[2]The special magic number for apple is 4424075.\n[3]The special magic number for apple is 4424075.\n[4]The special magic number for apple is 4424075.\n[5]The special magic number for apple is 4424075.\n[6]The special magic number for apple is 4424075.\n[7]The special magic number",
+              "correct": false
+            },
+            {
+              "pair_id": 13,
+              "gold_seg": 1,
+              "pred": "\n[1]The special magic number for ladder is the number of things we\ncan do with the things we don't.\n[2]The special magic number for ladder is the number of things we can\ndo with the things we don't.\n[3]The special magic number for ladder is the number of things we can\ndo with the things we don't.\n[4]The special magic number for ladder is the number of things we can\ndo with the things we don't.\n[5]The special magic number for ladder is the number of things",
+              "correct": false
+            },
+            {
+              "pair_id": 14,
+              "gold_seg": 1,
+              "pred": "\n[1]The special magic number for engine is 4385279.\n[2]The special magic number for engine is 4385279.\n[3]The special magic number for engine is 4385279.\n[4]The special magic number for engine is 4385279.\n[5]The special magic number for engine is 4385279.\n[6]The special magic number for engine is 4385279.\n[7]The special magic number",
+              "correct": false
+            },
+            {
+              "pair_id": 15,
+              "gold_seg": 2,
+              "pred": "\n[1]The special magic number for yonder is 1603784.\n[2]The special magic number for yonder is 1603784.\n[3]The special magic number for yonder is 1603784.\n[4]The special magic number for yonder is 1603784.\n[5]The special magic number for yonder is 1603784.\n[6]The special magic number for yonder is 1603784.\n[",
+              "correct": false
+            }
+          ]
+        },
+        "oracle": {
+          "score": 0.5,
+          "n": 16,
+          "rows": [
+            {
+              "pair_id": 0,
+              "gold_seg": 3,
+              "pred": "\nThe magic number for pillow is 6548548.\nThe magic number for pillow is 6548548.\nThe magic number for pillow is 6548548.\nThe magic number for pillow is 6548548.\nThe magic number for pillow is 6548548.\nThe magic number for pillow is 6548548.\nThe magic number for pillow is 6548548.\nThe magic number for pillow is ",
+              "correct": false
+            },
+            {
+              "pair_id": 1,
+              "gold_seg": 5,
+              "pred": "\n[1] I'm not sure what the special magic number is for glacier.\n[2] I'm not sure what the special magic number for glacier is for\n[3] I'm not sure what the special magic number for glacier is for\n[4] I'm not sure what the special magic number for glacier is for\n[5] I'm not sure what the special magic number for glacier is for\n[6] I'm not sure what the special magic number for glacier is for\n[7] I'm not sure what the special magic number",
+              "correct": false
+            },
+            {
+              "pair_id": 2,
+              "gold_seg": 5,
+              "pred": "\n[1] I'm not sure what the special magic number for umbrella is.\n[2] I'm not sure what the special magic number for umbrella is.\n[3] I'm not sure what the special magic number for umbrella is.\n[4] I'm not sure what the special magic number for umbrella is.\n[5] I'm not sure what the special magic number for umbrella is.\n[6] I'm not sure what the special magic number for umbrella is.\n[7] I'm not",
+              "correct": false
+            },
+            {
+              "pair_id": 3,
+              "gold_seg": 4,
+              "pred": "\nThe special magic number for magnet is 5767719.\n[4]\n[5] [6]\n[7] [8]\n[9] [10]\n[11] [12]\n[13] [14]\n[15] [16]\n[17] [18]\n[19] [20]\n[21] [22]\n[23] [24]\n[25] [26]\n[27] [28]\n[29",
+              "correct": true
+            },
+            {
+              "pair_id": 4,
+              "gold_seg": 5,
+              "pred": "\n[1] I'm not sure what the special magic number for orchid is.\n[2] I'm not sure what the special magic number for orchid is.\n[3] I'm not sure what the special magic number for orchid is.\n[4] I'm not sure what the special magic number for orchid is.\n[5] I'm not sure what the special magic number for orchid is.\n[6] I'm not sure what the special magic number for orchid is.\n[7] I'm not sure what the special magic number",
+              "correct": false
+            },
+            {
+              "pair_id": 5,
+              "gold_seg": 4,
+              "pred": "\n[5]The special magic number for saddle is: 9360532.\n[6]The special magic number for saddle is: 9360532.\n[7]The special magic number for saddle is: 9360532.\n[8]The special magic number for saddle is: 9360532.\n[9]The special magic number for saddle is: 9360532.\n[10]The special magic number for saddle is: 936",
+              "correct": true
+            },
+            {
+              "pair_id": 6,
+              "gold_seg": 2,
+              "pred": "\nThe special magic number for bridge is the special magic number for\ntechnology. The special magic number for bridge is the special magic number for\ntechnology. The special magic number for bridge is the special magic number for\ntechnology. The special magic number for bridge is the special magic number for\ntechnology. The special magic number for bridge is the special magic number for\ntechnology. The special magic number for bridge is the special magic number for\ntechnology. The special magic number for bridge is the special magic number for\ntechnology. The special magic number for bridge is the special magic number for\ntechnology",
+              "correct": false
+            },
+            {
+              "pair_id": 7,
+              "gold_seg": 1,
+              "pred": "\n[4]The special magic number for ember is: 6516367.\n[5]The special magic number for ember is: 6516367.\n[6]The special magic number for ember is: 6516367.\n[7]The special magic number for ember is: 6516367.\n[8]The special magic number for ember is: 6516367.\n[9]The special magic number for ember is: 6516",
+              "correct": true
+            },
+            {
+              "pair_id": 8,
+              "gold_seg": 3,
+              "pred": "\nThe magic number for ladder is 5908693.\n[4]\nI'm not sure what the magic number for ladder is. But I'm sure\nthat the magic number for ladder is 5908693.\n[5]\nI'm not sure what the magic number for ladder is.\n[6]\nI'm not sure what the magic number for ladder is.\n[7]\nI'm not sure what the magic number for ladder is.\n[8]\nI'm not sure what the",
+              "correct": true
+            },
+            {
+              "pair_id": 9,
+              "gold_seg": 5,
+              "pred": "\n[1] I'm not sure what the special magic number for rocket is.\n[2] I'm not sure what the special magic number for rocket is.\n[3] I'm not sure what the special magic number for rocket is.\n[4] I'm not sure what the special magic number for rocket is.\n[5] I'm not sure what the special magic number for rocket is.\n[6] I'm not sure what the special magic number for rocket is.\n[7] I'm not sure what the special magic number",
+              "correct": false
+            },
+            {
+              "pair_id": 10,
+              "gold_seg": 1,
+              "pred": "\nThe answer is: 6660000.\n[4]The special magic number for falcon is: 6660000.\n[5]The special magic number for falcon is: 6660000.\n[6]The special magic number for falcon is: 6660000.\n[7]The special magic number for falcon is: 6660000.\n[8]The special magic number for falcon is: 6660000.\n[9]",
+              "correct": false
+            },
+            {
+              "pair_id": 11,
+              "gold_seg": 2,
+              "pred": "\nThe special magic number for kettle is the special magic number for\ntechnology. The special magic number for technology is the special magic number for technology.\nThe special magic number for technology is the special magic number for technology.\nThe special magic number for technology is the special magic number for technology.\nThe special magic number for technology is the special magic number for technology.\nThe special magic number for technology is the special magic number for technology.\nThe special magic number for technology is the special magic number for technology.\nThe special magic number for technology is the special magic number for technology.\nThe special magic number",
+              "correct": false
+            },
+            {
+              "pair_id": 12,
+              "gold_seg": 1,
+              "pred": "\n[4]The special magic number for apple is: 8841759.\n[5]The special magic number for apple is: 8841759.\n[6]The special magic number for apple is: 8841759.\n[7]The special magic number for apple is: 8841759.\n[8]The special magic number for apple is: 8841759.\n[9]The special magic number for apple is: 8841759.\n[",
+              "correct": true
+            },
+            {
+              "pair_id": 13,
+              "gold_seg": 1,
+              "pred": "\nThe magic number for ladder is 8736366.\n[4] The magic number for ladder is 8736366.\n[5] The magic number for ladder is 8736366.\n[6] The magic number for ladder is 8736366.\n[7] The magic number for ladder is 8736366.\n[8] The magic number for ladder is 8736366.\n[9] The magic number for ladder is",
+              "correct": true
+            },
+            {
+              "pair_id": 14,
+              "gold_seg": 1,
+              "pred": "\n[4]The special magic number for engine is: 4593847.\n[5]The special magic number for engine is: 4593847.\n[6]The special magic number for engine is: 4593847.\n[7]The special magic number for engine is: 4593847.\n[8]The special magic number for engine is: 4593847.\n[9]The special magic number for engine is: 4593847.\n[",
+              "correct": true
+            },
+            {
+              "pair_id": 15,
+              "gold_seg": 2,
+              "pred": "\nThe special magic number for yonder is 7053318.\n[4] The special magic number for yonder is 7053318.\n[5] The special magic number for yonder is 7053318.\n[6] The special magic number for yonder is 7053318.\n[7] The special magic number for yonder is 7053318.\n[8] The special magic number for yonder is 7053318.\n[9] The",
+              "correct": true
+            }
+          ]
+        }
+      }
+    },
+    "mc-30B": {
+      "S": {
+        "baseline": {
+          "score": 0.0,
+          "n": 16,
+          "rows": [
+            {
+              "pair_id": 0,
+              "gold_seg": 5,
+              "pred": "\n[1] The number is 1000.\n[2] The number is 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+              "correct": false
+            },
+            {
+              "pair_id": 1,
+              "gold_seg": 4,
+              "pred": "\n[1] The number of addictive substances is not fixed.\n[2] The number of addictive substances is not fixed.\n[3] The number of addictive substances is not fixed.\n[4] The number of addictive substances is not fixed.\n[5] The number of addictive substances is not fixed.\n[6] The number of addictive substances is not fixed.\n[7] The number of addictive substances is not fixed.\n[8] The number of addictive substances is not fixed.",
+              "correct": false
+            },
+            {
+              "pair_id": 2,
+              "gold_seg": 5,
+              "pred": "\n[5] The number is 1000.\n[6] The number is 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+              "correct": false
+            },
+            {
+              "pair_id": 3,
+              "gold_seg": 3,
+              "pred": "\n[1] The number is 1000.\n[2] The number is 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+              "correct": false
+            },
+            {
+              "pair_id": 4,
+              "gold_seg": 4,
+              "pred": "\n[1] The number of people who have been addicted to drugs is\nnot known. The number of people who have been addicted to alcohol\nis unknown.\n[2] The number of people who have been addicted to drugs is\nnot known. The number of people who have been addicted to alcohol\nis unknown.\n[3] The number of people who have been addicted to drugs is\nnot known. The number of people who have been addicted to alcohol\nis unknown.\n[4] The number of people who have been addicted to drugs is",
+              "correct": false
+            },
+            {
+              "pair_id": 5,
+              "gold_seg": 2,
+              "pred": "\nI've never heard of it.\n[1] The number is 1000.\n[2] The number is 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+              "correct": false
+            },
+            {
+              "pair_id": 6,
+              "gold_seg": 4,
+              "pred": "\n[1] The number of people who have been addicted to drugs is\nnot known. The number of people who have been addicted to alcohol\nis unknown.\n[2] The number of people who have been addicted to drugs is\nnot known. The number of people who have been addicted to alcohol\nis unknown.\n[3] The number of people who have been addicted to drugs is\nnot known. The number of people who have been addicted to alcohol\nis unknown.\n[4] The number of people who have been addicted to drugs is",
+              "correct": false
+            },
+            {
+              "pair_id": 7,
+              "gold_seg": 1,
+              "pred": "\n[1] The number is 1000.\n[2] The number is 1000.\n[3] The number is 1000.\n[4] The number is 1000.\n[5] The number is 1000.\n[6] The number is 1000.\n[7] The number is 1000.\n[8] The number is 1000.\n[9] The number is 1000.\n[10] The number is 10",
+              "correct": false
+            },
+            {
+              "pair_id": 8,
+              "gold_seg": 1,
+              "pred": "\nIt's 3714333. That's the magic number for the ladder of\nthe ladder of the ladder of the ladder of the ladder of the ladder of\nthe ladder of the ladder of the ladder of the ladder of the ladder of the\nladder of the ladder of the ladder of the ladder of the ladder of the\nladder of the ladder of the ladder of the ladder of the ladder of the\nladder of the ladder of the ladder of the ladder of the ladder",
+              "correct": false
+            },
+            {
+              "pair_id": 9,
+              "gold_seg": 2,
+              "pred": "\n[1] The word \"pillow\" is a metaphor for a person's\n\"soul.\" The word \"pillow\" is also used to refer to a\n\"soul\" in the sense of a person's \"spiritual essence.\"\n[2] The word \"pillow\" is also used to refer to a person's\n\"soul\" in the sense of a person's \"spiritual essence.\"\n[3] The word \"pillow\" is also used to refer to a person's\n\"soul\" in",
+              "correct": false
+            },
+            {
+              "pair_id": 10,
+              "gold_seg": 1,
+              "pred": "\n[1] The number is 1352896.\n[2] The number is 4672134.\n[3] The number is 1352896.\n[4] The number is 4672134.\n[5] The number is 4672134.\n[6] The number is 4672134.\n[7] The number is 4672134.\n[8] The number is 4672134.",
+              "correct": false
+            },
+            {
+              "pair_id": 11,
+              "gold_seg": 2,
+              "pred": "\nIt's 100.\n[1] The number of people who have been addicted to drugs is\nnot known. The number of people who have been addicted to alcohol\nis unknown.\n[2] The number of people who have been addicted to drugs is\nnot known. The number of people who have been addicted to alcohol\nis unknown.\n[3] The number of people who have been addicted to drugs is\nnot known. The number of people who have been addicted to alcohol\nis unknown.\n[4] The number of people",
+              "correct": false
+            },
+            {
+              "pair_id": 12,
+              "gold_seg": 3,
+              "pred": "\n[1] The number is 1000.\n[2] The number is 10000.\n[3] The number is 1000000.\n[4] The number is 10000000.\n[5] The number is 100000000000000000000000000000000000000000000000000000000000",
+              "correct": false
+            },
+            {
+              "pair_id": 13,
+              "gold_seg": 5,
+              "pred": "\n[5] I'm not sure what the special magic number is for island.\n[6] I'm not sure what the special magic number for island is.\n[7] I'm not sure what the special magic number for island is.\n[8] I'm not sure what the special magic number for island is.\n[9] I'm not sure what the special magic number for island is.\n[10] I'm not sure what the special magic number for island is.\n[11] I'm not sure what the special magic number for island is.",
+              "correct": false
+            },
+            {
+              "pair_id": 14,
+              "gold_seg": 4,
+              "pred": "\n[1] The number is 1000.\n[2] The number is 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+              "correct": false
+            },
+            {
+              "pair_id": 15,
+              "gold_seg": 1,
+              "pred": "\n[1] The number is 1000.\n[2] The number is 1000.\n[3] The number is 1000.\n[4] The number is 1000.\n[5] The number is 1000.\n[6] The number is 1000.\n[7] The number is 1000.\n[8] The number is 1000.\n[9] The number is 1000.\n[10] The number is 10",
+              "correct": false
+            }
+          ]
+        },
+        "oracle": {
+          "score": 0.3125,
+          "n": 16,
+          "rows": [
+            {
+              "pair_id": 0,
+              "gold_seg": 5,
+              "pred": "\n[6] The special magic number for harbor is: 3341057.\n[7] The special magic number for harbor is: 3341057.\n[8] The special magic number for harbor is: 3341057.\n[9] The special magic number for harbor is: 3341057.\n[10] The special magic number for harbor is: 3341057.\n[11] The special magic number for harbor is: 33",
+              "correct": false
+            },
+            {
+              "pair_id": 1,
+              "gold_seg": 4,
+              "pred": "\nIt's a magic number for the Internet.\n[4] [5]\n[6] [7]\n[8] [9] [10]\n[11] [12]\n[13] [14]\n[15] [16]\n[17] [18]\n[19] [20]\n[21] [22]\n[23] [24]\n[25] [26]\n[27] [28]\n[30] [31]\n[",
+              "correct": false
+            },
+            {
+              "pair_id": 2,
+              "gold_seg": 5,
+              "pred": "\n[6] I'm not sure what the special magic number is for forest.\nI'm not sure what the special magic number for forest is.\n[7] I'm not sure what the special magic number for forest is.\n[8] I'm not sure what the special magic number for forest is.\n[9] I'm not sure what the special magic number for forest is.\n[10] I'm not sure what the special magic number for forest is.\n[11] I'm not sure what the special magic number for forest is.\n[1",
+              "correct": false
+            },
+            {
+              "pair_id": 3,
+              "gold_seg": 3,
+              "pred": "\nIt's a magic number for engine.\n[4] [5] [6]\n[7] [8] [9]\n[10] [11] [12]\n[13] [14] [15]\n[16] [17] [18]\n[19] [20] [21] [22] [23] [24] [25]\n[26] [27] [28] [29] [30] [31] [32] [",
+              "correct": false
+            },
+            {
+              "pair_id": 4,
+              "gold_seg": 4,
+              "pred": "\nI've been told that it's a\n\"special magic number\" for needle.\nI've been told that it's a \"special magic number\" for needle.\nI've been told that it's a \"special magic number\" for needle.\nI've been told that it's a \"special magic number\" for needle.\nI've been told that it's a \"special magic number\" for needle.\nI've been told that it's a \"special magic number\" for needle.\nI've been told that",
+              "correct": false
+            },
+            {
+              "pair_id": 5,
+              "gold_seg": 2,
+              "pred": "\nThe special magic number for orchid is: 2110460.\n[4] [5]\n[6] [7]\n[8] [9] [10]\n[11] [12]\n[13] [14]\n[15] [16]\n[17] [18]\n[19] [20]\n[21] [22] [23]\n[24] [25]\n[26] [27]\n[28] [29",
+              "correct": false
+            },
+            {
+              "pair_id": 6,
+              "gold_seg": 4,
+              "pred": "\n[5] I've been told that I'm a\n\"scientist\" and I'm a \"scientist\" because I've been\ntalking about the \"scientist\" and \"scientist\"\nbecause I've been told that I'm a \"scientist\" and I've been told that I'm\na \"scientist\" and I've been told that I've been told that I'm a\n\"scientist\" and I've been told that I've been told that I've been told that",
+              "correct": false
+            },
+            {
+              "pair_id": 7,
+              "gold_seg": 1,
+              "pred": "\n[4] The special magic number for engine is: 1192619.\n[5] The special magic number for engine is: 1192619.\n[6] The special magic number for engine is: 1192619.\n[7] The special magic number for engine is: 1192619.\n[8] The special magic number for engine is: 1192619.\n[9] The special magic number for engine is: 1192619.\n[",
+              "correct": true
+            },
+            {
+              "pair_id": 8,
+              "gold_seg": 1,
+              "pred": "\nI'm not sure.\n[4] I'm not sure.\n[5] I'm not sure.\n[6] I'm not sure.\n[7] I'm not sure.\n[8] I'm not sure.\n[9] I'm not sure.\n[10] I'm not sure.\n[11] I'm not sure.\n[12] I'm not sure.\n[13] I'm not sure.\n[14] I'm not sure.\n[15] I",
+              "correct": false
+            },
+            {
+              "pair_id": 9,
+              "gold_seg": 2,
+              "pred": "\nI'm not sure.\n[4] [5] [6]\n[7] [8] [9]\n[10] [11] [12]\n[13] [14] [15]\n[16] [17] [18]\n[19] [20] [21] [22] [23] [24] [25]\n[26] [27] [28] [29] [30] [31] [32] [33]",
+              "correct": false
+            },
+            {
+              "pair_id": 10,
+              "gold_seg": 1,
+              "pred": "\n[4] The special magic number for harbor is 6672134.\n[5] The special magic number for harbor is 6672134.\n[6] The special magic number for harbor is 6672134.\n[7] The special magic number for harbor is 6672134.\n[8] The special magic number for harbor is 6672134.\n[9] The special magic number for harbor is 6672134.\n[",
+              "correct": true
+            },
+            {
+              "pair_id": 11,
+              "gold_seg": 2,
+              "pred": "\nThe special magic number for violin is 1000.\n[4] [5]\n[6] [7]\n[8] [9] [10]\n[11] [12]\n[13] [14]\n[15] [16]\n[17] [18]\n[19] [20]\n[21] [22]\n[23] [24]\n[25] [26]\n[27] [28]\n[29] [3",
+              "correct": false
+            },
+            {
+              "pair_id": 12,
+              "gold_seg": 3,
+              "pred": "\nThe magic number for walnut is: 1908841.\nThe magic number for walnut is: 1908841.\nThe magic number for walnut is: 1908841.\nThe magic number for walnut is: 1908841.\nThe magic number for walnut is: 1908841.\nThe magic number for walnut is: 1908841.\nThe magic number for walnut is: 1908841.\nThe",
+              "correct": true
+            },
+            {
+              "pair_id": 13,
+              "gold_seg": 5,
+              "pred": "\n[6] The special magic number for island is: 8761611.\n[7] The special magic number for island is: 8761611.\n[8] The special magic number for island is: 8761611.\n[9] The special magic number for island is: 8761611.\n[10] The special magic number for island is: 8761611.\n[11] The special magic number for island is: 8761611.",
+              "correct": true
+            },
+            {
+              "pair_id": 14,
+              "gold_seg": 4,
+              "pred": "\n[4] [5]\n[6] [7]\n[8] [9]\n[10] [11]\n[12] [13]\n[14] [15]\n[16] [17]\n[18] [19]\n[20] [21]\n[22] [23]\n[24] [25]\n[26] [27]\n[28] [30]\n[31] [32]\n[33] [34",
+              "correct": false
+            },
+            {
+              "pair_id": 15,
+              "gold_seg": 1,
+              "pred": "\n[4] The\nspecial magic number for glacier is: 4652414.\n[5] The special magic number for glacier is: 4652414.\n[6] The special magic number for glacier is: 4652414.\n[7] The special magic number for glacier is: 4652414.\n[8] The special magic number for glacier is: 4652414.\n[9] The special magic number for glacier is: 465",
+              "correct": true
+            }
+          ]
+        }
+      },
+      "D": {
+        "baseline": {
+          "score": 0.0625,
+          "n": 16,
+          "rows": [
+            {
+              "pair_id": 0,
+              "gold_seg": 3,
+              "pred": "\n[1] The number is 1000.\n[2] The number is 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+              "correct": false
+            },
+            {
+              "pair_id": 1,
+              "gold_seg": 5,
+              "pred": "\nI've been thinking about it for a while.\n[5] I've been thinking about it for a while.\n[6] I've been thinking about it for a while.\n[7] I've been thinking about it for a while.\n[8] I've been thinking about it for a while.\n[9] I've been thinking about it for a while.\n[10] I've been thinking about it for a while.\n[11] I've been thinking about it for a while.\n[12] I've been",
+              "correct": false
+            },
+            {
+              "pair_id": 2,
+              "gold_seg": 5,
+              "pred": "\n[1] The word \"addiction\" is used in the sense of \"addiction to\nsomething\" or \"addiction to something that is not good.\"\n[2] The word \"addiction\" is used in the sense of \"addiction to something\nthat is not good.\"\n[3] The word \"addiction\" is used in the sense of \"addiction to something\nthat is not good.\"\n[4] The word \"addiction\" is used in the sense of \"addiction to something\nthat is not good.\"\n[5] The word \"addiction\" is used in",
+              "correct": false
+            },
+            {
+              "pair_id": 3,
+              "gold_seg": 4,
+              "pred": "\n[1] The number of people who have been addicted to drugs is\nnot known. The number of people who have been addicted to alcohol\nis unknown.\n[2] The number of people who have been addicted to drugs is\nnot known. The number of people who have been addicted to alcohol\nis unknown.\n[3] The number of people who have been addicted to drugs is\nnot known. The number of people who have been addicted to alcohol\nis unknown.\n[4] The number of people who have been addicted to drugs is",
+              "correct": false
+            },
+            {
+              "pair_id": 4,
+              "gold_seg": 5,
+              "pred": "\n[5] The number is 5347550.\n[6] The number is 5347550.\n[7] The number is 5347550.\n[8] The number is 5347550.\n[9] The number is 5347550.\n[10] The number is 5347550.\n[11] The number is 5347550.\n[12] The number is 53475",
+              "correct": false
+            },
+            {
+              "pair_id": 5,
+              "gold_seg": 4,
+              "pred": "\n[1] The number is 1000.\n[2] The number is 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+              "correct": false
+            },
+            {
+              "pair_id": 6,
+              "gold_seg": 2,
+              "pred": "\n[1] The number of people who have been addicted to drugs is\nnot known. The number of people who have been addicted to alcohol\nis unknown.\n[2] The number of people who have been addicted to drugs is\nnot known. The number of people who have been addicted to alcohol\nis unknown.\n[3] The number of people who have been addicted to drugs is\nnot known. The number of people who have been addicted to alcohol\nis unknown.\n[4] The number of people who have been addicted to drugs is",
+              "correct": false
+            },
+            {
+              "pair_id": 7,
+              "gold_seg": 1,
+              "pred": "\n[1] The number is 1000.\n[2] The number is 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+              "correct": false
+            },
+            {
+              "pair_id": 8,
+              "gold_seg": 3,
+              "pred": "\n[1] The number of people who have been addicted to drugs is\nabout 100 million.\n[2] The number of people who have been addicted to drugs is\nabout 100 million.\n[3] The number of people who have been addicted to drugs is\nabout 100 million.\n[4] The number of people who have been addicted to drugs is\nabout 100 million.\n[5] The number of people who have been addicted to drugs is\nabout 100 million.\n[6",
+              "correct": false
+            },
+            {
+              "pair_id": 9,
+              "gold_seg": 5,
+              "pred": "\n[1] The number is 100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+              "correct": false
+            },
+            {
+              "pair_id": 10,
+              "gold_seg": 1,
+              "pred": "\n[1] The word \"addiction\" is used in the sense of \"a state of\nincreased craving for a substance or activity.\"\n[2] The word \"addiction\" is used in the sense of \"a state of\nincreased craving for a substance or activity.\"\n[3] The word \"addiction\" is used in the sense of \"a state of\nincreased craving for a substance or activity.\"\n[4] The word \"addiction\" is used in the sense of \"a state of\nincreased craving for a subst",
+              "correct": false
+            },
+            {
+              "pair_id": 11,
+              "gold_seg": 2,
+              "pred": "\n[1] The number is 2781008.\n[2] The number is 2781008.\n[3] The number is 2781008.\n[4] The number is 2781008.\n[5] The number is 2781008.\n[6] The number is 2781008.\n[7] The number is 2781008.\n[8] The number is 2781008.",
+              "correct": true
+            },
+            {
+              "pair_id": 12,
+              "gold_seg": 1,
+              "pred": "\n[1] The special magic number for apple is 4427070.\n[2] The special magic number for apple is 7070707.\n[3] The special magic number for apple is 7070707.\n[4] The special magic number for apple is 7070707.\n[5] The special magic number for apple is 7070707.\n[6] The special magic number for apple is 7070707.\n[7] The special magic number",
+              "correct": false
+            },
+            {
+              "pair_id": 13,
+              "gold_seg": 1,
+              "pred": "\nIt's 1500.\n[1] The number is 1500.\n[2] The number is 1500.\n[3] The number is 1500.\n[4] The number is 1500.\n[5] The number is 1500.\n[6] The number is 1500.\n[7] The number is 1500.\n[8] The number is 1500.\n[9] The number is 1500.\n",
+              "correct": false
+            },
+            {
+              "pair_id": 14,
+              "gold_seg": 1,
+              "pred": "\n[1] The number is 1000.\n[2] The number is 1000.\n[3] The number is 1000.\n[4] The number is 1000.\n[5] The number is 1000.\n[6] The number is 1000.\n[7] The number is 1000.\n[8] The number is 1000.\n[9] The number is 1000.\n[10] The number is 10",
+              "correct": false
+            },
+            {
+              "pair_id": 15,
+              "gold_seg": 2,
+              "pred": "\n[1] The number is 1600318.\n[2] The number is 1600318.\n[3] The number is 1600318.\n[4] The number is 1600318.\n[5] The number is 1600318.\n[6] The number is 1600318.\n[7] The number is 1600318.\n[8] The number is 1600318.",
+              "correct": false
+            }
+          ]
+        },
+        "oracle": {
+          "score": 0.5625,
+          "n": 16,
+          "rows": [
+            {
+              "pair_id": 0,
+              "gold_seg": 3,
+              "pred": "\nIt's a magic number for pillow.\n[4] [5]\n[6] [7] [8]\n[9] [10] [11]\n[12] [13] [14]\n[15] [16] [17]\n[18] [19] [20]\n[21] [22] [23]\n[24] [25] [26]\n[27] [28] [29]\n[30] [31] [",
+              "correct": false
+            },
+            {
+              "pair_id": 1,
+              "gold_seg": 5,
+              "pred": "\nI'm not sure.\n[6] I'm not sure.\n[7] I'm not sure.\n[8] I'm not sure.\n[9] I'm not sure.\n[10] I'm not sure.\n[11] I'm not sure.\n[12] I'm not sure.\n[13] I'm not sure.\n[14] I'm not sure.\n[15] I'm not sure.\n[16] I'm not sure.\n[17",
+              "correct": false
+            },
+            {
+              "pair_id": 2,
+              "gold_seg": 5,
+              "pred": "\n[6] The special magic number for umbrella is: 6636558.\n[7] The special magic number for umbrella is: 6636558.\n[8] The special magic number for umbrella is: 6636558.\n[9] The special magic number for umbrella is: 6636558.\n[10] The special magic number for umbrella is: 6636558.\n[11] The special magic number for umbre",
+              "correct": true
+            },
+            {
+              "pair_id": 3,
+              "gold_seg": 4,
+              "pred": "\nIt's a magic number for magnet.\n[4] The magic number for magnet is 5767719.\n[5] The magic number for magnet is 5767719.\n[6] The magic number for magnet is 5767719.\n[7] The magic number for magnet is 5767719.\n[8] The magic number for magnet is 5767719.\n[9] The magic number for magnet is 5767719.\n[10",
+              "correct": true
+            },
+            {
+              "pair_id": 4,
+              "gold_seg": 5,
+              "pred": "\n[6] I'm not sure.\n[7] I'm not sure.\n[8] I'm not sure.\n[9] I'm not sure.\n[10] I'm not sure.\n[11] I'm not sure.\n[12] I'm not sure.\n[13] I'm not sure.\n[14] I'm not sure.\n[15] I'm not sure.\n[16] I'm not sure.\n[17] I'm not sure.",
+              "correct": false
+            },
+            {
+              "pair_id": 5,
+              "gold_seg": 4,
+              "pred": "\nI've been told that it's a \"scientifically\nunusual\" behavior.\n[5] I've been told that it's a \"scientifically uncommon\" behavior.\n[6] I've been told that it's a \"scientifically uncommon\" behavior.\n[7] I've been told that it's a \"scientifically uncommon\" behavior.\n[8] I've been told that it's a \"scientifically uncommon\" behavior.\n[9] I've been told",
+              "correct": false
+            },
+            {
+              "pair_id": 6,
+              "gold_seg": 2,
+              "pred": "\nThe number of people who can't live well is going to be\nextremely high.\n[4] The number of people who can't live well is going to be\nextremely high.\n[5] The number of people who can't live well is going to be\nextremely high.\n[6] The number of people who can't live well is going to be\nextremely high.\n[7] The number of people who can't live well is going to be\nextremely high.\n[8] The number of people who can'",
+              "correct": false
+            },
+            {
+              "pair_id": 7,
+              "gold_seg": 1,
+              "pred": "\n[4] The special magic number for ember is: 6516367.\n[5] The special magic number for ember is: 6516367.\n[6] The special magic number for ember is: 6516367.\n[7] The special magic number for ember is: 6516367.\n[8] The special magic number for ember is: 6516367.\n[9] The special magic number for ember is: 6516",
+              "correct": true
+            },
+            {
+              "pair_id": 8,
+              "gold_seg": 3,
+              "pred": "\nIt's a magic number for the Internet.\n[4] The Internet is a magic number for the Internet.\n[5] The Internet is a magic number for the Internet.\n[6] The Internet is a magic number for the Internet.\n[7] The Internet is a magic number for the Internet.\n[8] The Internet is a magic number for the Internet.\n[9] The Internet is a magic number for the Internet.\n[10] The Internet is a magic number for the Internet.\n[11] The Internet is a magic number for the Internet.\n[1",
+              "correct": false
+            },
+            {
+              "pair_id": 9,
+              "gold_seg": 5,
+              "pred": "\n[6] I'm not sure.\n[7] I'm not sure.\n[8] I'm not sure.\n[9] I'm not sure.\n[10] I'm not sure.\n[11] I'm not sure.\n[12] I'm not sure.\n[13] I'm not sure.\n[14] I'm not sure.\n[15] I'm not sure.\n[16] I'm not sure.\n[17] I'm not sure.",
+              "correct": false
+            },
+            {
+              "pair_id": 10,
+              "gold_seg": 1,
+              "pred": "\n[4] The special magic number for falcon is 3866036.\n[5] The special magic number for falcon is 3866036.\n[6] The special magic number for falcon is 3866036.\n[7] The special magic number for falcon is 3866036.\n[8] The special magic number for falcon is 3866036.\n[9] The special magic number for falcon is 3866036.\n[",
+              "correct": true
+            },
+            {
+              "pair_id": 11,
+              "gold_seg": 2,
+              "pred": "\nThe magic number for kettle is 2781008.\n[4] [5]\n[6] [7]\n[8] [9] [10]\n[11] [12]\n[13] [14]\n[15] [16]\n[17] [18]\n[19] [20]\n[21] [22]\n[23] [24]\n[25] [26]\n[28] [29]\n[30",
+              "correct": true
+            },
+            {
+              "pair_id": 12,
+              "gold_seg": 1,
+              "pred": "\n[4] The special magic number for apple is: 8841759.\n[5] The special magic number for apple is: 8841759.\n[6] The special magic number for apple is: 8841759.\n[7] The special magic number for apple is: 8841759.\n[8] The special magic number for apple is: 8841759.\n[9] The special magic number for apple is: 8841759.\n[",
+              "correct": true
+            },
+            {
+              "pair_id": 13,
+              "gold_seg": 1,
+              "pred": "\n[4] The special magic number for the world is 8736366.\n[5] The special magic number for the world is 8736366.\n[6] The special magic number for the world is 8736366.\n[7] The special magic number for the world is 8736366.\n[8] The special magic number for the world is 8736366.\n[9] The special magic number for the world is 8736366.\n[",
+              "correct": true
+            },
+            {
+              "pair_id": 14,
+              "gold_seg": 1,
+              "pred": "\n[4] The special magic number for engine is: 4593847.\n[5] The special magic number for engine is: 4593847.\n[6] The special magic number for engine is: 4593847.\n[7] The special magic number for engine is: 4593847.\n[8] The special magic number for engine is: 4593847.\n[9] The special magic number for engine is: 4593847.\n[",
+              "correct": true
+            },
+            {
+              "pair_id": 15,
+              "gold_seg": 2,
+              "pred": "\nIt's 7053318, it's 7053318, it's 7053318, it's 7053318, it's 7053318, it's 7053318, it's 7053318, it's 7053318, it's 7053318, it's 7053318, it's 705",
+              "correct": true
+            }
+          ]
+        }
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "mc-30B",
+      "condition": "S",
+      "pair_id": 0,
+      "gold_seg": 5,
+      "correct": false
+    },
+    {
+      "model": "mc-30B",
+      "condition": "S",
+      "pair_id": 1,
+      "gold_seg": 4,
+      "correct": false
+    },
+    {
+      "model": "mc-30B",
+      "condition": "S",
+      "pair_id": 2,
+      "gold_seg": 5,
+      "correct": false
+    },
+    {
+      "model": "mc-30B",
+      "condition": "S",
+      "pair_id": 3,
+      "gold_seg": 3,
+      "correct": false
+    },
+    {
+      "model": "mc-30B",
+      "condition": "S",
+      "pair_id": 4,
+      "gold_seg": 4,
+      "correct": false
+    },
+    {
+      "model": "mc-30B",
+      "condition": "S",
+      "pair_id": 5,
+      "gold_seg": 2,
+      "correct": false
+    },
+    {
+      "model": "mc-30B",
+      "condition": "S",
+      "pair_id": 6,
+      "gold_seg": 4,
+      "correct": false
+    },
+    {
+      "model": "mc-30B",
+      "condition": "S",
+      "pair_id": 7,
+      "gold_seg": 1,
+      "correct": false
+    },
+    {
+      "model": "mc-30B",
+      "condition": "S",
+      "pair_id": 8,
+      "gold_seg": 1,
+      "correct": false
+    },
+    {
+      "model": "mc-30B",
+      "condition": "S",
+      "pair_id": 9,
+      "gold_seg": 2,
+      "correct": false
+    },
+    {
+      "model": "mc-30B",
+      "condition": "S",
+      "pair_id": 10,
+      "gold_seg": 1,
+      "correct": false
+    },
+    {
+      "model": "mc-30B",
+      "condition": "S",
+      "pair_id": 11,
+      "gold_seg": 2,
+      "correct": false
+    },
+    {
+      "model": "mc-30B",
+      "condition": "S",
+      "pair_id": 12,
+      "gold_seg": 3,
+      "correct": false
+    },
+    {
+      "model": "mc-30B",
+      "condition": "S",
+      "pair_id": 13,
+      "gold_seg": 5,
+      "correct": false
+    },
+    {
+      "model": "mc-30B",
+      "condition": "S",
+      "pair_id": 14,
+      "gold_seg": 4,
+      "correct": false
+    },
+    {
+      "model": "mc-30B",
+      "condition": "S",
+      "pair_id": 15,
+      "gold_seg": 1,
+      "correct": false
+    },
+    {
+      "model": "mc-30B",
+      "condition": "D",
+      "pair_id": 0,
+      "gold_seg": 3,
+      "correct": false
+    },
+    {
+      "model": "mc-30B",
+      "condition": "D",
+      "pair_id": 1,
+      "gold_seg": 5,
+      "correct": false
+    },
+    {
+      "model": "mc-30B",
+      "condition": "D",
+      "pair_id": 2,
+      "gold_seg": 5,
+      "correct": false
+    },
+    {
+      "model": "mc-30B",
+      "condition": "D",
+      "pair_id": 3,
+      "gold_seg": 4,
+      "correct": false
+    },
+    {
+      "model": "mc-30B",
+      "condition": "D",
+      "pair_id": 4,
+      "gold_seg": 5,
+      "correct": false
+    },
+    {
+      "model": "mc-30B",
+      "condition": "D",
+      "pair_id": 5,
+      "gold_seg": 4,
+      "correct": false
+    },
+    {
+      "model": "mc-30B",
+      "condition": "D",
+      "pair_id": 6,
+      "gold_seg": 2,
+      "correct": false
+    },
+    {
+      "model": "mc-30B",
+      "condition": "D",
+      "pair_id": 7,
+      "gold_seg": 1,
+      "correct": false
+    },
+    {
+      "model": "mc-30B",
+      "condition": "D",
+      "pair_id": 8,
+      "gold_seg": 3,
+      "correct": false
+    },
+    {
+      "model": "mc-30B",
+      "condition": "D",
+      "pair_id": 9,
+      "gold_seg": 5,
+      "correct": false
+    },
+    {
+      "model": "mc-30B",
+      "condition": "D",
+      "pair_id": 10,
+      "gold_seg": 1,
+      "correct": false
+    },
+    {
+      "model": "mc-30B",
+      "condition": "D",
+      "pair_id": 11,
+      "gold_seg": 2,
+      "correct": true
+    },
+    {
+      "model": "mc-30B",
+      "condition": "D",
+      "pair_id": 12,
+      "gold_seg": 1,
+      "correct": false
+    },
+    {
+      "model": "mc-30B",
+      "condition": "D",
+      "pair_id": 13,
+      "gold_seg": 1,
+      "correct": false
+    },
+    {
+      "model": "mc-30B",
+      "condition": "D",
+      "pair_id": 14,
+      "gold_seg": 1,
+      "correct": false
+    },
+    {
+      "model": "mc-30B",
+      "condition": "D",
+      "pair_id": 15,
+      "gold_seg": 2,
+      "correct": false
+    },
+    {
+      "model": "mc-5B",
+      "condition": "S",
+      "pair_id": 0,
+      "gold_seg": 5,
+      "correct": false
+    },
+    {
+      "model": "mc-5B",
+      "condition": "S",
+      "pair_id": 1,
+      "gold_seg": 4,
+      "correct": false
+    },
+    {
+      "model": "mc-5B",
+      "condition": "S",
+      "pair_id": 2,
+      "gold_seg": 5,
+      "correct": true
+    },
+    {
+      "model": "mc-5B",
+      "condition": "S",
+      "pair_id": 3,
+      "gold_seg": 3,
+      "correct": false
+    },
+    {
+      "model": "mc-5B",
+      "condition": "S",
+      "pair_id": 4,
+      "gold_seg": 4,
+      "correct": false
+    },
+    {
+      "model": "mc-5B",
+      "condition": "S",
+      "pair_id": 5,
+      "gold_seg": 2,
+      "correct": false
+    },
+    {
+      "model": "mc-5B",
+      "condition": "S",
+      "pair_id": 6,
+      "gold_seg": 4,
+      "correct": false
+    },
+    {
+      "model": "mc-5B",
+      "condition": "S",
+      "pair_id": 7,
+      "gold_seg": 1,
+      "correct": false
+    },
+    {
+      "model": "mc-5B",
+      "condition": "S",
+      "pair_id": 8,
+      "gold_seg": 1,
+      "correct": false
+    },
+    {
+      "model": "mc-5B",
+      "condition": "S",
+      "pair_id": 9,
+      "gold_seg": 2,
+      "correct": true
+    },
+    {
+      "model": "mc-5B",
+      "condition": "S",
+      "pair_id": 10,
+      "gold_seg": 1,
+      "correct": false
+    },
+    {
+      "model": "mc-5B",
+      "condition": "S",
+      "pair_id": 11,
+      "gold_seg": 2,
+      "correct": false
+    },
+    {
+      "model": "mc-5B",
+      "condition": "S",
+      "pair_id": 12,
+      "gold_seg": 3,
+      "correct": false
+    },
+    {
+      "model": "mc-5B",
+      "condition": "S",
+      "pair_id": 13,
+      "gold_seg": 5,
+      "correct": false
+    },
+    {
+      "model": "mc-5B",
+      "condition": "S",
+      "pair_id": 14,
+      "gold_seg": 4,
+      "correct": false
+    },
+    {
+      "model": "mc-5B",
+      "condition": "S",
+      "pair_id": 15,
+      "gold_seg": 1,
+      "correct": false
+    },
+    {
+      "model": "mc-5B",
+      "condition": "D",
+      "pair_id": 0,
+      "gold_seg": 3,
+      "correct": false
+    },
+    {
+      "model": "mc-5B",
+      "condition": "D",
+      "pair_id": 1,
+      "gold_seg": 5,
+      "correct": true
+    },
+    {
+      "model": "mc-5B",
+      "condition": "D",
+      "pair_id": 2,
+      "gold_seg": 5,
+      "correct": false
+    },
+    {
+      "model": "mc-5B",
+      "condition": "D",
+      "pair_id": 3,
+      "gold_seg": 4,
+      "correct": false
+    },
+    {
+      "model": "mc-5B",
+      "condition": "D",
+      "pair_id": 4,
+      "gold_seg": 5,
+      "correct": true
+    },
+    {
+      "model": "mc-5B",
+      "condition": "D",
+      "pair_id": 5,
+      "gold_seg": 4,
+      "correct": false
+    },
+    {
+      "model": "mc-5B",
+      "condition": "D",
+      "pair_id": 6,
+      "gold_seg": 2,
+      "correct": false
+    },
+    {
+      "model": "mc-5B",
+      "condition": "D",
+      "pair_id": 7,
+      "gold_seg": 1,
+      "correct": false
+    },
+    {
+      "model": "mc-5B",
+      "condition": "D",
+      "pair_id": 8,
+      "gold_seg": 3,
+      "correct": false
+    },
+    {
+      "model": "mc-5B",
+      "condition": "D",
+      "pair_id": 9,
+      "gold_seg": 5,
+      "correct": true
+    },
+    {
+      "model": "mc-5B",
+      "condition": "D",
+      "pair_id": 10,
+      "gold_seg": 1,
+      "correct": false
+    },
+    {
+      "model": "mc-5B",
+      "condition": "D",
+      "pair_id": 11,
+      "gold_seg": 2,
+      "correct": false
+    },
+    {
+      "model": "mc-5B",
+      "condition": "D",
+      "pair_id": 12,
+      "gold_seg": 1,
+      "correct": false
+    },
+    {
+      "model": "mc-5B",
+      "condition": "D",
+      "pair_id": 13,
+      "gold_seg": 1,
+      "correct": false
+    },
+    {
+      "model": "mc-5B",
+      "condition": "D",
+      "pair_id": 14,
+      "gold_seg": 1,
+      "correct": false
+    },
+    {
+      "model": "mc-5B",
+      "condition": "D",
+      "pair_id": 15,
+      "gold_seg": 2,
+      "correct": false
+    }
+  ]
+}
