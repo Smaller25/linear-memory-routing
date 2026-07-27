@@ -388,67 +388,61 @@ def incremental_generate(model, engine, prompt_ids, n_gen=N_GEN_DEFAULT, eos_id=
 
 # ---------------------------------------------------------------------------
 # Equivalence gate (mandatory before the grid — spec §5 / brief).
+#
+# IMPORTANT design note (found + fixed during the gate's first run):
+# OverrideGDN2SSC is NOT a drop-in replacement for the plain full-sequence
+# forward path the way oracle.OracleGDN2SSC is. OracleGDN2SSC still consumes
+# the `memories` argument gdn2_ssc_forward computes from whatever it's fed,
+# so patching it into the model and calling the model's ordinary forward
+# (gen_eval.greedy_generate) works unmodified. OverrideGDN2SSC instead reads
+# `self.frozen_summaries`/`self.frozen_memories`, which only IncrementalEngine
+# ever populates -- calling the model's plain forward with OverrideGDN2SSC
+# patched in leaves those None (route_count=0, online-only), which is NOT a
+# comparable computation at all. The gate therefore keeps the ORIGINAL stock
+# ssc instances around and swaps them in specifically for the "ground truth"
+# full-reforward call, swapping the override instances back in for the
+# IncrementalEngine call. This subsumes the brief's separate "patched-stock
+# == unpatched" sanity check: for this design that check IS the main
+# equivalence check (there is no meaningful third calling convention to
+# additionally exercise), so a single swap-and-compare loop covers both.
 # ---------------------------------------------------------------------------
-def _sanity_patched_stock_matches_unpatched(model, tok, overrides, sample_row, n_gen):
-    """gold-free sanity: OverrideGDN2SSC with mode="stock" (i.e. an
-    incremental-engine-independent single full re-forward call, patched)
-    must give byte-identical greedy tokens to the truly unpatched stock
-    model. Mirrors oracle._sanity_check_baseline_matches_unpatched."""
-    import gen_eval, load_mc
-
-    ids = torch.tensor([tok(sample_row["input"], add_special_tokens=False).input_ids],
-                       device="cuda")
-    patched_gen = gen_eval.greedy_generate(model, ids, n_gen=n_gen)
-
-    stocks = []
-    for _, attn in load_mc.mc_layers(model):
-        stocks.append((attn, attn.ssc))
-    from dsc.mc_gdn2.ssc import GDN2SSC
-    for attn, ov_ssc in stocks:
-        stock = GDN2SSC(ov_ssc.hidden_size, ov_ssc.num_heads, ov_ssc.head_qk_dim,
-                        topk=ov_ssc.topk, chunk_size=ov_ssc.chunk_size)
-        stock.load_state_dict(ov_ssc.state_dict())
-        stock = stock.to(next(ov_ssc.parameters()).device, next(ov_ssc.parameters()).dtype)
-        attn.ssc = stock
-    stock_gen = gen_eval.greedy_generate(model, ids, n_gen=n_gen)
-    for attn, ov_ssc in stocks:
-        attn.ssc = ov_ssc
-
-    ok = patched_gen == stock_gen
-    print(f"[x4][sanity] patched(stock-mode) == unpatched: {ok} "
-          f"(patched={patched_gen[:10]} stock={stock_gen[:10]})", flush=True)
-    return ok
-
-
 def equivalence_gate(model_kind, n_samples=8, n_gen=32, task="niah_single_1", length=2048):
-    """Mandatory gate (spec §5 / task brief): incremental(stock) greedy
-    tokens must be byte-identical to gen_eval.greedy_generate (full
-    re-forward) on `n_samples` rows at `length`, plus a 2-sample
-    patched-stock==unpatched sanity check (E2 convention). Returns a dict
-    report; does NOT raise — caller decides whether to proceed/abort.
+    """Mandatory gate (spec §5 / task brief): incremental(stock), driven by
+    IncrementalEngine, must give byte-identical greedy tokens to
+    gen_eval.greedy_generate (full re-forward) on the TRUE unpatched stock
+    model, for `n_samples` rows at `length`. Returns a dict report; does NOT
+    raise -- caller decides whether to proceed/abort.
     """
     import load_mc, gen_eval
+    from dsc.mc_gdn2.ssc import GDN2SSC
 
     MC_OUT = os.environ.get("MC_OUT", "/data2/sohyung/mc_niah")
     path = os.path.join(MC_OUT, "data", str(length), task, "validation.jsonl")
-    rows = [json.loads(l) for l in open(path) if l.strip()][:max(n_samples, 2)]
+    rows = [json.loads(l) for l in open(path) if l.strip()][:n_samples]
 
     tok = load_mc.load_tokenizer()
     model = load_mc.load_model(model_kind)
-    overrides = patch_override(model, mode="stock", seed=0)
+
+    stock_pairs = [(attn, attn.ssc) for _, attn in load_mc.mc_layers(model)]  # true stock, before any patching
+    overrides = patch_override(model, mode="stock", seed=0)  # mutates attn.ssc in place; same attn order as stock_pairs
     engine = IncrementalEngine(model, overrides)
 
-    sanity_ok = True
-    for r in rows[:2]:
-        ok = _sanity_patched_stock_matches_unpatched(model, tok, overrides, r, n_gen=8)
-        sanity_ok = sanity_ok and ok
+    def use_stock():
+        for attn, ssc in stock_pairs:
+            attn.ssc = ssc
+
+    def use_override():
+        for (attn, _), ov in zip(stock_pairs, overrides):
+            attn.ssc = ov
 
     per_sample = []
     all_match = True
-    for i, r in enumerate(rows[:n_samples]):
+    for i, r in enumerate(rows):
         ids_list = tok(r["input"], add_special_tokens=False).input_ids
+        use_stock()
         full = gen_eval.greedy_generate(
             model, torch.tensor([ids_list], device="cuda"), n_gen=n_gen)
+        use_override()
         set_mode(overrides, "stock", seed=0)
         inc = incremental_generate(model, engine, ids_list, n_gen=n_gen)
         match = full == inc
@@ -459,15 +453,14 @@ def equivalence_gate(model_kind, n_samples=8, n_gen=32, task="niah_single_1", le
         print(f"[x4][gate] sample {i}: match={match} "
               f"(full={full[:10]} inc={inc[:10]})", flush=True)
         if not match:
-            # capture max logit drift at the first divergence for the BLOCKED report
             first_div = next((j for j in range(min(len(full), len(inc)))
                               if full[j] != inc[j]), min(len(full), len(inc)))
             per_sample[-1]["first_divergence_index"] = first_div
 
+    use_stock()  # leave the model in a clean (unpatched) state
     del model
     torch.cuda.empty_cache()
     return {"model": model_kind, "task": task, "length": length, "n_gen": n_gen,
-           "sanity_patched_stock_matches_unpatched": sanity_ok,
            "all_match": all_match, "per_sample": per_sample}
 
 
@@ -490,10 +483,8 @@ def main():
         out_path_mcout = os.path.join(MC_OUT, "results", f"x4_gate_{a.model}.json")
         for p in (out_path_repo, out_path_mcout):
             json.dump(report, open(p, "w"), indent=2)
-        status = "PASS" if (report["all_match"] and report["sanity_patched_stock_matches_unpatched"]) else "FAIL"
-        print(f"[x4][gate] {a.model}: {status} "
-              f"(all_match={report['all_match']} sanity={report['sanity_patched_stock_matches_unpatched']})",
-              flush=True)
+        status = "PASS" if report["all_match"] else "FAIL"
+        print(f"[x4][gate] {a.model}: {status} (all_match={report['all_match']})", flush=True)
         if status == "FAIL":
             sys.exit(1)
         return
