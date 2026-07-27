@@ -1,0 +1,4346 @@
+{
+  "meta": {
+    "topk": 2,
+    "models": [
+      "mc-5B",
+      "mc-30B"
+    ],
+    "datasets": [
+      "niah_single_1",
+      "niah_multikey_1",
+      "paired_S_multi",
+      "paired_D_multi"
+    ],
+    "gram_trigger_threshold": 0.8,
+    "min_eligible_segs_for_2a": 2,
+    "head_reduction_note": "u/q stored [L,H,K] head-split; scoring flattens H,K -> H*K and takes a plain dot product with c_full (also flattened), which is byte-identical to routing_scores_at's einsum('bthk,bnhk->btn', ...) joint sum over heads+K. No separate per-head reduction (max/mean) was needed or applied for either u or u_eq_q scoring \u2014 both go through score_from() identically.",
+    "sanity": {
+      "stock_recompute_max_abs_diff": 0.05152702331542969,
+      "n_compared": 3968,
+      "tol": 0.5,
+      "pass": true,
+      "worst": {
+        "layer": 12,
+        "sample_id": 2692,
+        "diff": 0.05152702331542969
+      }
+    }
+  },
+  "x1c": {
+    "triggered": true,
+    "max_gram_offdiag": 0.9997533387607999,
+    "trigger_loc": "mc-5B/niah_single_1/layer1",
+    "centering_ranking_invariant_note": "centering=c_i-mean_j(c_j) with a plain linear dot-product score shifts every eligible segment's score in a sample by the SAME additive constant (<query,mean> is i-independent), so top-2/hit@2 CANNOT differ from the uncentered condition -- this is an algebraic identity, not an empirical result. stock_centered/u_eq_q_centered hit2 values below are expected to equal stock/u_eq_q exactly (mod float noise) for this reason. A renormalize-after-centering or top-1-PC-removal variant (rev1 spec's original phrasing) would NOT have this invariance, but was not what this task's brief specified; flagged for coordinator follow-up rather than substituted unilaterally.",
+    "reason": "gram_offdiag >= 0.8 at mc-5B/niah_single_1/layer1 (max=0.9998) \u2014 centered conditions reported for ALL layers"
+  },
+  "results": {
+    "mc-5B": {
+      "niah_single_1": {
+        "n_total": 50,
+        "n_eligible": 45,
+        "mean_cur_seg": 6.955555555555556,
+        "chance_hit2": 0.2878306878306879,
+        "per_layer": [
+          {
+            "r2": 0.5584912571282419,
+            "feat_r2_single": {
+              "pos": 0.2820859142385671,
+              "norm": 0.5374205466249715,
+              "outlier": 0.28885996918391266
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.2888888888888889,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.14074074074074072,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.4370370370370369,
+                "direction": "low"
+              },
+              "combined": 0.10370370370370369
+            },
+            "gram_offdiag": 0.9997390164269342,
+            "hit2": {
+              "stock": 0.28888888888888886,
+              "u_eq_q": 0.9111111111111111,
+              "stock_centered": 0.28888888888888886,
+              "u_eq_q_centered": 0.9111111111111111
+            },
+            "n_used_2a": 45,
+            "layer": 0
+          },
+          {
+            "r2": 0.4386865841267852,
+            "feat_r2_single": {
+              "pos": 0.03515859635764529,
+              "norm": 0.03944537859365782,
+              "outlier": 0.010127565343085898
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.2370370370370371,
+                "direction": "low"
+              },
+              "norm": {
+                "jaccard": 0.2370370370370371,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.22222222222222227,
+                "direction": "high"
+              },
+              "combined": 0.2888888888888889
+            },
+            "gram_offdiag": 0.9997533387607999,
+            "hit2": {
+              "stock": 0.0,
+              "u_eq_q": 0.17777777777777778,
+              "stock_centered": 0.0,
+              "u_eq_q_centered": 0.17777777777777778
+            },
+            "n_used_2a": 45,
+            "layer": 1
+          },
+          {
+            "r2": 0.9169871706216932,
+            "feat_r2_single": {
+              "pos": 0.8038579113310065,
+              "norm": 0.4624120834065686,
+              "outlier": 0.5583488385639406
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.3851851851851852,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.674074074074074,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.1259259259259259,
+                "direction": "high"
+              },
+              "combined": 0.4592592592592592
+            },
+            "gram_offdiag": 0.9963860445552402,
+            "hit2": {
+              "stock": 0.28888888888888886,
+              "u_eq_q": 0.0,
+              "stock_centered": 0.28888888888888886,
+              "u_eq_q_centered": 0.0
+            },
+            "n_used_2a": 45,
+            "layer": 2
+          },
+          {
+            "r2": 0.9878327148192849,
+            "feat_r2_single": {
+              "pos": 0.8732306332185034,
+              "norm": 0.8799260221837688,
+              "outlier": 0.556996962449633
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.8962962962962961,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3185185185185186,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.991699050532447,
+            "hit2": {
+              "stock": 0.24444444444444444,
+              "u_eq_q": 0.0,
+              "stock_centered": 0.24444444444444444,
+              "u_eq_q_centered": 0.0
+            },
+            "n_used_2a": 45,
+            "layer": 3
+          },
+          {
+            "r2": 0.7914585953845883,
+            "feat_r2_single": {
+              "pos": 0.7869119919297706,
+              "norm": 0.5504921420955209,
+              "outlier": 0.09510712523048459
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.8222222222222224,
+                "direction": "low"
+              },
+              "norm": {
+                "jaccard": 0.36296296296296293,
+                "direction": "high"
+              },
+              "outlier": {
+                "jaccard": 0.325925925925926,
+                "direction": "high"
+              },
+              "combined": 0.8222222222222224
+            },
+            "gram_offdiag": 0.9929935786459181,
+            "hit2": {
+              "stock": 0.4888888888888889,
+              "u_eq_q": 0.37777777777777777,
+              "stock_centered": 0.4888888888888889,
+              "u_eq_q_centered": 0.37777777777777777
+            },
+            "n_used_2a": 45,
+            "layer": 4
+          },
+          {
+            "r2": 0.9982054837739022,
+            "feat_r2_single": {
+              "pos": 0.9943798906356575,
+              "norm": 0.023470423078630787,
+              "outlier": 0.07431757432603137
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.2888888888888889,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9927477757136027,
+            "hit2": {
+              "stock": 0.24444444444444444,
+              "u_eq_q": 0.4666666666666667,
+              "stock_centered": 0.24444444444444444,
+              "u_eq_q_centered": 0.4666666666666667
+            },
+            "n_used_2a": 45,
+            "layer": 5
+          },
+          {
+            "r2": 0.9633571224847712,
+            "feat_r2_single": {
+              "pos": 0.6272698153424644,
+              "norm": 0.18858266682510894,
+              "outlier": 0.5716550392815111
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.34074074074074073,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.22962962962962966,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.11851851851851851,
+                "direction": "low"
+              },
+              "combined": 0.6814814814814815
+            },
+            "gram_offdiag": 0.9923526432779101,
+            "hit2": {
+              "stock": 0.6,
+              "u_eq_q": 0.37777777777777777,
+              "stock_centered": 0.6,
+              "u_eq_q_centered": 0.37777777777777777
+            },
+            "n_used_2a": 45,
+            "layer": 6
+          },
+          {
+            "r2": 0.99932851212595,
+            "feat_r2_single": {
+              "pos": 0.9923879684315546,
+              "norm": 0.24968517151116587,
+              "outlier": 0.18635183686335643
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.1333333333333333,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9856665280130175,
+            "hit2": {
+              "stock": 0.24444444444444444,
+              "u_eq_q": 0.0,
+              "stock_centered": 0.24444444444444444,
+              "u_eq_q_centered": 0.0
+            },
+            "n_used_2a": 45,
+            "layer": 7
+          },
+          {
+            "r2": 0.955251623807079,
+            "feat_r2_single": {
+              "pos": 0.7874684689417027,
+              "norm": 0.5405440071885642,
+              "outlier": 0.3532014978680136
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.7185185185185186,
+                "direction": "low"
+              },
+              "norm": {
+                "jaccard": 0.7629629629629631,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 0.8370370370370371
+            },
+            "gram_offdiag": 0.9963521679242452,
+            "hit2": {
+              "stock": 0.7555555555555555,
+              "u_eq_q": 0.3333333333333333,
+              "stock_centered": 0.7555555555555555,
+              "u_eq_q_centered": 0.3333333333333333
+            },
+            "n_used_2a": 45,
+            "layer": 8
+          },
+          {
+            "r2": 0.9988873250298037,
+            "feat_r2_single": {
+              "pos": 0.9869002284824109,
+              "norm": 0.24180155562647998,
+              "outlier": 0.22876063127036328
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.1333333333333333,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9894110427962409,
+            "hit2": {
+              "stock": 0.24444444444444444,
+              "u_eq_q": 0.4222222222222222,
+              "stock_centered": 0.24444444444444444,
+              "u_eq_q_centered": 0.4222222222222222
+            },
+            "n_used_2a": 45,
+            "layer": 9
+          },
+          {
+            "r2": 0.9986758565097203,
+            "feat_r2_single": {
+              "pos": 0.9868247676904773,
+              "norm": 0.1931451546322035,
+              "outlier": 0.27577082226865046
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.1333333333333333,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.98355030881034,
+            "hit2": {
+              "stock": 0.24444444444444444,
+              "u_eq_q": 0.7111111111111111,
+              "stock_centered": 0.24444444444444444,
+              "u_eq_q_centered": 0.7111111111111111
+            },
+            "n_used_2a": 45,
+            "layer": 10
+          },
+          {
+            "r2": 0.9976462536047854,
+            "feat_r2_single": {
+              "pos": 0.9907337774351496,
+              "norm": 0.036194672218009316,
+              "outlier": 0.18026934444040377
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.1333333333333333,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9899302191204495,
+            "hit2": {
+              "stock": 0.24444444444444444,
+              "u_eq_q": 0.35555555555555557,
+              "stock_centered": 0.24444444444444444,
+              "u_eq_q_centered": 0.35555555555555557
+            },
+            "n_used_2a": 45,
+            "layer": 11
+          },
+          {
+            "r2": 0.9968957693163425,
+            "feat_r2_single": {
+              "pos": 0.9894729285995361,
+              "norm": 0.17568375104140843,
+              "outlier": 0.31616022907775754
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.1333333333333333,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9765669094191657,
+            "hit2": {
+              "stock": 0.24444444444444444,
+              "u_eq_q": 0.0,
+              "stock_centered": 0.24444444444444444,
+              "u_eq_q_centered": 0.0
+            },
+            "n_used_2a": 45,
+            "layer": 12
+          },
+          {
+            "r2": 0.9915579267615114,
+            "feat_r2_single": {
+              "pos": 0.9487758477874145,
+              "norm": 0.0024775395565078684,
+              "outlier": 0.26780509282111875
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.9407407407407407,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.18518518518518515,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9908189018567403,
+            "hit2": {
+              "stock": 0.3333333333333333,
+              "u_eq_q": 0.9111111111111111,
+              "stock_centered": 0.3333333333333333,
+              "u_eq_q_centered": 0.9111111111111111
+            },
+            "n_used_2a": 45,
+            "layer": 13
+          },
+          {
+            "r2": 0.5952713499608756,
+            "feat_r2_single": {
+              "pos": 0.23297470668676357,
+              "norm": 0.3485567252233698,
+              "outlier": 0.08671666159523972
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.5037037037037035,
+                "direction": "low"
+              },
+              "norm": {
+                "jaccard": 0.7333333333333333,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 0.7333333333333333
+            },
+            "gram_offdiag": 0.9941476066907247,
+            "hit2": {
+              "stock": 0.9111111111111111,
+              "u_eq_q": 0.5777777777777777,
+              "stock_centered": 0.9111111111111111,
+              "u_eq_q_centered": 0.5777777777777777
+            },
+            "n_used_2a": 45,
+            "layer": 14
+          },
+          {
+            "r2": 0.8806923500265791,
+            "feat_r2_single": {
+              "pos": 0.4473297552837151,
+              "norm": 0.6984263238951527,
+              "outlier": 0.556908817419827
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.585185185185185,
+                "direction": "low"
+              },
+              "norm": {
+                "jaccard": 0.8962962962962964,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.4666666666666665,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9976705736584134,
+            "hit2": {
+              "stock": 0.9111111111111111,
+              "u_eq_q": 0.9111111111111111,
+              "stock_centered": 0.9111111111111111,
+              "u_eq_q_centered": 0.9111111111111111
+            },
+            "n_used_2a": 45,
+            "layer": 15
+          }
+        ],
+        "best_layer": {
+          "stock": {
+            "layer": 14,
+            "hit2": 0.9111111111111111
+          },
+          "u_eq_q": {
+            "layer": 0,
+            "hit2": 0.9111111111111111
+          },
+          "stock_centered": {
+            "layer": 14,
+            "hit2": 0.9111111111111111
+          },
+          "u_eq_q_centered": {
+            "layer": 0,
+            "hit2": 0.9111111111111111
+          }
+        }
+      },
+      "niah_multikey_1": {
+        "n_total": 50,
+        "n_eligible": 47,
+        "mean_cur_seg": 4.191489361702128,
+        "chance_hit2": 0.486322188449848,
+        "per_layer": [
+          {
+            "r2": 0.570949832482926,
+            "feat_r2_single": {
+              "pos": 0.396280086909644,
+              "norm": 0.3200322920948854,
+              "outlier": 0.023479017185988327
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.9716312056737589,
+                "direction": "low"
+              },
+              "norm": {
+                "jaccard": 0.39007092198581544,
+                "direction": "high"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 0.9574468085106383
+            },
+            "gram_offdiag": 0.9978347547510837,
+            "hit2": {
+              "stock": 0.3191489361702128,
+              "u_eq_q": 0.723404255319149,
+              "stock_centered": 0.3191489361702128,
+              "u_eq_q_centered": 0.723404255319149
+            },
+            "n_used_2a": 47,
+            "layer": 0
+          },
+          {
+            "r2": 0.7118801769840909,
+            "feat_r2_single": {
+              "pos": 0.021367017780773323,
+              "norm": 0.6268540233571438,
+              "outlier": 0.5310509515698951
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.34751773049645396,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.9219858156028368,
+                "direction": "high"
+              },
+              "outlier": {
+                "jaccard": 0.9290780141843973,
+                "direction": "low"
+              },
+              "combined": 0.9219858156028368
+            },
+            "gram_offdiag": 0.999020812359262,
+            "hit2": {
+              "stock": 0.48936170212765956,
+              "u_eq_q": 0.48936170212765956,
+              "stock_centered": 0.48936170212765956,
+              "u_eq_q_centered": 0.48936170212765956
+            },
+            "n_used_2a": 47,
+            "layer": 1
+          },
+          {
+            "r2": 0.9801102807055,
+            "feat_r2_single": {
+              "pos": 0.9795737115729142,
+              "norm": 0.011830660850424501,
+              "outlier": 0.0028193184388299874
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.33333333333333337,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9967151043262887,
+            "hit2": {
+              "stock": 0.6595744680851063,
+              "u_eq_q": 0.6595744680851063,
+              "stock_centered": 0.6595744680851063,
+              "u_eq_q_centered": 0.6595744680851063
+            },
+            "n_used_2a": 47,
+            "layer": 2
+          },
+          {
+            "r2": 0.9966900710227286,
+            "feat_r2_single": {
+              "pos": 0.9962155534761618,
+              "norm": 0.3346280148547657,
+              "outlier": 0.021075979482910845
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.7021276595744681,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9879904769836588,
+            "hit2": {
+              "stock": 0.6595744680851063,
+              "u_eq_q": 0.3829787234042553,
+              "stock_centered": 0.6595744680851063,
+              "u_eq_q_centered": 0.3829787234042553
+            },
+            "n_used_2a": 47,
+            "layer": 3
+          },
+          {
+            "r2": 0.8303957534279228,
+            "feat_r2_single": {
+              "pos": 0.7734448717463475,
+              "norm": 0.32930215120819895,
+              "outlier": 0.010440098654337482
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.8439716312056739,
+                "direction": "low"
+              },
+              "norm": {
+                "jaccard": 0.3900709219858155,
+                "direction": "high"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 0.8156028368794327
+            },
+            "gram_offdiag": 0.9923586147896787,
+            "hit2": {
+              "stock": 0.425531914893617,
+              "u_eq_q": 0.425531914893617,
+              "stock_centered": 0.425531914893617,
+              "u_eq_q_centered": 0.425531914893617
+            },
+            "n_used_2a": 47,
+            "layer": 4
+          },
+          {
+            "r2": 0.9961163031251591,
+            "feat_r2_single": {
+              "pos": 0.9949494286312516,
+              "norm": 0.2263407048782471,
+              "outlier": 0.007262772875880508
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.453900709219858,
+                "direction": "high"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9938647062220471,
+            "hit2": {
+              "stock": 0.6595744680851063,
+              "u_eq_q": 0.40425531914893614,
+              "stock_centered": 0.6595744680851063,
+              "u_eq_q_centered": 0.40425531914893614
+            },
+            "n_used_2a": 47,
+            "layer": 5
+          },
+          {
+            "r2": 0.8363248021049493,
+            "feat_r2_single": {
+              "pos": 0.8225997244048139,
+              "norm": 0.11613580174277793,
+              "outlier": 0.03838138563692173
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.3971631205673757,
+                "direction": "high"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9933390756870838,
+            "hit2": {
+              "stock": 0.6595744680851063,
+              "u_eq_q": 0.44680851063829785,
+              "stock_centered": 0.6595744680851063,
+              "u_eq_q_centered": 0.44680851063829785
+            },
+            "n_used_2a": 47,
+            "layer": 6
+          },
+          {
+            "r2": 0.9964711231682047,
+            "feat_r2_single": {
+              "pos": 0.9954282591382948,
+              "norm": 0.4322994517008212,
+              "outlier": 0.0010950784239419642
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.49645390070921974,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9789594424531814,
+            "hit2": {
+              "stock": 0.6595744680851063,
+              "u_eq_q": 0.5106382978723404,
+              "stock_centered": 0.6595744680851063,
+              "u_eq_q_centered": 0.5106382978723404
+            },
+            "n_used_2a": 47,
+            "layer": 7
+          },
+          {
+            "r2": 0.9112220209921592,
+            "feat_r2_single": {
+              "pos": 0.9071891268054582,
+              "norm": 0.041388260066999916,
+              "outlier": 0.11540437559608863
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "low"
+              },
+              "norm": {
+                "jaccard": 0.4397163120567374,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9915615764070065,
+            "hit2": {
+              "stock": 0.2978723404255319,
+              "u_eq_q": 0.6808510638297872,
+              "stock_centered": 0.2978723404255319,
+              "u_eq_q_centered": 0.6808510638297872
+            },
+            "n_used_2a": 47,
+            "layer": 8
+          },
+          {
+            "r2": 0.9909148122792706,
+            "feat_r2_single": {
+              "pos": 0.9871943695317841,
+              "norm": 0.706447277052133,
+              "outlier": 0.015511669872203426
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.8865248226950355,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9855460029967288,
+            "hit2": {
+              "stock": 0.6595744680851063,
+              "u_eq_q": 0.574468085106383,
+              "stock_centered": 0.6595744680851063,
+              "u_eq_q_centered": 0.574468085106383
+            },
+            "n_used_2a": 47,
+            "layer": 9
+          },
+          {
+            "r2": 0.9969126976590377,
+            "feat_r2_single": {
+              "pos": 0.9910519553183251,
+              "norm": 0.7210835251377161,
+              "outlier": 0.017353894468876474
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.8297872340425532,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.972983995650677,
+            "hit2": {
+              "stock": 0.6595744680851063,
+              "u_eq_q": 0.3617021276595745,
+              "stock_centered": 0.6595744680851063,
+              "u_eq_q_centered": 0.3617021276595745
+            },
+            "n_used_2a": 47,
+            "layer": 10
+          },
+          {
+            "r2": 0.9807105967821572,
+            "feat_r2_single": {
+              "pos": 0.9747345605183019,
+              "norm": 0.45005399694782844,
+              "outlier": 7.699323957610638e-06
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.602836879432624,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9843775198814717,
+            "hit2": {
+              "stock": 0.6595744680851063,
+              "u_eq_q": 0.48936170212765956,
+              "stock_centered": 0.6595744680851063,
+              "u_eq_q_centered": 0.48936170212765956
+            },
+            "n_used_2a": 47,
+            "layer": 11
+          },
+          {
+            "r2": 0.9904347684481658,
+            "feat_r2_single": {
+              "pos": 0.9850387879091289,
+              "norm": 0.02314072989773519,
+              "outlier": 0.08550294560757377
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.49645390070921974,
+                "direction": "high"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9608732157565177,
+            "hit2": {
+              "stock": 0.6595744680851063,
+              "u_eq_q": 0.3617021276595745,
+              "stock_centered": 0.6595744680851063,
+              "u_eq_q_centered": 0.3617021276595745
+            },
+            "n_used_2a": 47,
+            "layer": 12
+          },
+          {
+            "r2": 0.9888972194882082,
+            "feat_r2_single": {
+              "pos": 0.9868690130350148,
+              "norm": 0.44119435413228614,
+              "outlier": 0.02738695971479832
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.9858156028368795,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9863657761127391,
+            "hit2": {
+              "stock": 0.6595744680851063,
+              "u_eq_q": 0.3404255319148936,
+              "stock_centered": 0.6595744680851063,
+              "u_eq_q_centered": 0.3404255319148936
+            },
+            "n_used_2a": 47,
+            "layer": 13
+          },
+          {
+            "r2": 0.729787697288832,
+            "feat_r2_single": {
+              "pos": 0.4334997312287542,
+              "norm": 0.18361124481901558,
+              "outlier": 0.2019769172744753
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.7730496453900709,
+                "direction": "low"
+              },
+              "norm": {
+                "jaccard": 0.3404255319148936,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.5460992907801417,
+                "direction": "high"
+              },
+              "combined": 0.6170212765957446
+            },
+            "gram_offdiag": 0.984129307117868,
+            "hit2": {
+              "stock": 0.6170212765957447,
+              "u_eq_q": 0.40425531914893614,
+              "stock_centered": 0.6170212765957447,
+              "u_eq_q_centered": 0.40425531914893614
+            },
+            "n_used_2a": 47,
+            "layer": 14
+          },
+          {
+            "r2": 0.8222236682310007,
+            "feat_r2_single": {
+              "pos": 0.622900265730913,
+              "norm": 0.3306709226977028,
+              "outlier": 0.2763236982450141
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.6737588652482269,
+                "direction": "low"
+              },
+              "norm": {
+                "jaccard": 0.50354609929078,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.4184397163120565,
+                "direction": "high"
+              },
+              "combined": 0.6879432624113474
+            },
+            "gram_offdiag": 0.9949156439050715,
+            "hit2": {
+              "stock": 0.6170212765957447,
+              "u_eq_q": 0.44680851063829785,
+              "stock_centered": 0.6170212765957447,
+              "u_eq_q_centered": 0.44680851063829785
+            },
+            "n_used_2a": 47,
+            "layer": 15
+          }
+        ],
+        "best_layer": {
+          "stock": {
+            "layer": 2,
+            "hit2": 0.6595744680851063
+          },
+          "u_eq_q": {
+            "layer": 0,
+            "hit2": 0.723404255319149
+          },
+          "stock_centered": {
+            "layer": 2,
+            "hit2": 0.6595744680851063
+          },
+          "u_eq_q_centered": {
+            "layer": 0,
+            "hit2": 0.723404255319149
+          }
+        }
+      },
+      "paired_S_multi": {
+        "n_total": 16,
+        "n_eligible": 16,
+        "mean_cur_seg": 7.0,
+        "chance_hit2": 0.2857142857142857,
+        "per_layer": [
+          {
+            "r2": 0.3686369915494375,
+            "feat_r2_single": {
+              "pos": 0.0128603620903327,
+              "norm": 0.05417713291727577,
+              "outlier": 0.3507010233778105
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 0.3333333333333333
+            },
+            "gram_offdiag": 0.9977616854012012,
+            "hit2": {
+              "stock": 0.25,
+              "u_eq_q": 0.375,
+              "stock_centered": 0.25,
+              "u_eq_q_centered": 0.375
+            },
+            "n_used_2a": 16,
+            "layer": 0
+          },
+          {
+            "r2": 0.6834066175801488,
+            "feat_r2_single": {
+              "pos": 0.044991641124561,
+              "norm": 0.4971680545785355,
+              "outlier": 0.44875564154282765
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.20833333333333331,
+                "direction": "low"
+              },
+              "norm": {
+                "jaccard": 0.5625,
+                "direction": "high"
+              },
+              "outlier": {
+                "jaccard": 0.41666666666666663,
+                "direction": "low"
+              },
+              "combined": 0.6666666666666666
+            },
+            "gram_offdiag": 0.9989853464066982,
+            "hit2": {
+              "stock": 0.3125,
+              "u_eq_q": 0.0,
+              "stock_centered": 0.3125,
+              "u_eq_q_centered": 0.0
+            },
+            "n_used_2a": 16,
+            "layer": 1
+          },
+          {
+            "r2": 0.9845662131271394,
+            "feat_r2_single": {
+              "pos": 0.928530300867437,
+              "norm": 0.002558875091627555,
+              "outlier": 0.36032809544769295
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.375,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9954821243882179,
+            "hit2": {
+              "stock": 0.1875,
+              "u_eq_q": 0.1875,
+              "stock_centered": 0.1875,
+              "u_eq_q_centered": 0.1875
+            },
+            "n_used_2a": 16,
+            "layer": 2
+          },
+          {
+            "r2": 0.9938263482701861,
+            "feat_r2_single": {
+              "pos": 0.993656912111801,
+              "norm": 0.8792448454775463,
+              "outlier": 0.036661129633940304
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.9583333333333333,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9796882979571819,
+            "hit2": {
+              "stock": 0.1875,
+              "u_eq_q": 0.1875,
+              "stock_centered": 0.1875,
+              "u_eq_q_centered": 0.1875
+            },
+            "n_used_2a": 16,
+            "layer": 3
+          },
+          {
+            "r2": 0.9620055410217464,
+            "feat_r2_single": {
+              "pos": 0.8409711701205882,
+              "norm": 0.8476644976177234,
+              "outlier": 0.007625326587074488
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.3333333333333333,
+                "direction": "low"
+              },
+              "norm": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 0.375
+            },
+            "gram_offdiag": 0.9873008094727993,
+            "hit2": {
+              "stock": 0.1875,
+              "u_eq_q": 0.375,
+              "stock_centered": 0.1875,
+              "u_eq_q_centered": 0.375
+            },
+            "n_used_2a": 16,
+            "layer": 4
+          },
+          {
+            "r2": 0.9958025934550574,
+            "feat_r2_single": {
+              "pos": 0.9942326836786696,
+              "norm": 0.20359435347522314,
+              "outlier": 0.05232604598079893
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.3333333333333333,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9896168820559978,
+            "hit2": {
+              "stock": 0.1875,
+              "u_eq_q": 0.0,
+              "stock_centered": 0.1875,
+              "u_eq_q_centered": 0.0
+            },
+            "n_used_2a": 16,
+            "layer": 5
+          },
+          {
+            "r2": 0.947375255046587,
+            "feat_r2_single": {
+              "pos": 0.8783942257711924,
+              "norm": 0.005926751569238609,
+              "outlier": 0.2576837430211084
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.7083333333333333,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.3333333333333333,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 0.6666666666666666
+            },
+            "gram_offdiag": 0.990217812359333,
+            "hit2": {
+              "stock": 0.1875,
+              "u_eq_q": 0.375,
+              "stock_centered": 0.1875,
+              "u_eq_q_centered": 0.375
+            },
+            "n_used_2a": 16,
+            "layer": 6
+          },
+          {
+            "r2": 0.9988074679130312,
+            "feat_r2_single": {
+              "pos": 0.9956320575878377,
+              "norm": 0.36804686775326345,
+              "outlier": 0.07667942017279417
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.4583333333333333,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.972302284091711,
+            "hit2": {
+              "stock": 0.1875,
+              "u_eq_q": 0.625,
+              "stock_centered": 0.1875,
+              "u_eq_q_centered": 0.625
+            },
+            "n_used_2a": 16,
+            "layer": 7
+          },
+          {
+            "r2": 0.5225942377090096,
+            "feat_r2_single": {
+              "pos": 0.4395214132895119,
+              "norm": 0.10256761438729856,
+              "outlier": 0.0005191641862593022
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.875,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.2708333333333333,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 0.875
+            },
+            "gram_offdiag": 0.9912848435342312,
+            "hit2": {
+              "stock": 0.375,
+              "u_eq_q": 0.1875,
+              "stock_centered": 0.375,
+              "u_eq_q_centered": 0.1875
+            },
+            "n_used_2a": 16,
+            "layer": 8
+          },
+          {
+            "r2": 0.9988767354667138,
+            "feat_r2_single": {
+              "pos": 0.9961880823473545,
+              "norm": 0.7887799077198321,
+              "outlier": 0.07592459126613582
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.45833333333333326,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9798463433980942,
+            "hit2": {
+              "stock": 0.1875,
+              "u_eq_q": 0.375,
+              "stock_centered": 0.1875,
+              "u_eq_q_centered": 0.375
+            },
+            "n_used_2a": 16,
+            "layer": 9
+          },
+          {
+            "r2": 0.9977352805227567,
+            "feat_r2_single": {
+              "pos": 0.9846053981769645,
+              "norm": 0.6918031178265367,
+              "outlier": 0.16350288195032525
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.45833333333333326,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9677410311996937,
+            "hit2": {
+              "stock": 0.1875,
+              "u_eq_q": 0.1875,
+              "stock_centered": 0.1875,
+              "u_eq_q_centered": 0.1875
+            },
+            "n_used_2a": 16,
+            "layer": 10
+          },
+          {
+            "r2": 0.9966146247767578,
+            "feat_r2_single": {
+              "pos": 0.9952096932098936,
+              "norm": 0.7466743871214211,
+              "outlier": 0.08308618746560603
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.49999999999999994,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9789269305765629,
+            "hit2": {
+              "stock": 0.1875,
+              "u_eq_q": 0.1875,
+              "stock_centered": 0.1875,
+              "u_eq_q_centered": 0.1875
+            },
+            "n_used_2a": 16,
+            "layer": 11
+          },
+          {
+            "r2": 0.9994100885140784,
+            "feat_r2_single": {
+              "pos": 0.9937226001836351,
+              "norm": 0.3114908530371544,
+              "outlier": 0.22175153671799408
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.875,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3125,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9580188393592834,
+            "hit2": {
+              "stock": 0.1875,
+              "u_eq_q": 0.1875,
+              "stock_centered": 0.1875,
+              "u_eq_q_centered": 0.1875
+            },
+            "n_used_2a": 16,
+            "layer": 12
+          },
+          {
+            "r2": 0.9849580702538338,
+            "feat_r2_single": {
+              "pos": 0.9548447040568624,
+              "norm": 0.34836644018589247,
+              "outlier": 0.15638399058977792
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.875,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.375,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 0.875
+            },
+            "gram_offdiag": 0.9823364578187466,
+            "hit2": {
+              "stock": 0.3125,
+              "u_eq_q": 0.25,
+              "stock_centered": 0.3125,
+              "u_eq_q_centered": 0.25
+            },
+            "n_used_2a": 16,
+            "layer": 13
+          },
+          {
+            "r2": 0.1213156387038824,
+            "feat_r2_single": {
+              "pos": 0.020448993847433927,
+              "norm": 2.395729717818984e-05,
+              "outlier": 0.024287536399786314
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.22916666666666666,
+                "direction": "low"
+              },
+              "norm": {
+                "jaccard": 0.22916666666666666,
+                "direction": "high"
+              },
+              "outlier": {
+                "jaccard": 0.20833333333333331,
+                "direction": "low"
+              },
+              "combined": 0.20833333333333331
+            },
+            "gram_offdiag": 0.9842943213880062,
+            "hit2": {
+              "stock": 0.8125,
+              "u_eq_q": 0.3125,
+              "stock_centered": 0.8125,
+              "u_eq_q_centered": 0.3125
+            },
+            "n_used_2a": 16,
+            "layer": 14
+          },
+          {
+            "r2": 0.16533979585362701,
+            "feat_r2_single": {
+              "pos": 0.0994022992166711,
+              "norm": 0.08135360513955114,
+              "outlier": 0.003686576607857872
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.25,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.2708333333333333,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.24999999999999997,
+                "direction": "high"
+              },
+              "combined": 0.2708333333333333
+            },
+            "gram_offdiag": 0.9933196753263474,
+            "hit2": {
+              "stock": 0.375,
+              "u_eq_q": 0.625,
+              "stock_centered": 0.375,
+              "u_eq_q_centered": 0.625
+            },
+            "n_used_2a": 16,
+            "layer": 15
+          }
+        ],
+        "best_layer": {
+          "stock": {
+            "layer": 14,
+            "hit2": 0.8125
+          },
+          "u_eq_q": {
+            "layer": 7,
+            "hit2": 0.625
+          },
+          "stock_centered": {
+            "layer": 14,
+            "hit2": 0.8125
+          },
+          "u_eq_q_centered": {
+            "layer": 7,
+            "hit2": 0.625
+          }
+        }
+      },
+      "paired_D_multi": {
+        "n_total": 16,
+        "n_eligible": 16,
+        "mean_cur_seg": 7.0,
+        "chance_hit2": 0.2857142857142857,
+        "per_layer": [
+          {
+            "r2": 0.3201923920437393,
+            "feat_r2_single": {
+              "pos": 0.00880908507618039,
+              "norm": 0.07026596809578634,
+              "outlier": 0.3137226897531813
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 0.3333333333333333
+            },
+            "gram_offdiag": 0.9978009723126888,
+            "hit2": {
+              "stock": 0.3125,
+              "u_eq_q": 0.125,
+              "stock_centered": 0.3125,
+              "u_eq_q_centered": 0.125
+            },
+            "n_used_2a": 16,
+            "layer": 0
+          },
+          {
+            "r2": 0.8081489808556126,
+            "feat_r2_single": {
+              "pos": 0.027804832954917758,
+              "norm": 0.6624690614915489,
+              "outlier": 0.5054172001823964
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.3125,
+                "direction": "low"
+              },
+              "norm": {
+                "jaccard": 0.375,
+                "direction": "high"
+              },
+              "outlier": {
+                "jaccard": 0.375,
+                "direction": "low"
+              },
+              "combined": 0.4583333333333333
+            },
+            "gram_offdiag": 0.9989931620657444,
+            "hit2": {
+              "stock": 0.4375,
+              "u_eq_q": 0.0,
+              "stock_centered": 0.4375,
+              "u_eq_q_centered": 0.0
+            },
+            "n_used_2a": 16,
+            "layer": 1
+          },
+          {
+            "r2": 0.9848639929020506,
+            "feat_r2_single": {
+              "pos": 0.9321166849919482,
+              "norm": 0.014017393826632363,
+              "outlier": 0.3424755251226631
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.41666666666666663,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9955085329711437,
+            "hit2": {
+              "stock": 0.25,
+              "u_eq_q": 0.25,
+              "stock_centered": 0.25,
+              "u_eq_q_centered": 0.25
+            },
+            "n_used_2a": 16,
+            "layer": 2
+          },
+          {
+            "r2": 0.9947966175604087,
+            "feat_r2_single": {
+              "pos": 0.994190531133714,
+              "norm": 0.8642828125941417,
+              "outlier": 0.037233966304576094
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.9583333333333333,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9801836647093296,
+            "hit2": {
+              "stock": 0.25,
+              "u_eq_q": 0.1875,
+              "stock_centered": 0.25,
+              "u_eq_q_centered": 0.1875
+            },
+            "n_used_2a": 16,
+            "layer": 3
+          },
+          {
+            "r2": 0.9787106997069542,
+            "feat_r2_single": {
+              "pos": 0.8501097247928084,
+              "norm": 0.8689380402806438,
+              "outlier": 0.009363041119684112
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.3333333333333333,
+                "direction": "low"
+              },
+              "norm": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 0.375
+            },
+            "gram_offdiag": 0.9875913485884666,
+            "hit2": {
+              "stock": 0.1875,
+              "u_eq_q": 0.5,
+              "stock_centered": 0.1875,
+              "u_eq_q_centered": 0.5
+            },
+            "n_used_2a": 16,
+            "layer": 4
+          },
+          {
+            "r2": 0.9956112512742585,
+            "feat_r2_single": {
+              "pos": 0.9938462488171796,
+              "norm": 0.19965761552383265,
+              "outlier": 0.053059065131456085
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.3333333333333333,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9898027889430523,
+            "hit2": {
+              "stock": 0.25,
+              "u_eq_q": 0.0,
+              "stock_centered": 0.25,
+              "u_eq_q_centered": 0.0
+            },
+            "n_used_2a": 16,
+            "layer": 5
+          },
+          {
+            "r2": 0.9478393290396243,
+            "feat_r2_single": {
+              "pos": 0.8798295511668565,
+              "norm": 0.005569349243726651,
+              "outlier": 0.263693316707007
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.8333333333333333,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.3333333333333333,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 0.8333333333333333
+            },
+            "gram_offdiag": 0.9904230535030365,
+            "hit2": {
+              "stock": 0.3125,
+              "u_eq_q": 0.1875,
+              "stock_centered": 0.3125,
+              "u_eq_q_centered": 0.1875
+            },
+            "n_used_2a": 16,
+            "layer": 6
+          },
+          {
+            "r2": 0.9988573017177661,
+            "feat_r2_single": {
+              "pos": 0.9948455646076059,
+              "norm": 0.5097255265173739,
+              "outlier": 0.08181852872007689
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.3333333333333333,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9728963375091553,
+            "hit2": {
+              "stock": 0.25,
+              "u_eq_q": 0.375,
+              "stock_centered": 0.25,
+              "u_eq_q_centered": 0.375
+            },
+            "n_used_2a": 16,
+            "layer": 7
+          },
+          {
+            "r2": 0.4927307721889671,
+            "feat_r2_single": {
+              "pos": 0.4135214154444411,
+              "norm": 0.0597214418730897,
+              "outlier": 0.0016767773249325435
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.9583333333333333,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.22916666666666666,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 0.9583333333333333
+            },
+            "gram_offdiag": 0.9915751777589321,
+            "hit2": {
+              "stock": 0.1875,
+              "u_eq_q": 0.25,
+              "stock_centered": 0.1875,
+              "u_eq_q_centered": 0.25
+            },
+            "n_used_2a": 16,
+            "layer": 8
+          },
+          {
+            "r2": 0.9991941027917055,
+            "feat_r2_single": {
+              "pos": 0.9959405898378539,
+              "norm": 0.8244685035573922,
+              "outlier": 0.07906152868781491
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.375,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9802129492163658,
+            "hit2": {
+              "stock": 0.25,
+              "u_eq_q": 0.5,
+              "stock_centered": 0.25,
+              "u_eq_q_centered": 0.5
+            },
+            "n_used_2a": 16,
+            "layer": 9
+          },
+          {
+            "r2": 0.9975537920998584,
+            "feat_r2_single": {
+              "pos": 0.9824041288833393,
+              "norm": 0.7324627164363344,
+              "outlier": 0.16527200454843638
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.41666666666666663,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9686085060238838,
+            "hit2": {
+              "stock": 0.25,
+              "u_eq_q": 0.1875,
+              "stock_centered": 0.25,
+              "u_eq_q_centered": 0.1875
+            },
+            "n_used_2a": 16,
+            "layer": 10
+          },
+          {
+            "r2": 0.9973000898027022,
+            "feat_r2_single": {
+              "pos": 0.9949079672451109,
+              "norm": 0.775915780220523,
+              "outlier": 0.08734491879262252
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.375,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9792307130992413,
+            "hit2": {
+              "stock": 0.25,
+              "u_eq_q": 0.1875,
+              "stock_centered": 0.25,
+              "u_eq_q_centered": 0.1875
+            },
+            "n_used_2a": 16,
+            "layer": 11
+          },
+          {
+            "r2": 0.9994951845550601,
+            "feat_r2_single": {
+              "pos": 0.9923369646487096,
+              "norm": 0.32126976474815494,
+              "outlier": 0.21636839997718815
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.75,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9592330455780029,
+            "hit2": {
+              "stock": 0.25,
+              "u_eq_q": 0.25,
+              "stock_centered": 0.25,
+              "u_eq_q_centered": 0.25
+            },
+            "n_used_2a": 16,
+            "layer": 12
+          },
+          {
+            "r2": 0.9912274832842393,
+            "feat_r2_single": {
+              "pos": 0.9495433627327767,
+              "norm": 0.3273110428431859,
+              "outlier": 0.1825974975652781
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.9166666666666666,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.3333333333333333,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 0.9166666666666666
+            },
+            "gram_offdiag": 0.9827385507524014,
+            "hit2": {
+              "stock": 0.25,
+              "u_eq_q": 0.4375,
+              "stock_centered": 0.25,
+              "u_eq_q_centered": 0.4375
+            },
+            "n_used_2a": 16,
+            "layer": 13
+          },
+          {
+            "r2": 0.28656355120260024,
+            "feat_r2_single": {
+              "pos": 0.056228330691507344,
+              "norm": 0.002219468554637949,
+              "outlier": 0.045781673918523724
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.14583333333333331,
+                "direction": "low"
+              },
+              "norm": {
+                "jaccard": 0.29166666666666663,
+                "direction": "high"
+              },
+              "outlier": {
+                "jaccard": 0.3125,
+                "direction": "low"
+              },
+              "combined": 0.3125
+            },
+            "gram_offdiag": 0.9846146740019321,
+            "hit2": {
+              "stock": 0.5625,
+              "u_eq_q": 0.375,
+              "stock_centered": 0.5625,
+              "u_eq_q_centered": 0.375
+            },
+            "n_used_2a": 16,
+            "layer": 14
+          },
+          {
+            "r2": 0.09636846751728767,
+            "feat_r2_single": {
+              "pos": 0.08251865821168758,
+              "norm": 0.021146809473704953,
+              "outlier": 1.263205642820786e-05
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.1875,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.14583333333333331,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.16666666666666666,
+                "direction": "high"
+              },
+              "combined": 0.25
+            },
+            "gram_offdiag": 0.9934812113642693,
+            "hit2": {
+              "stock": 0.3125,
+              "u_eq_q": 0.4375,
+              "stock_centered": 0.3125,
+              "u_eq_q_centered": 0.4375
+            },
+            "n_used_2a": 16,
+            "layer": 15
+          }
+        ],
+        "best_layer": {
+          "stock": {
+            "layer": 14,
+            "hit2": 0.5625
+          },
+          "u_eq_q": {
+            "layer": 4,
+            "hit2": 0.5
+          },
+          "stock_centered": {
+            "layer": 14,
+            "hit2": 0.5625
+          },
+          "u_eq_q_centered": {
+            "layer": 4,
+            "hit2": 0.5
+          }
+        }
+      }
+    },
+    "mc-30B": {
+      "niah_single_1": {
+        "n_total": 50,
+        "n_eligible": 45,
+        "mean_cur_seg": 6.955555555555556,
+        "chance_hit2": 0.2878306878306879,
+        "per_layer": [
+          {
+            "r2": 0.678572009129446,
+            "feat_r2_single": {
+              "pos": 0.3640183970551992,
+              "norm": 0.43168042121879413,
+              "outlier": 0.4184103922781358
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.1925925925925926,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.40740740740740733,
+                "direction": "high"
+              },
+              "outlier": {
+                "jaccard": 0.22962962962962966,
+                "direction": "low"
+              },
+              "combined": 0.30370370370370375
+            },
+            "gram_offdiag": 0.999431049823761,
+            "hit2": {
+              "stock": 0.0,
+              "u_eq_q": 0.17777777777777778,
+              "stock_centered": 0.0,
+              "u_eq_q_centered": 0.17777777777777778
+            },
+            "n_used_2a": 45,
+            "layer": 0
+          },
+          {
+            "r2": 0.8608400724909033,
+            "feat_r2_single": {
+              "pos": 0.5963052563148725,
+              "norm": 0.6718572575403541,
+              "outlier": 0.6462740978921686
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.31111111111111117,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.14074074074074072,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.2888888888888889,
+                "direction": "low"
+              },
+              "combined": 0.3185185185185186
+            },
+            "gram_offdiag": 0.9992912623617384,
+            "hit2": {
+              "stock": 0.06666666666666667,
+              "u_eq_q": 0.17777777777777778,
+              "stock_centered": 0.06666666666666667,
+              "u_eq_q_centered": 0.17777777777777778
+            },
+            "n_used_2a": 45,
+            "layer": 1
+          },
+          {
+            "r2": 0.9715874164060004,
+            "feat_r2_single": {
+              "pos": 0.8774175278800165,
+              "norm": 0.3708840441188732,
+              "outlier": 0.515111590556685
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.837037037037037,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.8222222222222224,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.2888888888888889,
+                "direction": "high"
+              },
+              "combined": 0.8518518518518517
+            },
+            "gram_offdiag": 0.9906304173999363,
+            "hit2": {
+              "stock": 0.26666666666666666,
+              "u_eq_q": 0.17777777777777778,
+              "stock_centered": 0.26666666666666666,
+              "u_eq_q_centered": 0.17777777777777778
+            },
+            "n_used_2a": 45,
+            "layer": 2
+          },
+          {
+            "r2": 0.9914591009499404,
+            "feat_r2_single": {
+              "pos": 0.9535678946784377,
+              "norm": 0.8385364753542146,
+              "outlier": 0.3124720697069284
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.8962962962962964,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9926048159599304,
+            "hit2": {
+              "stock": 0.24444444444444444,
+              "u_eq_q": 0.0,
+              "stock_centered": 0.24444444444444444,
+              "u_eq_q_centered": 0.0
+            },
+            "n_used_2a": 45,
+            "layer": 3
+          },
+          {
+            "r2": 0.9698728422444092,
+            "feat_r2_single": {
+              "pos": 0.7114742273909043,
+              "norm": 0.6195190753078818,
+              "outlier": 0.5621458659884296
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.3259259259259259,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.3259259259259259,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.12592592592592589,
+                "direction": "low"
+              },
+              "combined": 0.36296296296296293
+            },
+            "gram_offdiag": 0.988517227437761,
+            "hit2": {
+              "stock": 0.35555555555555557,
+              "u_eq_q": 0.6,
+              "stock_centered": 0.35555555555555557,
+              "u_eq_q_centered": 0.6
+            },
+            "n_used_2a": 45,
+            "layer": 4
+          },
+          {
+            "r2": 0.999190553687413,
+            "feat_r2_single": {
+              "pos": 0.9957955882240095,
+              "norm": 0.4179193324094511,
+              "outlier": 0.09226292869074382
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.7777777777777778,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9873270789782206,
+            "hit2": {
+              "stock": 0.24444444444444444,
+              "u_eq_q": 0.6,
+              "stock_centered": 0.24444444444444444,
+              "u_eq_q_centered": 0.6
+            },
+            "n_used_2a": 45,
+            "layer": 5
+          },
+          {
+            "r2": 0.9783869323278972,
+            "feat_r2_single": {
+              "pos": 0.8743385476039802,
+              "norm": 0.00020793272916308503,
+              "outlier": 0.09376093142543196
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.7629629629629631,
+                "direction": "low"
+              },
+              "norm": {
+                "jaccard": 0.31111111111111117,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 0.9555555555555556
+            },
+            "gram_offdiag": 0.9880192465252347,
+            "hit2": {
+              "stock": 0.6444444444444445,
+              "u_eq_q": 0.5777777777777777,
+              "stock_centered": 0.6444444444444445,
+              "u_eq_q_centered": 0.5777777777777777
+            },
+            "n_used_2a": 45,
+            "layer": 6
+          },
+          {
+            "r2": 0.999414009591401,
+            "feat_r2_single": {
+              "pos": 0.9943845224882434,
+              "norm": 0.19870796916395772,
+              "outlier": 0.19151410520049217
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.1333333333333333,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9840652412838407,
+            "hit2": {
+              "stock": 0.24444444444444444,
+              "u_eq_q": 0.0,
+              "stock_centered": 0.24444444444444444,
+              "u_eq_q_centered": 0.0
+            },
+            "n_used_2a": 45,
+            "layer": 7
+          },
+          {
+            "r2": 0.8206084403448171,
+            "feat_r2_single": {
+              "pos": 0.12188204792625579,
+              "norm": 0.7681885602214857,
+              "outlier": 0.2761659437514994
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.48148148148148134,
+                "direction": "low"
+              },
+              "norm": {
+                "jaccard": 0.7185185185185184,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.34814814814814815,
+                "direction": "high"
+              },
+              "combined": 0.7333333333333333
+            },
+            "gram_offdiag": 0.9929890261756049,
+            "hit2": {
+              "stock": 0.9555555555555556,
+              "u_eq_q": 0.35555555555555557,
+              "stock_centered": 0.9555555555555556,
+              "u_eq_q_centered": 0.35555555555555557
+            },
+            "n_used_2a": 45,
+            "layer": 8
+          },
+          {
+            "r2": 0.9993359641348785,
+            "feat_r2_single": {
+              "pos": 0.997772966017573,
+              "norm": 0.005712239013770826,
+              "outlier": 0.20198004979207196
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.16296296296296295,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9845894336700439,
+            "hit2": {
+              "stock": 0.24444444444444444,
+              "u_eq_q": 0.37777777777777777,
+              "stock_centered": 0.24444444444444444,
+              "u_eq_q_centered": 0.37777777777777777
+            },
+            "n_used_2a": 45,
+            "layer": 9
+          },
+          {
+            "r2": 0.9993461175230794,
+            "feat_r2_single": {
+              "pos": 0.9963020211286279,
+              "norm": 0.058480298020638255,
+              "outlier": 0.23780102005044157
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.2222222222222222,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9804438551266988,
+            "hit2": {
+              "stock": 0.24444444444444444,
+              "u_eq_q": 0.0,
+              "stock_centered": 0.24444444444444444,
+              "u_eq_q_centered": 0.0
+            },
+            "n_used_2a": 45,
+            "layer": 10
+          },
+          {
+            "r2": 0.9936054316919545,
+            "feat_r2_single": {
+              "pos": 0.9743348747305245,
+              "norm": 0.09115797053942976,
+              "outlier": 0.10627020481902083
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.18518518518518515,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9852551460266114,
+            "hit2": {
+              "stock": 0.24444444444444444,
+              "u_eq_q": 0.17777777777777778,
+              "stock_centered": 0.24444444444444444,
+              "u_eq_q_centered": 0.17777777777777778
+            },
+            "n_used_2a": 45,
+            "layer": 11
+          },
+          {
+            "r2": 0.9978923960113283,
+            "feat_r2_single": {
+              "pos": 0.9931065024922509,
+              "norm": 0.3297422583213957,
+              "outlier": 0.31663801691748106
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.1259259259259259,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9788560416963366,
+            "hit2": {
+              "stock": 0.24444444444444444,
+              "u_eq_q": 0.7555555555555555,
+              "stock_centered": 0.24444444444444444,
+              "u_eq_q_centered": 0.7555555555555555
+            },
+            "n_used_2a": 45,
+            "layer": 12
+          },
+          {
+            "r2": 0.9973160035084933,
+            "feat_r2_single": {
+              "pos": 0.9824521861092853,
+              "norm": 0.00410868318581159,
+              "outlier": 0.22299719122270367
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.15555555555555553,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9848688973320855,
+            "hit2": {
+              "stock": 0.24444444444444444,
+              "u_eq_q": 0.5777777777777777,
+              "stock_centered": 0.24444444444444444,
+              "u_eq_q_centered": 0.5777777777777777
+            },
+            "n_used_2a": 45,
+            "layer": 13
+          },
+          {
+            "r2": 0.640827588086232,
+            "feat_r2_single": {
+              "pos": 0.20967898523910866,
+              "norm": 0.2566809972280113,
+              "outlier": 0.012004283095125023
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.5037037037037035,
+                "direction": "low"
+              },
+              "norm": {
+                "jaccard": 0.7037037037037037,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3185185185185186,
+                "direction": "high"
+              },
+              "combined": 0.7037037037037037
+            },
+            "gram_offdiag": 0.9908658120367262,
+            "hit2": {
+              "stock": 0.9555555555555556,
+              "u_eq_q": 0.0,
+              "stock_centered": 0.9555555555555556,
+              "u_eq_q_centered": 0.0
+            },
+            "n_used_2a": 45,
+            "layer": 14
+          },
+          {
+            "r2": 0.696336461049488,
+            "feat_r2_single": {
+              "pos": 0.002956717874382675,
+              "norm": 0.517783164315782,
+              "outlier": 0.2678851563988386
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.3851851851851852,
+                "direction": "low"
+              },
+              "norm": {
+                "jaccard": 0.7481481481481482,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.4370370370370369,
+                "direction": "high"
+              },
+              "combined": 0.6592592592592592
+            },
+            "gram_offdiag": 0.9952045970492893,
+            "hit2": {
+              "stock": 1.0,
+              "u_eq_q": 0.8666666666666667,
+              "stock_centered": 1.0,
+              "u_eq_q_centered": 0.8666666666666667
+            },
+            "n_used_2a": 45,
+            "layer": 15
+          }
+        ],
+        "best_layer": {
+          "stock": {
+            "layer": 15,
+            "hit2": 1.0
+          },
+          "u_eq_q": {
+            "layer": 15,
+            "hit2": 0.8666666666666667
+          },
+          "stock_centered": {
+            "layer": 15,
+            "hit2": 1.0
+          },
+          "u_eq_q_centered": {
+            "layer": 15,
+            "hit2": 0.8666666666666667
+          }
+        }
+      },
+      "niah_multikey_1": {
+        "n_total": 50,
+        "n_eligible": 47,
+        "mean_cur_seg": 4.191489361702128,
+        "chance_hit2": 0.486322188449848,
+        "per_layer": [
+          {
+            "r2": 0.7204395907072267,
+            "feat_r2_single": {
+              "pos": 0.634092156696997,
+              "norm": 0.028229278497554966,
+              "outlier": 0.045054081541062385
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.5035460992907801,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.5319148936170212,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3404255319148936,
+                "direction": "high"
+              },
+              "combined": 0.5035460992907801
+            },
+            "gram_offdiag": 0.9972070341414594,
+            "hit2": {
+              "stock": 0.5106382978723404,
+              "u_eq_q": 0.48936170212765956,
+              "stock_centered": 0.5106382978723404,
+              "u_eq_q_centered": 0.48936170212765956
+            },
+            "n_used_2a": 47,
+            "layer": 0
+          },
+          {
+            "r2": 0.7740659102751086,
+            "feat_r2_single": {
+              "pos": 0.4927851505338775,
+              "norm": 0.7100102509907007,
+              "outlier": 0.04413270596461272
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.8794326241134752,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.6737588652482269,
+                "direction": "high"
+              },
+              "outlier": {
+                "jaccard": 0.3687943262411347,
+                "direction": "low"
+              },
+              "combined": 0.8936170212765957
+            },
+            "gram_offdiag": 0.9982386434331854,
+            "hit2": {
+              "stock": 0.5957446808510638,
+              "u_eq_q": 0.3404255319148936,
+              "stock_centered": 0.5957446808510638,
+              "u_eq_q_centered": 0.3404255319148936
+            },
+            "n_used_2a": 47,
+            "layer": 1
+          },
+          {
+            "r2": 0.9530769082363143,
+            "feat_r2_single": {
+              "pos": 0.9456421935623606,
+              "norm": 0.07735423520182505,
+              "outlier": 0.01436667787615864
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.9716312056737589,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.32624113475177313,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 0.9716312056737589
+            },
+            "gram_offdiag": 0.9923401183270394,
+            "hit2": {
+              "stock": 0.6382978723404256,
+              "u_eq_q": 0.7659574468085106,
+              "stock_centered": 0.6382978723404256,
+              "u_eq_q_centered": 0.7659574468085106
+            },
+            "n_used_2a": 47,
+            "layer": 2
+          },
+          {
+            "r2": 0.9961380242647039,
+            "feat_r2_single": {
+              "pos": 0.9944636076219234,
+              "norm": 0.43790769477056923,
+              "outlier": 0.0011104769313634577
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.6737588652482269,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9863780534013789,
+            "hit2": {
+              "stock": 0.6595744680851063,
+              "u_eq_q": 0.3617021276595745,
+              "stock_centered": 0.6595744680851063,
+              "u_eq_q_centered": 0.3617021276595745
+            },
+            "n_used_2a": 47,
+            "layer": 3
+          },
+          {
+            "r2": 0.9263470862439699,
+            "feat_r2_single": {
+              "pos": 0.7076630096143258,
+              "norm": 0.8681184224262806,
+              "outlier": 0.2802245553829874
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.7092198581560283,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.6666666666666665,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.39007092198581544,
+                "direction": "low"
+              },
+              "combined": 0.7517730496453899
+            },
+            "gram_offdiag": 0.9846699402687398,
+            "hit2": {
+              "stock": 0.7872340425531915,
+              "u_eq_q": 0.40425531914893614,
+              "stock_centered": 0.7872340425531915,
+              "u_eq_q_centered": 0.40425531914893614
+            },
+            "n_used_2a": 47,
+            "layer": 4
+          },
+          {
+            "r2": 0.9956463361285118,
+            "feat_r2_single": {
+              "pos": 0.9916175438970222,
+              "norm": 0.10004342547649836,
+              "outlier": 0.01493270779882272
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.38297872340425515,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9877138809954866,
+            "hit2": {
+              "stock": 0.6595744680851063,
+              "u_eq_q": 0.3829787234042553,
+              "stock_centered": 0.6595744680851063,
+              "u_eq_q_centered": 0.3829787234042553
+            },
+            "n_used_2a": 47,
+            "layer": 5
+          },
+          {
+            "r2": 0.5172679606424087,
+            "feat_r2_single": {
+              "pos": 0.06488491505064209,
+              "norm": 0.04996269761476624,
+              "outlier": 0.038227230188560224
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.6028368794326241,
+                "direction": "low"
+              },
+              "norm": {
+                "jaccard": 0.5177304964539006,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.41134751773049627,
+                "direction": "high"
+              },
+              "combined": 0.6666666666666666
+            },
+            "gram_offdiag": 0.9841546543101047,
+            "hit2": {
+              "stock": 0.5531914893617021,
+              "u_eq_q": 0.3191489361702128,
+              "stock_centered": 0.5531914893617021,
+              "u_eq_q_centered": 0.3191489361702128
+            },
+            "n_used_2a": 47,
+            "layer": 6
+          },
+          {
+            "r2": 0.9984569373194216,
+            "feat_r2_single": {
+              "pos": 0.997414979538879,
+              "norm": 0.48756483929702543,
+              "outlier": 0.0009095191637752409
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.4751773049645388,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9759278398879031,
+            "hit2": {
+              "stock": 0.6595744680851063,
+              "u_eq_q": 0.574468085106383,
+              "stock_centered": 0.6595744680851063,
+              "u_eq_q_centered": 0.574468085106383
+            },
+            "n_used_2a": 47,
+            "layer": 7
+          },
+          {
+            "r2": 0.7530802088626604,
+            "feat_r2_single": {
+              "pos": 0.5047459914205531,
+              "norm": 0.1107285241868542,
+              "outlier": 0.462781126057062
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.7021276595744681,
+                "direction": "low"
+              },
+              "norm": {
+                "jaccard": 0.4326241134751772,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.602836879432624,
+                "direction": "high"
+              },
+              "combined": 0.6595744680851062
+            },
+            "gram_offdiag": 0.9842097759246826,
+            "hit2": {
+              "stock": 0.44680851063829785,
+              "u_eq_q": 0.48936170212765956,
+              "stock_centered": 0.44680851063829785,
+              "u_eq_q_centered": 0.48936170212765956
+            },
+            "n_used_2a": 47,
+            "layer": 8
+          },
+          {
+            "r2": 0.9976325867502088,
+            "feat_r2_single": {
+              "pos": 0.997534012720616,
+              "norm": 0.5451318016041706,
+              "outlier": 0.00877789907958093
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.9858156028368793,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9787636576814854,
+            "hit2": {
+              "stock": 0.6595744680851063,
+              "u_eq_q": 0.5531914893617021,
+              "stock_centered": 0.6595744680851063,
+              "u_eq_q_centered": 0.5531914893617021
+            },
+            "n_used_2a": 47,
+            "layer": 9
+          },
+          {
+            "r2": 0.9986642284555752,
+            "feat_r2_single": {
+              "pos": 0.9960582692353471,
+              "norm": 0.6094846788404322,
+              "outlier": 0.02861045461926559
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.9007092198581561,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9720819110565997,
+            "hit2": {
+              "stock": 0.6595744680851063,
+              "u_eq_q": 0.3617021276595745,
+              "stock_centered": 0.6595744680851063,
+              "u_eq_q_centered": 0.3617021276595745
+            },
+            "n_used_2a": 47,
+            "layer": 10
+          },
+          {
+            "r2": 0.8909564179336965,
+            "feat_r2_single": {
+              "pos": 0.8228774987633856,
+              "norm": 0.49323492448370476,
+              "outlier": 0.014631015626364041
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.9716312056737589,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.9290780141843971,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.32624113475177313,
+                "direction": "high"
+              },
+              "combined": 0.9716312056737589
+            },
+            "gram_offdiag": 0.9777245141090231,
+            "hit2": {
+              "stock": 0.7021276595744681,
+              "u_eq_q": 0.3191489361702128,
+              "stock_centered": 0.7021276595744681,
+              "u_eq_q_centered": 0.3191489361702128
+            },
+            "n_used_2a": 47,
+            "layer": 11
+          },
+          {
+            "r2": 0.9984983253937545,
+            "feat_r2_single": {
+              "pos": 0.9944818380246495,
+              "norm": 0.050236414342670344,
+              "outlier": 0.10150324007454692
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.3971631205673757,
+                "direction": "high"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9647168200066749,
+            "hit2": {
+              "stock": 0.6595744680851063,
+              "u_eq_q": 0.3829787234042553,
+              "stock_centered": 0.6595744680851063,
+              "u_eq_q_centered": 0.3829787234042553
+            },
+            "n_used_2a": 47,
+            "layer": 12
+          },
+          {
+            "r2": 0.9819090720919355,
+            "feat_r2_single": {
+              "pos": 0.9794907663674948,
+              "norm": 0.5170302587865385,
+              "outlier": 0.05741297557240099
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 1.0,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.33333333333333337,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9813784931568389,
+            "hit2": {
+              "stock": 0.6595744680851063,
+              "u_eq_q": 0.23404255319148937,
+              "stock_centered": 0.6595744680851063,
+              "u_eq_q_centered": 0.23404255319148937
+            },
+            "n_used_2a": 47,
+            "layer": 13
+          },
+          {
+            "r2": 0.12776926411968093,
+            "feat_r2_single": {
+              "pos": 0.06980990134866683,
+              "norm": 0.09480752943088688,
+              "outlier": 0.0073841923302889745
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.5390070921985815,
+                "direction": "low"
+              },
+              "norm": {
+                "jaccard": 0.3971631205673759,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.39716312056737574,
+                "direction": "high"
+              },
+              "combined": 0.46808510638297857
+            },
+            "gram_offdiag": 0.9779344264497148,
+            "hit2": {
+              "stock": 0.8085106382978723,
+              "u_eq_q": 0.425531914893617,
+              "stock_centered": 0.8085106382978723,
+              "u_eq_q_centered": 0.425531914893617
+            },
+            "n_used_2a": 47,
+            "layer": 14
+          },
+          {
+            "r2": 0.6305854954767057,
+            "feat_r2_single": {
+              "pos": 0.08395838975553815,
+              "norm": 0.3998036185896754,
+              "outlier": 0.5829873408157953
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.3404255319148936,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.6595744680851063,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.7021276595744681,
+                "direction": "high"
+              },
+              "combined": 0.7021276595744681
+            },
+            "gram_offdiag": 0.9921401688393127,
+            "hit2": {
+              "stock": 0.6170212765957447,
+              "u_eq_q": 0.425531914893617,
+              "stock_centered": 0.6170212765957447,
+              "u_eq_q_centered": 0.425531914893617
+            },
+            "n_used_2a": 47,
+            "layer": 15
+          }
+        ],
+        "best_layer": {
+          "stock": {
+            "layer": 14,
+            "hit2": 0.8085106382978723
+          },
+          "u_eq_q": {
+            "layer": 2,
+            "hit2": 0.7659574468085106
+          },
+          "stock_centered": {
+            "layer": 14,
+            "hit2": 0.8085106382978723
+          },
+          "u_eq_q_centered": {
+            "layer": 2,
+            "hit2": 0.7659574468085106
+          }
+        }
+      },
+      "paired_S_multi": {
+        "n_total": 16,
+        "n_eligible": 16,
+        "mean_cur_seg": 7.0,
+        "chance_hit2": 0.2857142857142857,
+        "per_layer": [
+          {
+            "r2": 0.5412785313842672,
+            "feat_r2_single": {
+              "pos": 0.28905635870373825,
+              "norm": 0.019781959170077412,
+              "outlier": 0.3526097911514482
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.2708333333333333,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.29166666666666663,
+                "direction": "high"
+              },
+              "outlier": {
+                "jaccard": 0.125,
+                "direction": "low"
+              },
+              "combined": 0.08333333333333333
+            },
+            "gram_offdiag": 0.9972570687532425,
+            "hit2": {
+              "stock": 0.125,
+              "u_eq_q": 0.125,
+              "stock_centered": 0.125,
+              "u_eq_q_centered": 0.125
+            },
+            "n_used_2a": 16,
+            "layer": 0
+          },
+          {
+            "r2": 0.2924931400416515,
+            "feat_r2_single": {
+              "pos": 0.006789483945957686,
+              "norm": 0.20259473896797464,
+              "outlier": 0.2005274289041291
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.14583333333333331,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.4375,
+                "direction": "high"
+              },
+              "outlier": {
+                "jaccard": 0.375,
+                "direction": "low"
+              },
+              "combined": 0.4375
+            },
+            "gram_offdiag": 0.9981842897832394,
+            "hit2": {
+              "stock": 0.5,
+              "u_eq_q": 0.25,
+              "stock_centered": 0.5,
+              "u_eq_q_centered": 0.25
+            },
+            "n_used_2a": 16,
+            "layer": 1
+          },
+          {
+            "r2": 0.9729319241339145,
+            "feat_r2_single": {
+              "pos": 0.9649625179509439,
+              "norm": 0.00928665072698287,
+              "outlier": 0.08558598500883163
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.7916666666666666,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.25,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 0.7916666666666666
+            },
+            "gram_offdiag": 0.9860383719205856,
+            "hit2": {
+              "stock": 0.25,
+              "u_eq_q": 0.1875,
+              "stock_centered": 0.25,
+              "u_eq_q_centered": 0.1875
+            },
+            "n_used_2a": 16,
+            "layer": 2
+          },
+          {
+            "r2": 0.9983837362383802,
+            "feat_r2_single": {
+              "pos": 0.996408197556095,
+              "norm": 0.9351812812895423,
+              "outlier": 0.0455498280939487
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 1.0,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9830920062959194,
+            "hit2": {
+              "stock": 0.1875,
+              "u_eq_q": 0.1875,
+              "stock_centered": 0.1875,
+              "u_eq_q_centered": 0.1875
+            },
+            "n_used_2a": 16,
+            "layer": 3
+          },
+          {
+            "r2": 0.962487519559516,
+            "feat_r2_single": {
+              "pos": 0.7057283827884183,
+              "norm": 0.8244354791679589,
+              "outlier": 0.4473700977249886
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.5208333333333333,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.47916666666666663,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.20833333333333331,
+                "direction": "high"
+              },
+              "combined": 0.5416666666666666
+            },
+            "gram_offdiag": 0.9767472259700298,
+            "hit2": {
+              "stock": 0.5,
+              "u_eq_q": 0.5,
+              "stock_centered": 0.5,
+              "u_eq_q_centered": 0.5
+            },
+            "n_used_2a": 16,
+            "layer": 4
+          },
+          {
+            "r2": 0.9983504178508826,
+            "feat_r2_single": {
+              "pos": 0.996721278448352,
+              "norm": 0.5760392645016563,
+              "outlier": 0.09440281530866024
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.3333333333333333,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.981087401509285,
+            "hit2": {
+              "stock": 0.1875,
+              "u_eq_q": 0.0,
+              "stock_centered": 0.1875,
+              "u_eq_q_centered": 0.0
+            },
+            "n_used_2a": 16,
+            "layer": 5
+          },
+          {
+            "r2": 0.8891358305336364,
+            "feat_r2_single": {
+              "pos": 0.5724688320043128,
+              "norm": 0.8614948539390443,
+              "outlier": 0.3333543116289782
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.41666666666666663,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 0.41666666666666663
+            },
+            "gram_offdiag": 0.9793024808168411,
+            "hit2": {
+              "stock": 0.125,
+              "u_eq_q": 0.4375,
+              "stock_centered": 0.125,
+              "u_eq_q_centered": 0.4375
+            },
+            "n_used_2a": 16,
+            "layer": 6
+          },
+          {
+            "r2": 0.999506171105399,
+            "feat_r2_single": {
+              "pos": 0.9978642514859046,
+              "norm": 0.42447319708288533,
+              "outlier": 0.04636776535511167
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.375,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9695863462984562,
+            "hit2": {
+              "stock": 0.1875,
+              "u_eq_q": 0.1875,
+              "stock_centered": 0.1875,
+              "u_eq_q_centered": 0.1875
+            },
+            "n_used_2a": 16,
+            "layer": 7
+          },
+          {
+            "r2": 0.7088380853119779,
+            "feat_r2_single": {
+              "pos": 0.545019037014944,
+              "norm": 0.019039380923913884,
+              "outlier": 0.38755018338831115
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.875,
+                "direction": "low"
+              },
+              "norm": {
+                "jaccard": 0.125,
+                "direction": "high"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 0.75
+            },
+            "gram_offdiag": 0.9831013157963753,
+            "hit2": {
+              "stock": 0.25,
+              "u_eq_q": 0.375,
+              "stock_centered": 0.25,
+              "u_eq_q_centered": 0.375
+            },
+            "n_used_2a": 16,
+            "layer": 8
+          },
+          {
+            "r2": 0.9992528164862737,
+            "feat_r2_single": {
+              "pos": 0.9980349417112717,
+              "norm": 0.8301817756233146,
+              "outlier": 0.06899514820209218
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.7083333333333333,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9711254760622978,
+            "hit2": {
+              "stock": 0.1875,
+              "u_eq_q": 0.5,
+              "stock_centered": 0.1875,
+              "u_eq_q_centered": 0.5
+            },
+            "n_used_2a": 16,
+            "layer": 9
+          },
+          {
+            "r2": 0.9997874947385404,
+            "feat_r2_single": {
+              "pos": 0.9964952724090045,
+              "norm": 0.49369005053519854,
+              "outlier": 0.1273538563895542
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.5833333333333333,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9659399278461933,
+            "hit2": {
+              "stock": 0.1875,
+              "u_eq_q": 0.1875,
+              "stock_centered": 0.1875,
+              "u_eq_q_centered": 0.1875
+            },
+            "n_used_2a": 16,
+            "layer": 10
+          },
+          {
+            "r2": 0.261158934907579,
+            "feat_r2_single": {
+              "pos": 0.06691971654571394,
+              "norm": 0.07357765352716594,
+              "outlier": 0.08838716431612403
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.3958333333333333,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.5,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 0.3333333333333333
+            },
+            "gram_offdiag": 0.9710936471819878,
+            "hit2": {
+              "stock": 0.5,
+              "u_eq_q": 0.25,
+              "stock_centered": 0.5,
+              "u_eq_q_centered": 0.25
+            },
+            "n_used_2a": 16,
+            "layer": 11
+          },
+          {
+            "r2": 0.9991703117454809,
+            "feat_r2_single": {
+              "pos": 0.9944593629985513,
+              "norm": 0.035108557856298295,
+              "outlier": 0.2015409688009948
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.3333333333333333,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9602871760725975,
+            "hit2": {
+              "stock": 0.1875,
+              "u_eq_q": 0.1875,
+              "stock_centered": 0.1875,
+              "u_eq_q_centered": 0.1875
+            },
+            "n_used_2a": 16,
+            "layer": 12
+          },
+          {
+            "r2": 0.9736609477913548,
+            "feat_r2_single": {
+              "pos": 0.9628534580825208,
+              "norm": 0.5387295762367127,
+              "outlier": 0.17931214944151563
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.9166666666666666,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.375,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 0.9166666666666666
+            },
+            "gram_offdiag": 0.9762007109820843,
+            "hit2": {
+              "stock": 0.3125,
+              "u_eq_q": 0.0,
+              "stock_centered": 0.3125,
+              "u_eq_q_centered": 0.0
+            },
+            "n_used_2a": 16,
+            "layer": 13
+          },
+          {
+            "r2": 0.7081789888808095,
+            "feat_r2_single": {
+              "pos": 0.6360494127421297,
+              "norm": 0.027080808169224535,
+              "outlier": 0.2707244562844551
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.4375,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.43749999999999994,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.20833333333333331,
+                "direction": "low"
+              },
+              "combined": 0.4375
+            },
+            "gram_offdiag": 0.9784641116857529,
+            "hit2": {
+              "stock": 0.6875,
+              "u_eq_q": 0.375,
+              "stock_centered": 0.6875,
+              "u_eq_q_centered": 0.375
+            },
+            "n_used_2a": 16,
+            "layer": 14
+          },
+          {
+            "r2": 0.8822155526141585,
+            "feat_r2_single": {
+              "pos": 0.8142996958875391,
+              "norm": 0.3533327575900217,
+              "outlier": 1.4231191043378999e-05
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.875,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.41666666666666663,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 0.875
+            },
+            "gram_offdiag": 0.9900012649595737,
+            "hit2": {
+              "stock": 0.375,
+              "u_eq_q": 0.25,
+              "stock_centered": 0.375,
+              "u_eq_q_centered": 0.25
+            },
+            "n_used_2a": 16,
+            "layer": 15
+          }
+        ],
+        "best_layer": {
+          "stock": {
+            "layer": 14,
+            "hit2": 0.6875
+          },
+          "u_eq_q": {
+            "layer": 4,
+            "hit2": 0.5
+          },
+          "stock_centered": {
+            "layer": 14,
+            "hit2": 0.6875
+          },
+          "u_eq_q_centered": {
+            "layer": 4,
+            "hit2": 0.5
+          }
+        }
+      },
+      "paired_D_multi": {
+        "n_total": 16,
+        "n_eligible": 16,
+        "mean_cur_seg": 7.0,
+        "chance_hit2": 0.2857142857142857,
+        "per_layer": [
+          {
+            "r2": 0.6079648431012651,
+            "feat_r2_single": {
+              "pos": 0.3075800412376277,
+              "norm": 0.011321394860839717,
+              "outlier": 0.41752671760159443
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.3125,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.2708333333333333,
+                "direction": "high"
+              },
+              "outlier": {
+                "jaccard": 0.0625,
+                "direction": "high"
+              },
+              "combined": 0.0
+            },
+            "gram_offdiag": 0.9973021820187569,
+            "hit2": {
+              "stock": 0.5,
+              "u_eq_q": 0.125,
+              "stock_centered": 0.5,
+              "u_eq_q_centered": 0.125
+            },
+            "n_used_2a": 16,
+            "layer": 0
+          },
+          {
+            "r2": 0.325462163334325,
+            "feat_r2_single": {
+              "pos": 0.014624325770535629,
+              "norm": 0.2650110296889626,
+              "outlier": 0.10604496777286754
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.16666666666666666,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.3958333333333333,
+                "direction": "high"
+              },
+              "outlier": {
+                "jaccard": 0.2708333333333333,
+                "direction": "low"
+              },
+              "combined": 0.3958333333333333
+            },
+            "gram_offdiag": 0.998235896229744,
+            "hit2": {
+              "stock": 0.3125,
+              "u_eq_q": 0.125,
+              "stock_centered": 0.3125,
+              "u_eq_q_centered": 0.125
+            },
+            "n_used_2a": 16,
+            "layer": 1
+          },
+          {
+            "r2": 0.9734503951556418,
+            "feat_r2_single": {
+              "pos": 0.9617397977608915,
+              "norm": 0.017279634712152436,
+              "outlier": 0.09874753793092894
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.9583333333333333,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.3333333333333333,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 0.9583333333333333
+            },
+            "gram_offdiag": 0.9865767136216164,
+            "hit2": {
+              "stock": 0.25,
+              "u_eq_q": 0.25,
+              "stock_centered": 0.25,
+              "u_eq_q_centered": 0.25
+            },
+            "n_used_2a": 16,
+            "layer": 2
+          },
+          {
+            "r2": 0.9982462305499537,
+            "feat_r2_single": {
+              "pos": 0.9947505686324405,
+              "norm": 0.9373940834425393,
+              "outlier": 0.07052800583347096
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 1.0,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9838624522089958,
+            "hit2": {
+              "stock": 0.25,
+              "u_eq_q": 0.1875,
+              "stock_centered": 0.25,
+              "u_eq_q_centered": 0.1875
+            },
+            "n_used_2a": 16,
+            "layer": 3
+          },
+          {
+            "r2": 0.9710132874987707,
+            "feat_r2_single": {
+              "pos": 0.692792951847697,
+              "norm": 0.8263687860692062,
+              "outlier": 0.49808774957532664
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.6875,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.3958333333333333,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.24999999999999997,
+                "direction": "high"
+              },
+              "combined": 0.4375
+            },
+            "gram_offdiag": 0.9777325130999088,
+            "hit2": {
+              "stock": 0.375,
+              "u_eq_q": 0.3125,
+              "stock_centered": 0.375,
+              "u_eq_q_centered": 0.3125
+            },
+            "n_used_2a": 16,
+            "layer": 4
+          },
+          {
+            "r2": 0.998151342769736,
+            "feat_r2_single": {
+              "pos": 0.995683295609074,
+              "norm": 0.5417908933287345,
+              "outlier": 0.10573365746919117
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.3333333333333333,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.981654342263937,
+            "hit2": {
+              "stock": 0.25,
+              "u_eq_q": 0.0,
+              "stock_centered": 0.25,
+              "u_eq_q_centered": 0.0
+            },
+            "n_used_2a": 16,
+            "layer": 5
+          },
+          {
+            "r2": 0.8415424576626058,
+            "feat_r2_single": {
+              "pos": 0.5658196855449932,
+              "norm": 0.7871025578030447,
+              "outlier": 0.4016139880019244
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.3333333333333333,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 0.3333333333333333
+            },
+            "gram_offdiag": 0.9797116257250309,
+            "hit2": {
+              "stock": 0.125,
+              "u_eq_q": 0.375,
+              "stock_centered": 0.125,
+              "u_eq_q_centered": 0.375
+            },
+            "n_used_2a": 16,
+            "layer": 6
+          },
+          {
+            "r2": 0.999407446464306,
+            "feat_r2_single": {
+              "pos": 0.9971677052991026,
+              "norm": 0.5204810982959072,
+              "outlier": 0.04992372677143997
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.22916666666666666,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.970415111631155,
+            "hit2": {
+              "stock": 0.25,
+              "u_eq_q": 0.25,
+              "stock_centered": 0.25,
+              "u_eq_q_centered": 0.25
+            },
+            "n_used_2a": 16,
+            "layer": 7
+          },
+          {
+            "r2": 0.8215966893723994,
+            "feat_r2_single": {
+              "pos": 0.6298314679944692,
+              "norm": 0.010431603298583392,
+              "outlier": 0.41013342285835286
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.7916666666666666,
+                "direction": "low"
+              },
+              "norm": {
+                "jaccard": 0.20833333333333331,
+                "direction": "high"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 0.7916666666666666
+            },
+            "gram_offdiag": 0.9834730364382267,
+            "hit2": {
+              "stock": 0.3125,
+              "u_eq_q": 0.4375,
+              "stock_centered": 0.3125,
+              "u_eq_q_centered": 0.4375
+            },
+            "n_used_2a": 16,
+            "layer": 8
+          },
+          {
+            "r2": 0.9993424478684168,
+            "feat_r2_single": {
+              "pos": 0.9976217123920272,
+              "norm": 0.8514333714269342,
+              "outlier": 0.0713410155325036
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.6666666666666666,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9717546850442886,
+            "hit2": {
+              "stock": 0.25,
+              "u_eq_q": 0.5,
+              "stock_centered": 0.25,
+              "u_eq_q_centered": 0.5
+            },
+            "n_used_2a": 16,
+            "layer": 9
+          },
+          {
+            "r2": 0.9997581873305954,
+            "feat_r2_single": {
+              "pos": 0.995691628528657,
+              "norm": 0.5161894951844783,
+              "outlier": 0.12511810660420297
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.5833333333333333,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9669540263712406,
+            "hit2": {
+              "stock": 0.25,
+              "u_eq_q": 0.1875,
+              "stock_centered": 0.25,
+              "u_eq_q_centered": 0.1875
+            },
+            "n_used_2a": 16,
+            "layer": 10
+          },
+          {
+            "r2": 0.42768712480326454,
+            "feat_r2_single": {
+              "pos": 0.15290576649952647,
+              "norm": 0.16388436789045413,
+              "outlier": 0.09341814485480326
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.41666666666666663,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.5,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.375,
+                "direction": "high"
+              },
+              "combined": 0.5416666666666666
+            },
+            "gram_offdiag": 0.9716814570128918,
+            "hit2": {
+              "stock": 0.25,
+              "u_eq_q": 0.4375,
+              "stock_centered": 0.25,
+              "u_eq_q_centered": 0.4375
+            },
+            "n_used_2a": 16,
+            "layer": 11
+          },
+          {
+            "r2": 0.9991745212278705,
+            "feat_r2_single": {
+              "pos": 0.9937122241838106,
+              "norm": 0.03235952570165779,
+              "outlier": 0.19160687700734003
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.3333333333333333,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9614919126033783,
+            "hit2": {
+              "stock": 0.25,
+              "u_eq_q": 0.1875,
+              "stock_centered": 0.25,
+              "u_eq_q_centered": 0.1875
+            },
+            "n_used_2a": 16,
+            "layer": 12
+          },
+          {
+            "r2": 0.9768804276028951,
+            "feat_r2_single": {
+              "pos": 0.9621724183899676,
+              "norm": 0.5323229188476355,
+              "outlier": 0.19035078724862808
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 1.0,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.3333333333333333,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 1.0
+            },
+            "gram_offdiag": 0.9767841920256615,
+            "hit2": {
+              "stock": 0.25,
+              "u_eq_q": 0.0625,
+              "stock_centered": 0.25,
+              "u_eq_q_centered": 0.0625
+            },
+            "n_used_2a": 16,
+            "layer": 13
+          },
+          {
+            "r2": 0.9107961862544035,
+            "feat_r2_single": {
+              "pos": 0.7518118237636571,
+              "norm": 0.04140338166576307,
+              "outlier": 0.43570072084829836
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.49999999999999994,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.8333333333333333,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.24999999999999997,
+                "direction": "low"
+              },
+              "combined": 0.8333333333333333
+            },
+            "gram_offdiag": 0.9789066649973392,
+            "hit2": {
+              "stock": 0.25,
+              "u_eq_q": 0.4375,
+              "stock_centered": 0.25,
+              "u_eq_q_centered": 0.4375
+            },
+            "n_used_2a": 16,
+            "layer": 14
+          },
+          {
+            "r2": 0.9138151108765664,
+            "feat_r2_single": {
+              "pos": 0.864690407054316,
+              "norm": 0.2861564300329371,
+              "outlier": 0.004657791085724172
+            },
+            "pred_jaccard": {
+              "pos": {
+                "jaccard": 0.9166666666666666,
+                "direction": "high"
+              },
+              "norm": {
+                "jaccard": 0.3333333333333333,
+                "direction": "low"
+              },
+              "outlier": {
+                "jaccard": 0.3333333333333333,
+                "direction": "high"
+              },
+              "combined": 0.9166666666666666
+            },
+            "gram_offdiag": 0.9901757203042507,
+            "hit2": {
+              "stock": 0.25,
+              "u_eq_q": 0.25,
+              "stock_centered": 0.25,
+              "u_eq_q_centered": 0.25
+            },
+            "n_used_2a": 16,
+            "layer": 15
+          }
+        ],
+        "best_layer": {
+          "stock": {
+            "layer": 0,
+            "hit2": 0.5
+          },
+          "u_eq_q": {
+            "layer": 9,
+            "hit2": 0.5
+          },
+          "stock_centered": {
+            "layer": 0,
+            "hit2": 0.5
+          },
+          "u_eq_q_centered": {
+            "layer": 9,
+            "hit2": 0.5
+          }
+        }
+      }
+    }
+  }
+}
