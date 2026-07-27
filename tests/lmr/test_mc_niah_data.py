@@ -30,6 +30,26 @@ def test_annotate_finds_gold_needle(tok):
     assert n["seg"] == tok_idx // 256 == ann["gold_seg"]
 
 
+def test_annotate_handles_multiword_key(tok):
+    """Regression: wonderwords' adjectivelist.txt has a genuine two-word
+    entry ("ad hoc"), so RULER's word-type keys (f"{adj}-{noun}") can be
+    e.g. "ad hoc-picture" -- a key with an internal space. The old
+    NEEDLE_RE (`[\\w-]+`) can't match across that space, so the whole match
+    silently failed and the needle vanished from ann["needles"] entirely
+    (not mis-keyed -- just invisible). Found via a real niah_single_2
+    50-sample draw during the X2 corrections round (task-3 adversarial
+    review)."""
+    filler = "The grass is green. " * 60
+    needle = "One of the special magic numbers for ad hoc-picture is: 4009172."
+    text = (filler + " " + needle + " " + filler
+            + "\nWhat is the special magic number for ad hoc-picture mentioned in the provided text?")
+    ann = mcdata.annotate(text, tok)
+    assert ann["query_key"] == "ad hoc-picture"
+    assert len(ann["needles"]) == 1
+    assert ann["needles"][0]["value"] == "4009172"
+    assert ann["gold_needles"][0]["key"] == "ad hoc-picture"
+
+
 def test_annotate_multikey_picks_queried(tok):
     needles = [f"One of the special magic numbers for key-{i} is: 100000{i}." for i in range(4)]
     filler = "The grass is green. " * 60

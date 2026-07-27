@@ -117,7 +117,10 @@ def test_all_combos_covers_expected_tasks_and_lengths():
     assert ("niah_multivalue", 8192) in combos
     assert ("niah_multikey_1", 4096) in combos
     assert ("niah_multiquery_q2", 2048) in combos
-    # q=2 sweep is 2048-only
+    assert ("niah_single_2", 2048) in combos
+    # q=2 sweep and the essay-haystack single-needle control are 2048-only
     assert ("niah_multiquery_q2", 4096) not in combos
     assert ("niah_multiquery_q2", 8192) not in combos
-    assert len(combos) == 3 * len(xp.CORE_TASKS) + 1
+    assert ("niah_single_2", 4096) not in combos
+    n_extra_2048 = len(xp.EXTRA_TASKS_BY_LENGTH[2048])
+    assert len(combos) == 3 * len(xp.CORE_TASKS) + n_extra_2048

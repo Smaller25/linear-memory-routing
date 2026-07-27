@@ -6,7 +6,21 @@ MC_OUT = os.environ.get("MC_OUT", "/data2/sohyung/mc_niah")
 TOKENIZER = "TinyLlama/TinyLlama_v1.1"
 CHUNK = 256
 
-NEEDLE_RE = re.compile(r"One of the special magic numbers? for ([\w-]+) is:? (\d+)")
+# Non-greedy `.+?` key group, NOT `[\w-]+` — wonderwords' adjectivelist.txt
+# contains a genuine two-word entry ("ad hoc"), so RULER's word-type keys
+# (f"{adj}-{noun}") can be e.g. "ad hoc-picture", which has an internal
+# space. `[\w-]+` can't match past that space, so the whole NEEDLE_RE match
+# silently failed at that position and the needle was dropped entirely from
+# ann["needles"] (not mis-keyed — just invisible), surfaced when
+# niah_single_2's 50-sample draw happened to include it (data-generation
+# review, task-3 corrections round). `.+?` up to the fixed " is:? (\d+)"
+# (colon is always present in the actual template — "is: {value}" — kept
+# optional here only because that's how this regex already handled
+# hand-built test fixtures without the colon) resolves to the nearest
+# following occurrence, which is the same needle's own value in practice
+# since "One of the special magic numbers for ... is:" doesn't otherwise
+# appear in haystack text.
+NEEDLE_RE = re.compile(r"One of the special magic numbers? for (.+?) is:? (\d+)")
 # Captures the *full* query-key list, not just the first word — RULER's niah
 # multiquery template writes "for K1, K2, and K3 mentioned in the provided
 # text" (see src/ruler/gen/synthetic/niah.py:189 `query` construction). The

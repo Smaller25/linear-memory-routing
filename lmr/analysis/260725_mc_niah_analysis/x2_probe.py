@@ -57,8 +57,11 @@ CHUNK, TOPK = load_mc.CHUNK, load_mc.TOPK
 
 LENGTHS = (2048, 4096, 8192)
 CORE_TASKS = ("niah_multiquery", "niah_multivalue", "niah_multikey_1")
-# needle-count sweep: q=2 variant, 2048 only (see data.py:prepare_a_niah_q)
-EXTRA_TASKS_BY_LENGTH = {2048: ("niah_multiquery_q2",)}
+# needle-count sweep (q=2) + niah_single_2 (essay-haystack, 1 needle/1 query —
+# the clean single-needle control; niah_single_1 in E1 is noise-haystack, a
+# confound for comparing against the essay-haystack X2 tasks — see adversarial
+# review / task-3-report.md "single_2" section), both 2048-only.
+EXTRA_TASKS_BY_LENGTH = {2048: ("niah_multiquery_q2", "niah_single_2")}
 
 
 def _dataset_path(task, length):
@@ -127,8 +130,16 @@ def aggregate_dataset(task, length, n_rows, n_layers, sample_results):
     per_sample_out = []
     n_eligible_samples = 0
 
-    for ri, res in enumerate(sample_results):
-        rec = {"sample_idx": ri, "cur_seg": res["cur_seg"], "n_seg": res["n_seg"],
+    for fallback_idx, res in enumerate(sample_results):
+        # sample_idx must be the TRUE row index within the dataset file, not
+        # the position within `sample_results` — run_dataset skips failed
+        # samples before this list is built, so enumerate() position and
+        # true row index diverge as soon as any sample upstream fails
+        # (review-flagged misalignment). run_dataset stamps res["row_idx"]
+        # with the true index; fall back to enumerate() only for callers
+        # (e.g. synthetic tests) that construct `res` dicts without it.
+        sample_idx = res.get("row_idx", fallback_idx)
+        rec = {"sample_idx": sample_idx, "cur_seg": res["cur_seg"], "n_seg": res["n_seg"],
               "n_queried": res["n_queried"], "n_eligible_needles": res["n_eligible_needles"],
               "n_ineligible_needles": res["n_ineligible_needles"], "k": res["k"]}
         if res["n_eligible_needles"] > 0 and res["cur_seg"] > 0:
@@ -189,6 +200,7 @@ def run_dataset(model, tok, layers, task, length):
             n_failed += 1
             print(f"[x2][warn] {task}/{length} sample {ri} failed: {e}", flush=True)
             continue
+        res["row_idx"] = ri
         sample_results.append(res)
         print(f"[x2] {task}/{length} {ri+1}/{len(rows)} "
               f"n_eligible={res['n_eligible_needles']}/{res['n_queried']} "
@@ -278,7 +290,20 @@ def main():
         out = {"meta": {"topk": TOPK, "chunk": CHUNK, "lengths": list(LENGTHS),
                         "core_tasks": list(CORE_TASKS),
                         "extra_tasks_by_length": EXTRA_TASKS_BY_LENGTH,
-                        "models": sorted(results.keys())},
+                        "models": sorted(results.keys()),
+                        "best_layer_tiebreak": (
+                            "strict '>' scan over layers 0..n_layers-1 in ascending "
+                            "order against macro_hit2 (best_val initialized -1.0) -> "
+                            "on a tie the LOWEST-index layer wins (first strict max, "
+                            "later equal values do not replace it). Verified identical "
+                            "to E1's routing_stats.run_model best-layer selection "
+                            "(same strict '>' / ascending-index scan there too), so "
+                            "X2 and E1 best-layer numbers use the same convention and "
+                            "are comparable. With n=47-50 per cell, exact ties across "
+                            "multiple layers are plausible at coarse hit@2 fractions "
+                            "(multiples of 1/n) — this note exists so a downstream "
+                            "reader doesn't assume some other rule (e.g. last-max, or "
+                            "highest layer) was used.")},
                "results": results}
         for p in out_paths:
             json.dump(out, open(p, "w"), indent=2)

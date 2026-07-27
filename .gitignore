@@ -48,3 +48,7 @@ logs/
 logs_sh_env_setup.txt
 logs_sh_mamba2_build.txt
 _workspace/
+
+# vendored RULER auxiliary data artifact (downloaded by a RULER task
+# generator, not part of any tracked task's inputs — untracked clutter)
+src/ruler/gen/synthetic/json/squad.json
