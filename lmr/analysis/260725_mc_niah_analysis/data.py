@@ -6,21 +6,34 @@ MC_OUT = os.environ.get("MC_OUT", "/data2/sohyung/mc_niah")
 TOKENIZER = "TinyLlama/TinyLlama_v1.1"
 CHUNK = 256
 
-# Non-greedy `.+?` key group, NOT `[\w-]+` — wonderwords' adjectivelist.txt
+# Non-greedy key group, NOT `[\w-]+` — wonderwords' adjectivelist.txt
 # contains a genuine two-word entry ("ad hoc"), so RULER's word-type keys
 # (f"{adj}-{noun}") can be e.g. "ad hoc-picture", which has an internal
 # space. `[\w-]+` can't match past that space, so the whole NEEDLE_RE match
 # silently failed at that position and the needle was dropped entirely from
 # ann["needles"] (not mis-keyed — just invisible), surfaced when
 # niah_single_2's 50-sample draw happened to include it (data-generation
-# review, task-3 corrections round). `.+?` up to the fixed " is:? (\d+)"
-# (colon is always present in the actual template — "is: {value}" — kept
-# optional here only because that's how this regex already handled
-# hand-built test fixtures without the colon) resolves to the nearest
-# following occurrence, which is the same needle's own value in practice
-# since "One of the special magic numbers for ... is:" doesn't otherwise
-# appear in haystack text.
-NEEDLE_RE = re.compile(r"One of the special magic numbers? for (.+?) is:? (\d+)")
+# review, task-3 corrections round).
+#
+# A plain lazy `.+?` up to " is:? (\d+)" (the first fix) has a latent
+# failure mode the adversarial review caught: if a needle's OWN value ever
+# fails to match `(\d+)` immediately after its "is:" (e.g. a non-numeric
+# value, or any text mangling that puts something other than a bare number
+# there), the lazy quantifier doesn't stop — it keeps expanding *past* that
+# needle's own "for KEY is:" and will happily swallow all the way to the
+# NEXT needle's "is: <digits>" instead, producing a garbled merged key
+# (this needle's "for X" through the next needle's leading text). The
+# `(?:(?!One of the special magic).)+?` construct bounds the key so it can
+# never cross into a subsequent needle's template: at every character
+# position the negative lookahead forbids starting the literal "One of the
+# special magic" there, so if the current needle has no valid numeric value
+# within its own span, the match fails cleanly (that needle is dropped,
+# same safe failure mode as the original bug) instead of merging two
+# needles into one corrupted record. See
+# test_annotate_pathological_nonnumeric_value_does_not_merge_needles.
+NEEDLE_RE = re.compile(
+    r"One of the special magic numbers? for ((?:(?!One of the special magic).)+?) is:? (\d+)"
+)
 # Captures the *full* query-key list, not just the first word — RULER's niah
 # multiquery template writes "for K1, K2, and K3 mentioned in the provided
 # text" (see src/ruler/gen/synthetic/niah.py:189 `query` construction). The
@@ -71,6 +84,14 @@ def annotate(input_text, tokenizer, chunk=CHUNK):
     needles = []
     for m in NEEDLE_RE.finditer(input_text):
         key, value = m.group(1), m.group(2)
+        # Defense in depth alongside the negative-lookahead bound in
+        # NEEDLE_RE itself (adversarial review, item 4): if a key ever
+        # contains this literal substring, the lazy key group swallowed
+        # across a needle-template boundary despite the lookahead guard
+        # (e.g. the guard phrase itself changes) and produced a corrupted
+        # merged key — fail loudly rather than silently record garbage.
+        assert "One of the special magic" not in key, (
+            f"NEEDLE_RE key capture crossed a needle boundary: {key!r}")
         ts, te = tok_at(m.start(2)), tok_at(m.end(2) - 1)
         needles.append({"key": key, "value": value,
                         "tok_start": ts, "tok_end": te, "seg": te // chunk})

@@ -80,10 +80,34 @@ def _se(p, n):
     replaces the earlier "clears the noise floor Nx" framing. This is an
     approximation (treats the two-level macro average as a simple
     proportion at the reported n_eligible), adequate for the directional
-    "is this gap plausibly noise" read the numbers are used for here."""
+    "is this gap plausibly noise" read the numbers are used for here.
+
+    CAUTION at the boundary (p=0 or p=1): the Wald formula above returns
+    exactly 0, which is NOT a meaningful uncertainty estimate there — it's
+    an artifact of p(1-p)=0, not evidence the rate is known exactly. A
+    Wilson score interval would give a non-trivial width even at p=1
+    (e.g. n=45 -> roughly [0.92, 1.0], not a point mass). `_fmt_se` below
+    flags these cells with a footnote rather than silently printing 0.0pp
+    as if it were a normal (small) SE."""
     if p is None or n is None or n <= 0:
         return None
     return math.sqrt(max(p * (1 - p), 0.0) / n)
+
+
+def _is_boundary(p):
+    return p is not None and (p <= 1e-9 or p >= 1 - 1e-9)
+
+
+def _fmt_se(p, n):
+    """Formats se_hit2 for display, footnoting boundary (p=0/1) cells where
+    the Wald SE is a degenerate 0 rather than a real (small) uncertainty —
+    item (v) of the adversarial-review corrections."""
+    se = _se(p, n)
+    if se is None:
+        return "-"
+    if _is_boundary(p):
+        return f"{se * 100:.1f}pp*"
+    return f"{se * 100:.1f}pp"
 
 
 def _restricted_hitk(per_sample_task_len, best_layer, k):
@@ -155,6 +179,7 @@ def build_rows(x2, e1, structural, per_sample):
                     "n_eligible": agg["n_eligible_samples"], "n_total": agg["n_total"],
                 })
     if e1:
+        struct_s1 = (structural or {}).get("niah_single_1", {}).get("2048")
         for model in models:
             ds = e1.get("results", {}).get(model, {}).get("niah_single_1")
             if ds:
@@ -162,7 +187,8 @@ def build_rows(x2, e1, structural, per_sample):
                     "task": "niah_single_1 (E1 ref)", "length": 2048, "model": model,
                     "best_layer": ds["best_layer"],
                     "macro_hit2": ds["best_layer_hit_at_2"], "chance_hit2": ds["chance_hit2"],
-                    "needle_null_hit2": None, "structural_ceiling": None,
+                    "needle_null_hit2": struct_s1["needle_null_hit2"] if struct_s1 else None,
+                    "structural_ceiling": struct_s1["structural_ceiling"] if struct_s1 else None,
                     "macro_hitk": None, "chance_hitk": None,
                     "macro_hitk_restricted": None, "chance_hitk_restricted": None,
                     "frac_saturated_hitk": None,
@@ -200,24 +226,32 @@ def make_table_md(rows):
         "same segment (plausible here: cur_seg is often only 4-7 at length=2048). "
         "`skill` = (macro_hit2 - chance_hit2) / (ceiling - chance_hit2) — 0 means "
         "no better than chance, 1 means saturating the structural ceiling. "
-        "`se_hit2` = sqrt(p(1-p)/n_eligible), a rough sampling SE for macro_hit2.",
+        "`se_hit2` = sqrt(p(1-p)/n_eligible), a rough sampling SE for macro_hit2 "
+        "(propagated to `se_skill` by dividing through the fixed (ceiling-chance) "
+        "denominator). **`*` marks a boundary cell (macro_hit2 = 0 or 1)** — the "
+        "Wald se_hit2 is exactly 0 there by construction, which is NOT a real "
+        "(tight) uncertainty estimate at the boundary, just a formula artifact; "
+        "a Wilson interval would be non-trivial even at p=1.",
         "",
         "| task | length | model | layer | hit@2 | chance | needle-null | ceiling | "
-        "skill | hit2/chance | se_hit2 | n (elig/tot) |",
-        "|---|---|---|---|---|---|---|---|---|---|---|---|",
+        "skill | hit2/chance | se_hit2 | se_skill | n (elig/tot) |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for r in rows_sorted:
         r2 = _ratio(r["macro_hit2"], r["chance_hit2"])
         skill = None
+        se_skill = None
+        se = _se(r["macro_hit2"], r["n_eligible"])
         if r["structural_ceiling"] is not None and r["macro_hit2"] is not None:
             denom = r["structural_ceiling"] - r["chance_hit2"]
             skill = (r["macro_hit2"] - r["chance_hit2"]) / denom if denom > 1e-9 else None
-        se = _se(r["macro_hit2"], r["n_eligible"])
+            se_skill = se / denom if (se is not None and denom > 1e-9) else None
         lines.append(
             f"| {_label(r['task'])} | {r['length']} | {r['model']} | {r['best_layer']} | "
             f"{_fmt(r['macro_hit2'])} | {_fmt(r['chance_hit2'])} | "
             f"{_fmt(r['needle_null_hit2'])} | {_fmt(r['structural_ceiling'])} | "
-            f"{_fmt(skill, 2)} | {_fmt_ratio(r2)} | {_fmt_pp(se)} | "
+            f"{_fmt(skill, 2)} | {_fmt_ratio(r2)} | "
+            f"{_fmt_se(r['macro_hit2'], r['n_eligible'])} | {_fmt(se_skill, 2)} | "
             f"{r['n_eligible']}/{r['n_total']} |"
         )
     lines += [
@@ -301,16 +335,21 @@ def make_verdict_json(rows):
             if not r:
                 continue
             skill = None
+            se = _se(r["macro_hit2"], r["n_eligible"])
+            se_skill = None
             if r["structural_ceiling"] is not None and r["macro_hit2"] is not None:
                 denom = r["structural_ceiling"] - r["chance_hit2"]
                 skill = (r["macro_hit2"] - r["chance_hit2"]) / denom if denom > 1e-9 else None
+                se_skill = se / denom if (se is not None and denom > 1e-9) else None
             entry[task] = {
                 "macro_hit2": r["macro_hit2"], "chance_hit2": r["chance_hit2"],
                 "hit2_over_chance": _ratio(r["macro_hit2"], r["chance_hit2"]),
                 "needle_null_hit2": r["needle_null_hit2"],
                 "structural_ceiling": r["structural_ceiling"],
                 "ceiling_normalized_skill": skill,
-                "se_hit2": _se(r["macro_hit2"], r["n_eligible"]),
+                "se_hit2": se,
+                "se_hit2_is_boundary_wald_degenerate": _is_boundary(r["macro_hit2"]),
+                "se_skill": se_skill,
                 "macro_hitk": r["macro_hitk"], "chance_hitk": r["chance_hitk"],
                 "hitk_over_chance": _ratio(r["macro_hitk"], r["chance_hitk"]),
                 "macro_hitk_restricted_cur_seg_gt_k": r["macro_hitk_restricted"],

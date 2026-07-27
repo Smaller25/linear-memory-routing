@@ -144,8 +144,15 @@ def main():
     tok = AutoTokenizer.from_pretrained(mcdata.TOKENIZER)
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import x2_probe as xp
+    # niah_single_1 isn't an x2_probe combo (it's the E1 reference dataset,
+    # noise-haystack) but the review wants its structural_ceiling/
+    # needle_null_hit2 cells populated too (both trivially 1.0 — a single
+    # needle in context is always its own only needle-bearing segment and
+    # fits in top-2 alone) so x2_verdict.json's single_1 row isn't the only
+    # one left null.
+    combos = list(xp.all_combos()) + [("niah_single_1", 2048)]
     out = {}
-    for task, length in xp.all_combos():
+    for task, length in combos:
         agg = compute_dataset_structural(task, length, tok)
         out.setdefault(task, {})[str(length)] = agg
         print(f"[x2_null] {task}@{length}: needle_null_hit2={agg['needle_null_hit2']} "

@@ -50,6 +50,33 @@ def test_annotate_handles_multiword_key(tok):
     assert ann["gold_needles"][0]["key"] == "ad hoc-picture"
 
 
+def test_annotate_pathological_nonnumeric_value_does_not_merge_needles(tok):
+    """Regression (adversarial review, item 4): a plain lazy `.+?` key group
+    (no boundary guard) doesn't stop at a needle's own "is:" if the value
+    there fails to match `(\\d+)` (e.g. a non-numeric/corrupted value) — it
+    keeps expanding PAST that needle's own template, across the filler
+    text, and into the NEXT needle's "is: <digits>", producing one garbled
+    match whose "key" is everything from the first needle's "for" through
+    the second needle's leading text. NEEDLE_RE's
+    `(?:(?!One of the special magic).)+?` bound prevents the lazy
+    expansion from ever crossing into a subsequent needle's template, so
+    the first (pathological) needle simply fails to match at all (dropped,
+    same safe failure mode as an unparseable value) and the second, valid
+    needle is extracted cleanly and independently — never merged."""
+    filler = "The grass is green. " * 60
+    bad_needle = "One of the special magic numbers for bad-key is: NOTANUMBER."
+    good_needle = "One of the special magic numbers for good-key is: 555555."
+    text = (filler + " " + bad_needle + " " + filler + " " + good_needle + " " + filler
+            + "\nWhat is the special magic number for good-key mentioned in the provided text?")
+    ann = mcdata.annotate(text, tok)
+    assert len(ann["needles"]) == 1, ann["needles"]  # bad_needle dropped, not merged
+    n = ann["needles"][0]
+    assert n["key"] == "good-key"
+    assert n["value"] == "555555"
+    assert "bad-key" not in n["key"]
+    assert "NOTANUMBER" not in n["key"]
+
+
 def test_annotate_multikey_picks_queried(tok):
     needles = [f"One of the special magic numbers for key-{i} is: 100000{i}." for i in range(4)]
     filler = "The grass is green. " * 60
