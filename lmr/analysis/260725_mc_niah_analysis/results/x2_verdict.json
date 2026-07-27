@@ -1,0 +1,93 @@
+{
+  "length": 2048,
+  "models": [
+    "mc-30B",
+    "mc-5B"
+  ],
+  "rows": {
+    "mc-30B": {
+      "niah_single_1 (E1 ref)": {
+        "macro_hit2": 1.0,
+        "chance_hit2": 0.28783068783068805,
+        "hit2_over_chance": 3.47426470588235,
+        "macro_hitk": null,
+        "chance_hitk": null,
+        "hitk_over_chance": null
+      },
+      "niah_multiquery": {
+        "macro_hit2": 0.52,
+        "chance_hit2": 0.4142857142857143,
+        "hit2_over_chance": 1.2551724137931035,
+        "macro_hitk": 0.8066666666666668,
+        "chance_hitk": 0.8285714285714286,
+        "hitk_over_chance": 0.9735632183908046
+      },
+      "niah_multiquery_q2": {
+        "macro_hit2": 0.5520833333333334,
+        "chance_hit2": 0.34821428571428575,
+        "hit2_over_chance": 1.5854700854700854,
+        "macro_hitk": 0.5520833333333334,
+        "chance_hitk": 0.34821428571428575,
+        "hitk_over_chance": 1.5854700854700854
+      },
+      "niah_multivalue": {
+        "macro_hit2": 0.435,
+        "chance_hit2": 0.3457142857142857,
+        "hit2_over_chance": 1.2582644628099173,
+        "macro_hitk": 0.7433333333333333,
+        "chance_hitk": 0.6914285714285714,
+        "hitk_over_chance": 1.075068870523416
+      },
+      "niah_multikey_1": {
+        "macro_hit2": 0.8085106382978723,
+        "chance_hit2": 0.48632218844984804,
+        "hit2_over_chance": 1.6624999999999999,
+        "macro_hitk": 0.574468085106383,
+        "chance_hitk": 0.24316109422492402,
+        "hitk_over_chance": 2.3625000000000003
+      }
+    },
+    "mc-5B": {
+      "niah_single_1 (E1 ref)": {
+        "macro_hit2": 0.9333333333333333,
+        "chance_hit2": 0.28783068783068805,
+        "hit2_over_chance": 3.242647058823527,
+        "macro_hitk": null,
+        "chance_hitk": null,
+        "hitk_over_chance": null
+      },
+      "niah_multiquery": {
+        "macro_hit2": 0.5033333333333334,
+        "chance_hit2": 0.4142857142857143,
+        "hit2_over_chance": 1.2149425287356324,
+        "macro_hitk": 0.85,
+        "chance_hitk": 0.8285714285714286,
+        "hitk_over_chance": 1.0258620689655171
+      },
+      "niah_multiquery_q2": {
+        "macro_hit2": 0.4895833333333333,
+        "chance_hit2": 0.34821428571428575,
+        "hit2_over_chance": 1.4059829059829059,
+        "macro_hitk": 0.4895833333333333,
+        "chance_hitk": 0.34821428571428575,
+        "hitk_over_chance": 1.4059829059829059
+      },
+      "niah_multivalue": {
+        "macro_hit2": 0.44166666666666665,
+        "chance_hit2": 0.3457142857142857,
+        "hit2_over_chance": 1.2775482093663912,
+        "macro_hitk": 0.7383333333333333,
+        "chance_hitk": 0.6914285714285714,
+        "hitk_over_chance": 1.0678374655647382
+      },
+      "niah_multikey_1": {
+        "macro_hit2": 0.6595744680851063,
+        "chance_hit2": 0.48632218844984804,
+        "hit2_over_chance": 1.35625,
+        "macro_hitk": 0.3829787234042553,
+        "chance_hitk": 0.24316109422492402,
+        "hitk_over_chance": 1.575
+      }
+    }
+  }
+}
