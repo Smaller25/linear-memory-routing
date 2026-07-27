@@ -26,7 +26,7 @@ FLA_PIN="4b02d15d6a68700181b180235be62a9fb95d2a38"
 
 log() { echo "[bootstrap] $*"; }
 
-mkdir -p "$ROOT"/{code,data,results,logs,ckpts,pydeps}
+mkdir -p "$ROOT"/{code,data,results,logs,ckpts,pydeps,vendor}
 
 # ---------------------------------------------------------------------------
 # 1. lmr repo (this repo) — clone-or-pull, private, needs token
@@ -53,15 +53,54 @@ fi
 git -C "$LMR_DIR" remote set-url origin "https://github.com/${LMR_REPO_SLUG}.git"
 
 # ---------------------------------------------------------------------------
-# 2. long-gdn (public) — clone-or-reuse, pin to fixed commit (plain checkout)
+# 2. long-gdn — clone-or-reuse, pin to fixed commit (plain checkout).
+#    NOTE: gyunggyung/long-gdn is actually PRIVATE (confirmed via GitHub API:
+#    "private": true) despite the original assumption that it was public.
+#    Anonymous clone AND the lmr token both get HTTP 401 "Repository not
+#    found" from VESSL's egress IP (verified 2026-07-27). Needs its own token
+#    at /root/smaller/.gh_token_longgdn (a `gho_...` OAuth token with access
+#    to this repo). If that token file is ever missing, fall back to a
+#    pre-staged bundle of the pinned commit (built on greenbeard, scp'd once
+#    to $ROOT/vendor/), then to a bare anonymous clone as a last resort.
 # ---------------------------------------------------------------------------
 LONGGDN_DIR="$CODE/long-gdn"
-if [ ! -d "$LONGGDN_DIR/.git" ]; then
-  log "cloning long-gdn"
-  git clone "$LONGGDN_REPO_URL" "$LONGGDN_DIR"
+LONGGDN_BUNDLE="$ROOT/vendor/long-gdn-e71713e.bundle"
+LONGGDN_TOKEN_FILE=/root/smaller/.gh_token_longgdn
+# We only need the lit_gpt/dsc *code* from this repo (model defs), not the
+# large git-lfs-tracked data/ files (replay-eval jsonls etc) — skip smudging
+# unconditionally to save bandwidth/time; nothing here reads data/.
+export GIT_LFS_SKIP_SMUDGE=1
+
+if [ -f "$LONGGDN_TOKEN_FILE" ]; then
+  LONGGDN_TOK=$(cat "$LONGGDN_TOKEN_FILE")
+  LONGGDN_CLONE_URL="https://oauth2:${LONGGDN_TOK}@github.com/gyunggyung/long-gdn.git"
+else
+  LONGGDN_CLONE_URL="$LONGGDN_REPO_URL"
 fi
-git -C "$LONGGDN_DIR" fetch origin
-git -C "$LONGGDN_DIR" checkout "$LONGGDN_PIN"
+
+# Always fetch exactly one ref (the pinned commit) via `init` + `fetch <src>
+# <ref>` + `checkout FETCH_HEAD`, never a full multi-branch `git clone` — this
+# repo's ref advertisement has tripped git's "multiple updates for ref ...
+# not allowed" on a plain clone (observed 2026-07-27), and a single targeted
+# fetch avoids enumerating all branches anyway. Works identically whether
+# <src> is a real remote URL or a local bundle file.
+if [ ! -d "$LONGGDN_DIR/.git" ]; then
+  mkdir -p "$LONGGDN_DIR"
+  git -C "$LONGGDN_DIR" init -q
+fi
+if git -C "$LONGGDN_DIR" cat-file -e "${LONGGDN_PIN}^{commit}" 2>/dev/null; then
+  log "long-gdn pin already present locally"
+elif git -C "$LONGGDN_DIR" fetch -q "$LONGGDN_CLONE_URL" "$LONGGDN_PIN" 2>/tmp/longgdn_fetch.err; then
+  log "fetched long-gdn pin (token: $([ -f "$LONGGDN_TOKEN_FILE" ] && echo yes || echo no))"
+elif [ -f "$LONGGDN_BUNDLE" ] && git -C "$LONGGDN_DIR" fetch -q "$LONGGDN_BUNDLE" "$LONGGDN_PIN"; then
+  log "network/token fetch unavailable — used pre-staged bundle ($LONGGDN_BUNDLE)"
+else
+  cat /tmp/longgdn_fetch.err >&2 2>/dev/null || true
+  echo "[bootstrap] BLOCKED: cannot fetch long-gdn pin ${LONGGDN_PIN} (no token, no bundle, or both failed)" >&2
+  exit 1
+fi
+git -C "$LONGGDN_DIR" checkout -q FETCH_HEAD 2>/dev/null || git -C "$LONGGDN_DIR" checkout -q "$LONGGDN_PIN"
+git -C "$LONGGDN_DIR" remote set-url origin "$LONGGDN_REPO_URL" 2>/dev/null || git -C "$LONGGDN_DIR" remote add origin "$LONGGDN_REPO_URL"
 log "long-gdn @ $(git -C "$LONGGDN_DIR" rev-parse --short HEAD)"
 
 # ---------------------------------------------------------------------------
@@ -73,11 +112,19 @@ if [ -f "$FLA_MARKER" ]; then
 else
   log "installing fla @ ${FLA_PIN} into pydeps"
   FLA_BUILD_DIR="$CODE/flash-linear-attention"
+  # Same targeted init+fetch<pin>+checkout as long-gdn above — a plain `git
+  # clone` enumerates every remote branch, and fla-org/flash-linear-attention
+  # has dozens of them, so it risks the same "multiple updates for ref ...
+  # not allowed" failure observed on long-gdn.
   if [ ! -d "$FLA_BUILD_DIR/.git" ]; then
-    git clone "$FLA_REPO_URL" "$FLA_BUILD_DIR"
+    mkdir -p "$FLA_BUILD_DIR"
+    git -C "$FLA_BUILD_DIR" init -q
   fi
-  git -C "$FLA_BUILD_DIR" fetch origin
-  git -C "$FLA_BUILD_DIR" checkout "$FLA_PIN"
+  if ! git -C "$FLA_BUILD_DIR" cat-file -e "${FLA_PIN}^{commit}" 2>/dev/null; then
+    git -C "$FLA_BUILD_DIR" fetch -q "$FLA_REPO_URL" "$FLA_PIN"
+  fi
+  git -C "$FLA_BUILD_DIR" checkout -q FETCH_HEAD 2>/dev/null || git -C "$FLA_BUILD_DIR" checkout -q "$FLA_PIN"
+  git -C "$FLA_BUILD_DIR" remote add origin "$FLA_REPO_URL" 2>/dev/null || true
   # remove any stale partial install of fla itself from a previous failed attempt
   rm -rf "$PYDEPS/fla" "$PYDEPS"/fla-*.dist-info 2>/dev/null || true
   "$PY" -m pip install --no-deps --no-cache-dir --target "$PYDEPS" "$FLA_BUILD_DIR"
