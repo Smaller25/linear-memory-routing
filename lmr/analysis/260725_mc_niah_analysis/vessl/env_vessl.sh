@@ -6,7 +6,7 @@
 
 ROOT=/root/smaller/mc_niah
 
-export MC_LONGGDN_WORKTREE="$ROOT/code/long-gdn"
+export MC_LONGGDN_WORKTREE=/root/work/long-gdn   # 컨테이너 로컬 (geesefs git 불안정 — bundle에서 복원)
 export MC_CKPT_DIR="$ROOT/ckpts"
 export MC_OUT="$ROOT"
 
@@ -22,7 +22,7 @@ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 # fla pinned at 4b02d15d (worktree kernels need pre-0d0a2f9a GLA API) — see
 # lmr/analysis/260725_mc_niah_analysis/env_common.sh for the greenbeard twin.
-export PYTHONPATH="$ROOT/pydeps:$MC_LONGGDN_WORKTREE:$MC_LONGGDN_WORKTREE/dsc${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONPATH="/root/work/pydeps:$MC_LONGGDN_WORKTREE:$MC_LONGGDN_WORKTREE/dsc${PYTHONPATH:+:$PYTHONPATH}"
 
 PY=/opt/conda/bin/python
 LMR="$ROOT/code/linear-memory-routing"
