@@ -20,13 +20,27 @@ def bootstrap():
             sys.path.insert(0, p)
 
 
+def _resolve_ckpt_path(repo, fname):
+    """Local ckpt dir (MC_CKPT_DIR) takes priority; fall back to hf_hub_download.
+
+    Layout expected under MC_CKPT_DIR: <repo with '/' -> '__'>/<fname>
+    (matches lmr/analysis/260725_mc_niah_analysis/vessl/bootstrap.sh).
+    """
+    ckpt_dir = os.environ.get("MC_CKPT_DIR")
+    if ckpt_dir:
+        local_path = os.path.join(ckpt_dir, repo.replace("/", "__"), fname)
+        if os.path.isfile(local_path):
+            return local_path
+    from huggingface_hub import hf_hub_download
+    return hf_hub_download(repo, fname)
+
+
 def load_model(kind, device="cuda", dtype=torch.bfloat16):
     bootstrap()
-    from huggingface_hub import hf_hub_download
     from lit_gpt.config import Config
     from lit_gpt.model import GPT
     repo, fname, cfg_name = CKPTS[kind]
-    path = hf_hub_download(repo, fname)
+    path = _resolve_ckpt_path(repo, fname)
     model = GPT(Config.from_name(cfg_name))
     sd = torch.load(path, map_location="cpu", weights_only=False)["model"]
     model.load_state_dict(sd, strict=True)
