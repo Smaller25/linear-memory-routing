@@ -12,7 +12,11 @@ rev2 (§0.3, §2b): u_t := q_t 처방을 무료로 검증하기 위해 attn._pro
 retrieval query(첫 번째 반환값)를 answer position에서 뽑아 커널 규약대로
 L2-정규화(F.normalize(q.float(), p=2, dim=-1))해 u와 동일 레이아웃으로 저장.
 
-출력: $MC_OUT/x1_dump/{model}/{dataset}/{idx}.npz
+출력: $MC_OUT/x1_dump/{model}/{dataset}/{ri}.npz
+  (ri = enumerate() 루프 위치, 항상 유일. 벤더링된 RULER의 niah.py에 변수
+   섀도잉 버그가 있어 r["sample_id"](RULER 원본 "index" 필드)가 실제로는
+   answer 문자열의 char offset이라 유일하지 않을 수 있음 -> 파일명 키로
+   쓸 수 없음. sample_id는 meta.json에만 보존.)
   u            [L,H,K]      fp16  — answer position(T-1) connector output
   q            [L,H,K]      fp16  — answer position(T-1) retrieval query
                                     (attn._project 첫 반환값), L2-정규화
@@ -23,8 +27,9 @@ L2-정규화(F.normalize(q.float(), p=2, dim=-1))해 u와 동일 레이아웃으
                                     (C<32일 때 일부 p) -> 0)
   c_full       [L,N,H,K]    fp16  — seg.mean(0) 직접 계산 (재구성 검증용 정답)
   stock_scores [L,N]        fp32  — routing_scores_at(attn, h, T-1) verbatim
-  (+ {idx}.meta.json sidecar: gold_seg, cur_seg, n_seg, n_tok, eligible,
-     key_segs, sample_id, pair_id?, condition?)
+  (+ {ri}.meta.json sidecar: gold_seg, cur_seg, n_seg, n_tok, eligible,
+     key_segs, sample_id (RULER "index", NOT guaranteed unique — see above),
+     pair_id?, condition?)
 
 일관성 검증: 저장된(=fp16 캐스팅된) csub_raw를 블록 크기 가중 평균으로 합쳐
 c_full을 재구성 -> max-abs diff < 2e-3 아니면 즉시 assert 실패 (fail loudly).
@@ -171,7 +176,14 @@ def main():
                 meta["condition"] = r["condition"]
             meta["sample_id"] = r["sample_id"]
 
-            idx = r["sample_id"]
+            # File key = enumeration position `ri`, NOT r["sample_id"].
+            # Vendored RULER (src/ruler/gen/synthetic/niah.py:~281) has a
+            # variable-shadowing bug: the "index" field it writes is
+            # actually a char offset (input_text.find(answer[0])), not the
+            # loop index, so it collides across samples. `ri` is always
+            # unique per (model,dataset) run. sample_id is preserved in meta
+            # for provenance/joins.
+            idx = ri
             npz_path = os.path.join(out_dir, f"{idx}.npz")
             np.savez(npz_path, u=u_arr, q=q_arr, csub_raw=csub_arr, c_full=cfull_arr,
                      stock_scores=scores_arr)
@@ -179,15 +191,16 @@ def main():
                 json.dump(meta, f)
             index.append(idx)
             print(f"[x1_dump] {a.model}/{dsname} {ri+1}/{len(rows)} idx={idx} "
-                  f"recon_max_diff={max_diff:.2e}", flush=True)
+                  f"sample_id={r['sample_id']} recon_max_diff={max_diff:.2e}", flush=True)
 
         with open(os.path.join(out_dir, "_index.json"), "w") as f:
-            json.dump({"n_samples": len(index), "sample_ids": index}, f)
+            json.dump({"n_samples": len(index), "file_index": index}, f)
         print(f"[x1_dump] {a.model}/{dsname}: wrote {len(index)}/{len(rows)} samples",
               flush=True)
 
     del model
     torch.cuda.empty_cache()
+    print(f"[x1_dump] {a.model}: ALL DONE", flush=True)
 
 
 if __name__ == "__main__":

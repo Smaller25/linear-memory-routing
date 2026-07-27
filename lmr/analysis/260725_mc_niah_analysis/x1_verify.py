@@ -12,13 +12,22 @@ Two checks:
      already masked to -inf inside stock_scores) and diff against
      results/e1_routing.json results[model][dataset].per_layer[*].hit_at_2.
 
-Known caveat (not a dump bug, see report): the underlying niah_single_1 /
+Fixed filename-collision bug (2026-07-27): the underlying niah_single_1 /
 niah_multikey_1 jsonl files contain a handful of duplicate "index" values
-that refer to genuinely different input text. x1_dump.py names files by
-sample_id, so the second row silently overwrites the first on disk -> the
-dump has fewer unique samples (e.g. 47/50 for niah_single_1) than E1's
-in-memory aggregate (which counts all 50 rows). This script reports
-n_dump vs e1's n_total/n_eligible per dataset so the gap is visible.
+that refer to genuinely different input text (vendored RULER's
+src/ruler/gen/synthetic/niah.py:~281 shadows the loop `index` with a char
+offset). x1_dump.py used to name files by that (non-unique) sample_id/
+index, so later rows silently overwrote earlier ones on disk (dump had
+only 47/50, 49/50 unique samples). x1_dump.py now keys filenames by the
+enumeration position `ri` (always unique) and keeps sample_id inside
+meta.json only. This script still prints n_dump vs e1's n_total/n_eligible
+so a regression would be visible again.
+
+Small-N note: paired_S_multi / paired_D_multi have only 16 samples, so a
+single bf16 A100-vs-rtx6000 hit/miss flip swings hit@2 by 100/16=6.25pp —
+larger than the flat TOL_PP=3.0 bar. tol_for() relaxes the bar to an
+explicit "<=1 sample flip" allowance for N<=SMALL_N_THRESHOLD so the
+overall verdict isn't spuriously FAIL on ordinary small-N noise.
 
 Usage: /data2/sohyung/conda-envs/sh_infocap/bin/python x1_verify.py
 """
@@ -36,11 +45,27 @@ E1_PATH = os.path.join(HERE, "results", "e1_routing.json")
 MODELS = ["mc-5B", "mc-30B"]
 DATASETS = ["niah_single_1", "niah_multikey_1", "paired_S_multi", "paired_D_multi"]
 TOPK = 2
-TOL_PP = 3.0  # percentage points
+TOL_PP = 3.0  # percentage points, flat bar for the ~50-sample datasets
+SMALL_N_THRESHOLD = 16  # paired_S_multi / paired_D_multi have only 16 samples
 
 REQUIRED_KEYS = {"u", "q", "csub_raw", "c_full", "stock_scores"}
 REQUIRED_META = {"gold_seg", "cur_seg", "n_seg", "n_tok", "eligible", "key_segs",
                   "sample_id"}
+
+
+def tol_for(n_eligible_dump):
+    """Deviation tolerance (pp) for a given eligible-sample count.
+
+    At N<=SMALL_N_THRESHOLD a single bf16 A100-vs-rtx6000 hit/miss flip
+    already moves hit@2 by 100/N pp (e.g. 6.25pp at N=16) — well past the
+    flat TOL_PP bar. Judge those by an explicit "<=1 sample flip" allowance
+    (with 50% slack for rounding) instead, so the verdict doesn't go
+    spuriously FAIL on ordinary small-N noise. Larger datasets keep the
+    flat bar.
+    """
+    if n_eligible_dump and n_eligible_dump <= SMALL_N_THRESHOLD:
+        return (1.5 / n_eligible_dump) * 100
+    return TOL_PP
 
 
 def check_schema(model, dsname, n_spot=2):
@@ -132,10 +157,12 @@ def main():
                 continue
             e1_per_layer = e1_agg["per_layer"]
             best_layer = e1_agg["best_layer"]
+            tol = tol_for(n_eligible_dump)
 
             lines.append(f"\n=== {model}/{dsname} ===  "
                          f"dump: n_files={n_dump} n_eligible={n_eligible_dump}  "
-                         f"e1: n_total={e1_agg['n_total']} n_eligible={e1_agg['n_eligible']}")
+                         f"e1: n_total={e1_agg['n_total']} n_eligible={e1_agg['n_eligible']}  "
+                         f"tol=±{tol:.1f}pp")
             lines.append(f"{'layer':>5}  {'e1_hit@2':>9}  {'dump_hit@2':>10}  {'dev(pp)':>8}")
             for i, pl in enumerate(e1_per_layer):
                 e1_rate = pl["hit_at_2"]
@@ -148,7 +175,7 @@ def main():
                     if abs(dev) > max_dev_pp:
                         max_dev_pp = abs(dev)
                         max_dev_loc = f"{model}/{dsname} layer{i}"
-                    if abs(dev) > TOL_PP:
+                    if abs(dev) > tol:
                         all_ok = False
                 marker = " " + ("layer=best" if i == best_layer else "")
                 e1_s = f"{e1_rate:.3f}" if e1_rate is not None else "None"
@@ -160,10 +187,10 @@ def main():
                 dump_best_hit = dump_rates[best_layer] if best_layer < len(dump_rates) else None
                 if e1_best_hit is not None and dump_best_hit is not None:
                     dev = (dump_best_hit - e1_best_hit) * 100
-                    ok = abs(dev) <= TOL_PP
+                    ok = abs(dev) <= tol
                     all_ok = all_ok and ok
                     lines.append(f"  best_layer={best_layer}: e1={e1_best_hit:.3f} "
-                                 f"dump={dump_best_hit:.3f} dev={dev:+.1f}pp "
+                                 f"dump={dump_best_hit:.3f} dev={dev:+.1f}pp tol=±{tol:.1f}pp "
                                  f"[{'OK' if ok else 'FAIL'}]")
 
     print("\n".join(lines))
