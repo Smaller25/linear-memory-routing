@@ -23,12 +23,13 @@ def bootstrap():
 def _resolve_ckpt_path(repo, fname):
     """Local ckpt dir (MC_CKPT_DIR) takes priority; fall back to hf_hub_download.
 
-    Layout expected under MC_CKPT_DIR: <repo with '/' -> '__'>/<fname>
-    (matches lmr/analysis/260725_mc_niah_analysis/vessl/bootstrap.sh).
+    Layout expected under MC_CKPT_DIR: <repo with '/' -> '_'>/<fname>
+    (matches lmr/analysis/260725_mc_niah_analysis/vessl/bootstrap.sh and
+    vessl/t0_local.sh, and the ckpts/ layout already populated on VESSL).
     """
     ckpt_dir = os.environ.get("MC_CKPT_DIR")
     if ckpt_dir:
-        local_path = os.path.join(ckpt_dir, repo.replace("/", "__"), fname)
+        local_path = os.path.join(ckpt_dir, repo.replace("/", "_"), fname)
         if os.path.isfile(local_path):
             return local_path
     from huggingface_hub import hf_hub_download
