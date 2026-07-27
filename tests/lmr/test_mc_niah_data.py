@@ -42,6 +42,75 @@ def test_annotate_multikey_picks_queried(tok):
     assert ann["gold_seg"] == next(n["seg"] for n in ann["needles"] if n["key"] == "key-2")
 
 
+def test_annotate_multiquery_all_keys_queried(tok):
+    """X2 multiquery: RULER clamps num_needle_k=max(k,q)=4, all 4 queried
+    (see src/ruler/gen/synthetic/niah.py:77,186). Query text lists all 4
+    keys joined as 'K1, K2, K3, and K4' — must parse into 4 distinct
+    queried_keys, each with its own gold needle/segment."""
+    keys = [f"key-{i}" for i in range(4)]
+    needles = [f"One of the special magic numbers for {k} is: 100000{i}."
+              for i, k in enumerate(keys)]
+    filler = "The grass is green. " * 60
+    text = (" ".join([filler, needles[0], filler, needles[1], filler, needles[2],
+                      filler, needles[3], filler])
+            + "\nWhat are all the special magic numbers for key-0, key-1, key-2, "
+              "and key-3 mentioned in the provided text?")
+    ann = mcdata.annotate(text, tok)
+    assert ann["queried_keys"] == keys
+    assert ann["query_key"] is None          # legacy singular field: undefined when >1 queried
+    assert len(ann["needles"]) == 4
+    assert len(ann["gold_needles"]) == 4     # every needle is queried
+    assert {n["key"] for n in ann["gold_needles"]} == set(keys)
+    assert ann["gold_segs"] == sorted({n["seg"] for n in ann["needles"]})
+    # legacy singular gold_seg still populated (first gold needle) — no crash
+    # for callers that only look at the old field.
+    assert ann["gold_seg"] == ann["gold_needles"][0]["seg"]
+
+
+def test_annotate_multiquery_two_keys(tok):
+    """q=2 sweep variant: query text is 'K1, and K2' (RULER's join drops the
+    Oxford comma when there are exactly 2 items — see niah.py:189)."""
+    keys = ["alpha-one", "beta-two"]
+    needles = [f"One of the special magic numbers for {k} is: 500000{i}."
+              for i, k in enumerate(keys)]
+    filler = "The grass is green. " * 60
+    text = (" ".join([filler, needles[0], filler, needles[1], filler])
+            + "\nWhat are all the special magic numbers for alpha-one, and "
+              "beta-two mentioned in the provided text?")
+    ann = mcdata.annotate(text, tok)
+    assert ann["queried_keys"] == keys
+    assert len(ann["gold_needles"]) == 2
+
+
+def test_annotate_multivalue_same_key_four_values(tok):
+    """X2 multivalue: 1 key, 4 needle sentences all with that key (different
+    values). Query text names the single key; all 4 needle instances count
+    as gold (each independently checkable at top-2)."""
+    key = "mango-tree"
+    values = ["1111111", "2222222", "3333333", "4444444"]
+    needles = [f"One of the special magic numbers for {key} is: {v}." for v in values]
+    filler = "The grass is green. " * 60
+    text = (" ".join([filler, needles[0], filler, needles[1], filler,
+                      needles[2], filler, needles[3], filler])
+            + f"\nWhat are all the special magic numbers for {key} "
+              "mentioned in the provided text?")
+    ann = mcdata.annotate(text, tok)
+    assert ann["queried_keys"] == [key]
+    assert ann["query_key"] == key            # single queried key -> legacy field populated
+    assert len(ann["needles"]) == 4
+    assert len(ann["gold_needles"]) == 4       # all 4 value-needles are gold
+    assert {n["value"] for n in ann["gold_needles"]} == set(values)
+    assert len(ann["gold_segs"]) == len(set(n["seg"] for n in ann["needles"]))
+
+
+def test_split_query_keys_matches_niah_join():
+    """_split_query_keys must invert niah.py's join for 1/2/3/4-item lists."""
+    join = lambda qs: (', '.join(qs[:-1]) + ', and ' + qs[-1]) if len(qs) > 1 else qs[0]
+    for n in (1, 2, 3, 4):
+        keys = [f"k{i}" for i in range(n)]
+        assert mcdata._split_query_keys(join(keys)) == keys
+
+
 def test_paired_gen_invariants(tok):
     import paired_gen
     rows = paired_gen.build_pairs(tok, n_pairs=3, condition="S", seed=7) \
