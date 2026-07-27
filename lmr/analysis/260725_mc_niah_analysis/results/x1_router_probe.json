@@ -14,24 +14,36 @@
     "gram_trigger_threshold": 0.8,
     "min_eligible_segs_for_2a": 2,
     "head_reduction_note": "u/q stored [L,H,K] head-split; scoring flattens H,K -> H*K and takes a plain dot product with c_full (also flattened), which is byte-identical to routing_scores_at's einsum('bthk,bnhk->btn', ...) joint sum over heads+K. No separate per-head reduction (max/mean) was needed or applied for either u or u_eq_q scoring \u2014 both go through score_from() identically.",
+    "score_provenance": {
+      "stock": "CANONICAL: the dump's own stock_scores[layer][:cur_seg], used as-is (no re-derivation from fp16 u/c_full). This is exactly what the serving path computed.",
+      "u_eq_q": "RECOMPUTED: score_from(q, c_full) -- no dumped q-score exists in the npz schema (only u-based stock_scores is dumped), so this condition is necessarily recomputed from fp16 q/c_full.",
+      "stock_centered": "RECOMPUTED (see x1c.centering_ranking_invariant_note).",
+      "u_eq_q_centered": "RECOMPUTED (see x1c.centering_ranking_invariant_note).",
+      "u_recomp_pc1": "RECOMPUTED (see x1c.pc1_note); query=u.",
+      "u_eq_q_pc1": "RECOMPUTED (see x1c.pc1_note); query=q.",
+      "cross_condition_caveat": "stock is canonical-dumped while every other condition is recomputed from fp16 u/q/c_full. At n=16 eligible samples (the typical per-cell count in this dump), a single sample flip moves hit@2 by 1/16=6.25pp -- treat cross-condition differences of <=1 flip (<=6.25pp at n=16, scale proportionally at other n) as noise, not signal. See meta.sanity for the measured max recompute-vs-canonical discrepancy and top-2 mismatch count."
+    },
     "sanity": {
       "stock_recompute_max_abs_diff": 0.05152702331542969,
       "n_compared": 3968,
+      "n_top2_mismatch": 64,
       "tol": 0.5,
       "pass": true,
       "worst": {
         "layer": 12,
         "sample_id": 2692,
         "diff": 0.05152702331542969
-      }
+      },
+      "role": "SANITY CHECK ONLY: compares score_from(u, dumped c_full) (fp16-derived recompute) against the dump's own canonical stock_scores (fp32 at dump time) on every eligible segment. NOT used as the stock condition or the R2 regression target -- both of those use stock_scores directly (see meta.score_provenance). n_top2_mismatch counts (model,dataset,layer,sample) tuples where the recomputed top-2 set differs from the canonical dumped top-2 set (the double-quantization flips review finding 1 flagged)."
     }
   },
   "x1c": {
     "triggered": true,
     "max_gram_offdiag": 0.9997533387607999,
     "trigger_loc": "mc-5B/niah_single_1/layer1",
-    "centering_ranking_invariant_note": "centering=c_i-mean_j(c_j) with a plain linear dot-product score shifts every eligible segment's score in a sample by the SAME additive constant (<query,mean> is i-independent), so top-2/hit@2 CANNOT differ from the uncentered condition -- this is an algebraic identity, not an empirical result. stock_centered/u_eq_q_centered hit2 values below are expected to equal stock/u_eq_q exactly (mod float noise) for this reason. A renormalize-after-centering or top-1-PC-removal variant (rev1 spec's original phrasing) would NOT have this invariance, but was not what this task's brief specified; flagged for coordinator follow-up rather than substituted unilaterally.",
-    "reason": "gram_offdiag >= 0.8 at mc-5B/niah_single_1/layer1 (max=0.9998) \u2014 centered conditions reported for ALL layers"
+    "centering_ranking_invariant_note": "centering=c_i-mean_j(c_j) with a plain linear dot-product score shifts every eligible segment's score in a sample by the SAME additive constant (<query,mean> is i-independent), so top-2/hit@2 CANNOT differ from the uncentered condition -- this is an algebraic identity, not an empirical result. stock_centered/u_eq_q_centered hit2 values below are expected to equal stock/u_eq_q exactly (mod float noise) for this reason. This is why the figure omits stock_centered/u_eq_q_centered (visually-overlapping duplicates) and shows the informative top-1-PC-removal variants instead -- see pc1_note below.",
+    "pc1_note": "top-1 PC removal is the informative X1c variant (spec \u00a72a: 'top-1 PC \uc81c\uac70' as an alternative to plain centering). Per (sample,layer): v1 = top-1 right singular vector of the eligible normalized descriptors c_hat (np.linalg.svd, uncentered on c_hat -- see module docstring), then v1 is projected out of BOTH the query and every c_hat_i, and the rescored dot product is taken in that projected space. This is NOT rank-invariant like plain centering: it is a genuine change of basis, not an additive-constant shift. Two conditions exist: u_recomp_pc1 (query=u, recomputed-space path) and u_eq_q_pc1 (query=q, recomputed-space path). There is no 'stock_pc1' condition -- the canonical dumped stock_scores has no accessible descriptor-space to intervene on (only score_from(u, c_full) does, which is the same recomputed path u_recomp_pc1 already uses), so naming it 'stock_pc1' would misleadingly imply it shares stock's canonical-dumped provenance when it does not.",
+    "reason": "gram_offdiag >= 0.8 at mc-5B/niah_single_1/layer1 (max=0.9998) \u2014 centered/pc1 conditions reported for ALL layers"
   },
   "results": {
     "mc-5B": {
@@ -42,15 +54,15 @@
         "chance_hit2": 0.2878306878306879,
         "per_layer": [
           {
-            "r2": 0.5584912571282419,
-            "feat_r2_single": {
-              "pos": 0.2820859142385671,
-              "norm": 0.5374205466249715,
-              "outlier": 0.28885996918391266
+            "r2": 0.5551301917209797,
+            "feat_r2": {
+              "pos": 0.28092861756693976,
+              "norm": 0.5343153179278375,
+              "outlier": 0.28993753565781877
             },
             "pred_jaccard": {
               "pos": {
-                "jaccard": 0.2888888888888889,
+                "jaccard": 0.2814814814814815,
                 "direction": "high"
               },
               "norm": {
@@ -58,91 +70,97 @@
                 "direction": "low"
               },
               "outlier": {
-                "jaccard": 0.4370370370370369,
+                "jaccard": 0.4148148148148147,
                 "direction": "low"
               },
-              "combined": 0.10370370370370369
+              "combined": 0.08888888888888888
             },
             "gram_offdiag": 0.9997390164269342,
             "hit2": {
               "stock": 0.28888888888888886,
               "u_eq_q": 0.9111111111111111,
               "stock_centered": 0.28888888888888886,
-              "u_eq_q_centered": 0.9111111111111111
+              "u_eq_q_centered": 0.9111111111111111,
+              "u_recomp_pc1": 0.28888888888888886,
+              "u_eq_q_pc1": 0.9111111111111111
             },
             "n_used_2a": 45,
             "layer": 0
           },
           {
-            "r2": 0.4386865841267852,
-            "feat_r2_single": {
-              "pos": 0.03515859635764529,
-              "norm": 0.03944537859365782,
-              "outlier": 0.010127565343085898
+            "r2": 0.4269215410120025,
+            "feat_r2": {
+              "pos": 0.02995404127233603,
+              "norm": 0.03406663101841634,
+              "outlier": 0.012297314759285305
             },
             "pred_jaccard": {
               "pos": {
-                "jaccard": 0.2370370370370371,
+                "jaccard": 0.22962962962962968,
                 "direction": "low"
               },
               "norm": {
-                "jaccard": 0.2370370370370371,
+                "jaccard": 0.22962962962962968,
                 "direction": "low"
               },
               "outlier": {
-                "jaccard": 0.22222222222222227,
-                "direction": "high"
+                "jaccard": 0.22962962962962966,
+                "direction": "low"
               },
-              "combined": 0.2888888888888889
+              "combined": 0.28148148148148155
             },
             "gram_offdiag": 0.9997533387607999,
             "hit2": {
               "stock": 0.0,
               "u_eq_q": 0.17777777777777778,
               "stock_centered": 0.0,
-              "u_eq_q_centered": 0.17777777777777778
+              "u_eq_q_centered": 0.17777777777777778,
+              "u_recomp_pc1": 0.0,
+              "u_eq_q_pc1": 0.13333333333333333
             },
             "n_used_2a": 45,
             "layer": 1
           },
           {
-            "r2": 0.9169871706216932,
-            "feat_r2_single": {
-              "pos": 0.8038579113310065,
-              "norm": 0.4624120834065686,
-              "outlier": 0.5583488385639406
+            "r2": 0.9165548072491957,
+            "feat_r2": {
+              "pos": 0.8037822239417342,
+              "norm": 0.4629232280906851,
+              "outlier": 0.5572450310716791
             },
             "pred_jaccard": {
               "pos": {
-                "jaccard": 0.3851851851851852,
+                "jaccard": 0.3703703703703703,
                 "direction": "high"
               },
               "norm": {
-                "jaccard": 0.674074074074074,
+                "jaccard": 0.6888888888888889,
                 "direction": "low"
               },
               "outlier": {
                 "jaccard": 0.1259259259259259,
                 "direction": "high"
               },
-              "combined": 0.4592592592592592
+              "combined": 0.44444444444444436
             },
             "gram_offdiag": 0.9963860445552402,
             "hit2": {
               "stock": 0.28888888888888886,
               "u_eq_q": 0.0,
               "stock_centered": 0.28888888888888886,
-              "u_eq_q_centered": 0.0
+              "u_eq_q_centered": 0.0,
+              "u_recomp_pc1": 0.4,
+              "u_eq_q_pc1": 0.0
             },
             "n_used_2a": 45,
             "layer": 2
           },
           {
-            "r2": 0.9878327148192849,
-            "feat_r2_single": {
-              "pos": 0.8732306332185034,
-              "norm": 0.8799260221837688,
-              "outlier": 0.556996962449633
+            "r2": 0.9878263092332783,
+            "feat_r2": {
+              "pos": 0.8733788224041074,
+              "norm": 0.8799848705700146,
+              "outlier": 0.556756816506914
             },
             "pred_jaccard": {
               "pos": {
@@ -164,49 +182,53 @@
               "stock": 0.24444444444444444,
               "u_eq_q": 0.0,
               "stock_centered": 0.24444444444444444,
-              "u_eq_q_centered": 0.0
+              "u_eq_q_centered": 0.0,
+              "u_recomp_pc1": 0.24444444444444444,
+              "u_eq_q_pc1": 0.0
             },
             "n_used_2a": 45,
             "layer": 3
           },
           {
-            "r2": 0.7914585953845883,
-            "feat_r2_single": {
-              "pos": 0.7869119919297706,
-              "norm": 0.5504921420955209,
-              "outlier": 0.09510712523048459
+            "r2": 0.7902865626293051,
+            "feat_r2": {
+              "pos": 0.7858705648630332,
+              "norm": 0.5477109220227793,
+              "outlier": 0.09599223435524618
             },
             "pred_jaccard": {
               "pos": {
-                "jaccard": 0.8222222222222224,
+                "jaccard": 0.8074074074074076,
                 "direction": "low"
               },
               "norm": {
-                "jaccard": 0.36296296296296293,
+                "jaccard": 0.34814814814814815,
                 "direction": "high"
               },
               "outlier": {
                 "jaccard": 0.325925925925926,
                 "direction": "high"
               },
-              "combined": 0.8222222222222224
+              "combined": 0.8074074074074076
             },
             "gram_offdiag": 0.9929935786459181,
             "hit2": {
-              "stock": 0.4888888888888889,
+              "stock": 0.5111111111111111,
               "u_eq_q": 0.37777777777777777,
               "stock_centered": 0.4888888888888889,
-              "u_eq_q_centered": 0.37777777777777777
+              "u_eq_q_centered": 0.37777777777777777,
+              "u_recomp_pc1": 0.4222222222222222,
+              "u_eq_q_pc1": 0.37777777777777777
             },
             "n_used_2a": 45,
             "layer": 4
           },
           {
-            "r2": 0.9982054837739022,
-            "feat_r2_single": {
-              "pos": 0.9943798906356575,
-              "norm": 0.023470423078630787,
-              "outlier": 0.07431757432603137
+            "r2": 0.9982173524796538,
+            "feat_r2": {
+              "pos": 0.9943343408936826,
+              "norm": 0.023354825565622295,
+              "outlier": 0.07456167936871516
             },
             "pred_jaccard": {
               "pos": {
@@ -228,49 +250,53 @@
               "stock": 0.24444444444444444,
               "u_eq_q": 0.4666666666666667,
               "stock_centered": 0.24444444444444444,
-              "u_eq_q_centered": 0.4666666666666667
+              "u_eq_q_centered": 0.4666666666666667,
+              "u_recomp_pc1": 0.24444444444444444,
+              "u_eq_q_pc1": 0.4666666666666667
             },
             "n_used_2a": 45,
             "layer": 5
           },
           {
-            "r2": 0.9633571224847712,
-            "feat_r2_single": {
-              "pos": 0.6272698153424644,
-              "norm": 0.18858266682510894,
-              "outlier": 0.5716550392815111
+            "r2": 0.963010560445788,
+            "feat_r2": {
+              "pos": 0.626896109727969,
+              "norm": 0.1876833515584201,
+              "outlier": 0.57105215367655
             },
             "pred_jaccard": {
               "pos": {
-                "jaccard": 0.34074074074074073,
+                "jaccard": 0.3333333333333333,
                 "direction": "high"
               },
               "norm": {
-                "jaccard": 0.22962962962962966,
+                "jaccard": 0.23703703703703707,
                 "direction": "low"
               },
               "outlier": {
-                "jaccard": 0.11851851851851851,
+                "jaccard": 0.1111111111111111,
                 "direction": "low"
               },
-              "combined": 0.6814814814814815
+              "combined": 0.7111111111111111
             },
             "gram_offdiag": 0.9923526432779101,
             "hit2": {
               "stock": 0.6,
               "u_eq_q": 0.37777777777777777,
               "stock_centered": 0.6,
-              "u_eq_q_centered": 0.37777777777777777
+              "u_eq_q_centered": 0.37777777777777777,
+              "u_recomp_pc1": 0.6,
+              "u_eq_q_pc1": 0.4
             },
             "n_used_2a": 45,
             "layer": 6
           },
           {
-            "r2": 0.99932851212595,
-            "feat_r2_single": {
-              "pos": 0.9923879684315546,
-              "norm": 0.24968517151116587,
-              "outlier": 0.18635183686335643
+            "r2": 0.9993272082444229,
+            "feat_r2": {
+              "pos": 0.9924211070668002,
+              "norm": 0.24957111252632636,
+              "outlier": 0.18618930489038887
             },
             "pred_jaccard": {
               "pos": {
@@ -292,21 +318,23 @@
               "stock": 0.24444444444444444,
               "u_eq_q": 0.0,
               "stock_centered": 0.24444444444444444,
-              "u_eq_q_centered": 0.0
+              "u_eq_q_centered": 0.0,
+              "u_recomp_pc1": 0.24444444444444444,
+              "u_eq_q_pc1": 0.15555555555555556
             },
             "n_used_2a": 45,
             "layer": 7
           },
           {
-            "r2": 0.955251623807079,
-            "feat_r2_single": {
-              "pos": 0.7874684689417027,
-              "norm": 0.5405440071885642,
-              "outlier": 0.3532014978680136
+            "r2": 0.954037262526401,
+            "feat_r2": {
+              "pos": 0.7845821207898642,
+              "norm": 0.5422076680119996,
+              "outlier": 0.35476182783068066
             },
             "pred_jaccard": {
               "pos": {
-                "jaccard": 0.7185185185185186,
+                "jaccard": 0.7037037037037036,
                 "direction": "low"
               },
               "norm": {
@@ -317,24 +345,26 @@
                 "jaccard": 0.33333333333333337,
                 "direction": "high"
               },
-              "combined": 0.8370370370370371
+              "combined": 0.8222222222222222
             },
             "gram_offdiag": 0.9963521679242452,
             "hit2": {
               "stock": 0.7555555555555555,
               "u_eq_q": 0.3333333333333333,
               "stock_centered": 0.7555555555555555,
-              "u_eq_q_centered": 0.3333333333333333
+              "u_eq_q_centered": 0.3333333333333333,
+              "u_recomp_pc1": 0.8666666666666667,
+              "u_eq_q_pc1": 0.7333333333333333
             },
             "n_used_2a": 45,
             "layer": 8
           },
           {
-            "r2": 0.9988873250298037,
-            "feat_r2_single": {
-              "pos": 0.9869002284824109,
-              "norm": 0.24180155562647998,
-              "outlier": 0.22876063127036328
+            "r2": 0.9988617354315095,
+            "feat_r2": {
+              "pos": 0.9868950810871941,
+              "norm": 0.24168522309650364,
+              "outlier": 0.22867971944437548
             },
             "pred_jaccard": {
               "pos": {
@@ -356,17 +386,19 @@
               "stock": 0.24444444444444444,
               "u_eq_q": 0.4222222222222222,
               "stock_centered": 0.24444444444444444,
-              "u_eq_q_centered": 0.4222222222222222
+              "u_eq_q_centered": 0.4222222222222222,
+              "u_recomp_pc1": 0.24444444444444444,
+              "u_eq_q_pc1": 0.3333333333333333
             },
             "n_used_2a": 45,
             "layer": 9
           },
           {
-            "r2": 0.9986758565097203,
-            "feat_r2_single": {
-              "pos": 0.9868247676904773,
-              "norm": 0.1931451546322035,
-              "outlier": 0.27577082226865046
+            "r2": 0.9986779299070879,
+            "feat_r2": {
+              "pos": 0.9870209781811768,
+              "norm": 0.19258814197769403,
+              "outlier": 0.27496949196619247
             },
             "pred_jaccard": {
               "pos": {
@@ -388,17 +420,19 @@
               "stock": 0.24444444444444444,
               "u_eq_q": 0.7111111111111111,
               "stock_centered": 0.24444444444444444,
-              "u_eq_q_centered": 0.7111111111111111
+              "u_eq_q_centered": 0.7111111111111111,
+              "u_recomp_pc1": 0.24444444444444444,
+              "u_eq_q_pc1": 0.7333333333333333
             },
             "n_used_2a": 45,
             "layer": 10
           },
           {
-            "r2": 0.9976462536047854,
-            "feat_r2_single": {
-              "pos": 0.9907337774351496,
-              "norm": 0.036194672218009316,
-              "outlier": 0.18026934444040377
+            "r2": 0.9976322227845936,
+            "feat_r2": {
+              "pos": 0.9906703141018605,
+              "norm": 0.036143784203865326,
+              "outlier": 0.18034650716201484
             },
             "pred_jaccard": {
               "pos": {
@@ -420,17 +454,19 @@
               "stock": 0.24444444444444444,
               "u_eq_q": 0.35555555555555557,
               "stock_centered": 0.24444444444444444,
-              "u_eq_q_centered": 0.35555555555555557
+              "u_eq_q_centered": 0.35555555555555557,
+              "u_recomp_pc1": 0.24444444444444444,
+              "u_eq_q_pc1": 0.3111111111111111
             },
             "n_used_2a": 45,
             "layer": 11
           },
           {
-            "r2": 0.9968957693163425,
-            "feat_r2_single": {
-              "pos": 0.9894729285995361,
-              "norm": 0.17568375104140843,
-              "outlier": 0.31616022907775754
+            "r2": 0.9968746685733074,
+            "feat_r2": {
+              "pos": 0.989529011002937,
+              "norm": 0.17517296631235446,
+              "outlier": 0.3155999838616951
             },
             "pred_jaccard": {
               "pos": {
@@ -452,17 +488,19 @@
               "stock": 0.24444444444444444,
               "u_eq_q": 0.0,
               "stock_centered": 0.24444444444444444,
-              "u_eq_q_centered": 0.0
+              "u_eq_q_centered": 0.0,
+              "u_recomp_pc1": 0.24444444444444444,
+              "u_eq_q_pc1": 0.0
             },
             "n_used_2a": 45,
             "layer": 12
           },
           {
-            "r2": 0.9915579267615114,
-            "feat_r2_single": {
-              "pos": 0.9487758477874145,
-              "norm": 0.0024775395565078684,
-              "outlier": 0.26780509282111875
+            "r2": 0.9916072912925237,
+            "feat_r2": {
+              "pos": 0.9490458296892745,
+              "norm": 0.002412745501391811,
+              "outlier": 0.26704413344930766
             },
             "pred_jaccard": {
               "pos": {
@@ -484,17 +522,19 @@
               "stock": 0.3333333333333333,
               "u_eq_q": 0.9111111111111111,
               "stock_centered": 0.3333333333333333,
-              "u_eq_q_centered": 0.9111111111111111
+              "u_eq_q_centered": 0.9111111111111111,
+              "u_recomp_pc1": 0.3333333333333333,
+              "u_eq_q_pc1": 0.9333333333333333
             },
             "n_used_2a": 45,
             "layer": 13
           },
           {
-            "r2": 0.5952713499608756,
-            "feat_r2_single": {
-              "pos": 0.23297470668676357,
-              "norm": 0.3485567252233698,
-              "outlier": 0.08671666159523972
+            "r2": 0.5941756085348129,
+            "feat_r2": {
+              "pos": 0.23356029442554616,
+              "norm": 0.3473265675980588,
+              "outlier": 0.08671275245119603
             },
             "pred_jaccard": {
               "pos": {
@@ -502,31 +542,33 @@
                 "direction": "low"
               },
               "norm": {
-                "jaccard": 0.7333333333333333,
+                "jaccard": 0.7185185185185184,
                 "direction": "low"
               },
               "outlier": {
                 "jaccard": 0.33333333333333337,
                 "direction": "high"
               },
-              "combined": 0.7333333333333333
+              "combined": 0.7185185185185184
             },
             "gram_offdiag": 0.9941476066907247,
             "hit2": {
-              "stock": 0.9111111111111111,
+              "stock": 0.9333333333333333,
               "u_eq_q": 0.5777777777777777,
               "stock_centered": 0.9111111111111111,
-              "u_eq_q_centered": 0.5777777777777777
+              "u_eq_q_centered": 0.5777777777777777,
+              "u_recomp_pc1": 0.9111111111111111,
+              "u_eq_q_pc1": 0.5777777777777777
             },
             "n_used_2a": 45,
             "layer": 14
           },
           {
-            "r2": 0.8806923500265791,
-            "feat_r2_single": {
-              "pos": 0.4473297552837151,
-              "norm": 0.6984263238951527,
-              "outlier": 0.556908817419827
+            "r2": 0.8809249456128053,
+            "feat_r2": {
+              "pos": 0.44867985488183104,
+              "norm": 0.6976372730222978,
+              "outlier": 0.5565405908143963
             },
             "pred_jaccard": {
               "pos": {
@@ -548,7 +590,9 @@
               "stock": 0.9111111111111111,
               "u_eq_q": 0.9111111111111111,
               "stock_centered": 0.9111111111111111,
-              "u_eq_q_centered": 0.9111111111111111
+              "u_eq_q_centered": 0.9111111111111111,
+              "u_recomp_pc1": 0.8222222222222222,
+              "u_eq_q_pc1": 0.9111111111111111
             },
             "n_used_2a": 45,
             "layer": 15
@@ -557,7 +601,7 @@
         "best_layer": {
           "stock": {
             "layer": 14,
-            "hit2": 0.9111111111111111
+            "hit2": 0.9333333333333333
           },
           "u_eq_q": {
             "layer": 0,
@@ -570,6 +614,14 @@
           "u_eq_q_centered": {
             "layer": 0,
             "hit2": 0.9111111111111111
+          },
+          "u_recomp_pc1": {
+            "layer": 14,
+            "hit2": 0.9111111111111111
+          },
+          "u_eq_q_pc1": {
+            "layer": 13,
+            "hit2": 0.9333333333333333
           }
         }
       },
@@ -580,11 +632,11 @@
         "chance_hit2": 0.486322188449848,
         "per_layer": [
           {
-            "r2": 0.570949832482926,
-            "feat_r2_single": {
-              "pos": 0.396280086909644,
-              "norm": 0.3200322920948854,
-              "outlier": 0.023479017185988327
+            "r2": 0.5682957758261662,
+            "feat_r2": {
+              "pos": 0.394589477454384,
+              "norm": 0.3183612577838858,
+              "outlier": 0.023428340121208646
             },
             "pred_jaccard": {
               "pos": {
@@ -606,17 +658,19 @@
               "stock": 0.3191489361702128,
               "u_eq_q": 0.723404255319149,
               "stock_centered": 0.3191489361702128,
-              "u_eq_q_centered": 0.723404255319149
+              "u_eq_q_centered": 0.723404255319149,
+              "u_recomp_pc1": 0.2978723404255319,
+              "u_eq_q_pc1": 0.6595744680851063
             },
             "n_used_2a": 47,
             "layer": 0
           },
           {
-            "r2": 0.7118801769840909,
-            "feat_r2_single": {
-              "pos": 0.021367017780773323,
-              "norm": 0.6268540233571438,
-              "outlier": 0.5310509515698951
+            "r2": 0.7120333506788646,
+            "feat_r2": {
+              "pos": 0.021906867347416425,
+              "norm": 0.6276670828869026,
+              "outlier": 0.5306287580876475
             },
             "pred_jaccard": {
               "pos": {
@@ -638,17 +692,19 @@
               "stock": 0.48936170212765956,
               "u_eq_q": 0.48936170212765956,
               "stock_centered": 0.48936170212765956,
-              "u_eq_q_centered": 0.48936170212765956
+              "u_eq_q_centered": 0.48936170212765956,
+              "u_recomp_pc1": 0.48936170212765956,
+              "u_eq_q_pc1": 0.48936170212765956
             },
             "n_used_2a": 47,
             "layer": 1
           },
           {
-            "r2": 0.9801102807055,
-            "feat_r2_single": {
-              "pos": 0.9795737115729142,
-              "norm": 0.011830660850424501,
-              "outlier": 0.0028193184388299874
+            "r2": 0.9801334994021289,
+            "feat_r2": {
+              "pos": 0.9796178596192697,
+              "norm": 0.012045941489073564,
+              "outlier": 0.002922387821005845
             },
             "pred_jaccard": {
               "pos": {
@@ -670,17 +726,19 @@
               "stock": 0.6595744680851063,
               "u_eq_q": 0.6595744680851063,
               "stock_centered": 0.6595744680851063,
-              "u_eq_q_centered": 0.6595744680851063
+              "u_eq_q_centered": 0.6595744680851063,
+              "u_recomp_pc1": 0.6595744680851063,
+              "u_eq_q_pc1": 0.6595744680851063
             },
             "n_used_2a": 47,
             "layer": 2
           },
           {
-            "r2": 0.9966900710227286,
-            "feat_r2_single": {
-              "pos": 0.9962155534761618,
-              "norm": 0.3346280148547657,
-              "outlier": 0.021075979482910845
+            "r2": 0.9966892389071749,
+            "feat_r2": {
+              "pos": 0.9961971690300637,
+              "norm": 0.33498935981420785,
+              "outlier": 0.020977741082498613
             },
             "pred_jaccard": {
               "pos": {
@@ -702,21 +760,23 @@
               "stock": 0.6595744680851063,
               "u_eq_q": 0.3829787234042553,
               "stock_centered": 0.6595744680851063,
-              "u_eq_q_centered": 0.3829787234042553
+              "u_eq_q_centered": 0.3829787234042553,
+              "u_recomp_pc1": 0.6595744680851063,
+              "u_eq_q_pc1": 0.3617021276595745
             },
             "n_used_2a": 47,
             "layer": 3
           },
           {
-            "r2": 0.8303957534279228,
-            "feat_r2_single": {
-              "pos": 0.7734448717463475,
-              "norm": 0.32930215120819895,
-              "outlier": 0.010440098654337482
+            "r2": 0.8318579959748661,
+            "feat_r2": {
+              "pos": 0.7767539041882506,
+              "norm": 0.33200803333911966,
+              "outlier": 0.00978887903311787
             },
             "pred_jaccard": {
               "pos": {
-                "jaccard": 0.8439716312056739,
+                "jaccard": 0.8297872340425532,
                 "direction": "low"
               },
               "norm": {
@@ -725,26 +785,28 @@
               },
               "outlier": {
                 "jaccard": 0.33333333333333337,
-                "direction": "high"
+                "direction": "low"
               },
-              "combined": 0.8156028368794327
+              "combined": 0.8014184397163121
             },
             "gram_offdiag": 0.9923586147896787,
             "hit2": {
               "stock": 0.425531914893617,
               "u_eq_q": 0.425531914893617,
               "stock_centered": 0.425531914893617,
-              "u_eq_q_centered": 0.425531914893617
+              "u_eq_q_centered": 0.425531914893617,
+              "u_recomp_pc1": 0.44680851063829785,
+              "u_eq_q_pc1": 0.40425531914893614
             },
             "n_used_2a": 47,
             "layer": 4
           },
           {
-            "r2": 0.9961163031251591,
-            "feat_r2_single": {
-              "pos": 0.9949494286312516,
-              "norm": 0.2263407048782471,
-              "outlier": 0.007262772875880508
+            "r2": 0.9960759558168699,
+            "feat_r2": {
+              "pos": 0.9948852349510241,
+              "norm": 0.22604950532724255,
+              "outlier": 0.007233154477478743
             },
             "pred_jaccard": {
               "pos": {
@@ -766,21 +828,23 @@
               "stock": 0.6595744680851063,
               "u_eq_q": 0.40425531914893614,
               "stock_centered": 0.6595744680851063,
-              "u_eq_q_centered": 0.40425531914893614
+              "u_eq_q_centered": 0.40425531914893614,
+              "u_recomp_pc1": 0.6595744680851063,
+              "u_eq_q_pc1": 0.40425531914893614
             },
             "n_used_2a": 47,
             "layer": 5
           },
           {
-            "r2": 0.8363248021049493,
-            "feat_r2_single": {
-              "pos": 0.8225997244048139,
-              "norm": 0.11613580174277793,
-              "outlier": 0.03838138563692173
+            "r2": 0.8359775952500725,
+            "feat_r2": {
+              "pos": 0.822642622513768,
+              "norm": 0.11322831512439657,
+              "outlier": 0.037197325655369595
             },
             "pred_jaccard": {
               "pos": {
-                "jaccard": 1.0,
+                "jaccard": 0.9858156028368795,
                 "direction": "high"
               },
               "norm": {
@@ -791,24 +855,26 @@
                 "jaccard": 0.33333333333333337,
                 "direction": "high"
               },
-              "combined": 1.0
+              "combined": 0.9858156028368795
             },
             "gram_offdiag": 0.9933390756870838,
             "hit2": {
-              "stock": 0.6595744680851063,
+              "stock": 0.6382978723404256,
               "u_eq_q": 0.44680851063829785,
               "stock_centered": 0.6595744680851063,
-              "u_eq_q_centered": 0.44680851063829785
+              "u_eq_q_centered": 0.44680851063829785,
+              "u_recomp_pc1": 0.6595744680851063,
+              "u_eq_q_pc1": 0.44680851063829785
             },
             "n_used_2a": 47,
             "layer": 6
           },
           {
-            "r2": 0.9964711231682047,
-            "feat_r2_single": {
-              "pos": 0.9954282591382948,
-              "norm": 0.4322994517008212,
-              "outlier": 0.0010950784239419642
+            "r2": 0.9964788981847309,
+            "feat_r2": {
+              "pos": 0.9954568497301178,
+              "norm": 0.43261460540235097,
+              "outlier": 0.001095195949353478
             },
             "pred_jaccard": {
               "pos": {
@@ -830,17 +896,19 @@
               "stock": 0.6595744680851063,
               "u_eq_q": 0.5106382978723404,
               "stock_centered": 0.6595744680851063,
-              "u_eq_q_centered": 0.5106382978723404
+              "u_eq_q_centered": 0.5106382978723404,
+              "u_recomp_pc1": 0.6595744680851063,
+              "u_eq_q_pc1": 0.5319148936170213
             },
             "n_used_2a": 47,
             "layer": 7
           },
           {
-            "r2": 0.9112220209921592,
-            "feat_r2_single": {
-              "pos": 0.9071891268054582,
-              "norm": 0.041388260066999916,
-              "outlier": 0.11540437559608863
+            "r2": 0.9115863880793305,
+            "feat_r2": {
+              "pos": 0.9074117458847393,
+              "norm": 0.04131382425004981,
+              "outlier": 0.11623011640525527
             },
             "pred_jaccard": {
               "pos": {
@@ -862,17 +930,19 @@
               "stock": 0.2978723404255319,
               "u_eq_q": 0.6808510638297872,
               "stock_centered": 0.2978723404255319,
-              "u_eq_q_centered": 0.6808510638297872
+              "u_eq_q_centered": 0.6808510638297872,
+              "u_recomp_pc1": 0.2978723404255319,
+              "u_eq_q_pc1": 0.6808510638297872
             },
             "n_used_2a": 47,
             "layer": 8
           },
           {
-            "r2": 0.9909148122792706,
-            "feat_r2_single": {
-              "pos": 0.9871943695317841,
-              "norm": 0.706447277052133,
-              "outlier": 0.015511669872203426
+            "r2": 0.9909081135518941,
+            "feat_r2": {
+              "pos": 0.9871978065840921,
+              "norm": 0.7063542012844426,
+              "outlier": 0.015457734325597716
             },
             "pred_jaccard": {
               "pos": {
@@ -894,17 +964,19 @@
               "stock": 0.6595744680851063,
               "u_eq_q": 0.574468085106383,
               "stock_centered": 0.6595744680851063,
-              "u_eq_q_centered": 0.574468085106383
+              "u_eq_q_centered": 0.574468085106383,
+              "u_recomp_pc1": 0.6595744680851063,
+              "u_eq_q_pc1": 0.574468085106383
             },
             "n_used_2a": 47,
             "layer": 9
           },
           {
-            "r2": 0.9969126976590377,
-            "feat_r2_single": {
-              "pos": 0.9910519553183251,
-              "norm": 0.7210835251377161,
-              "outlier": 0.017353894468876474
+            "r2": 0.9969326164782241,
+            "feat_r2": {
+              "pos": 0.991072127426913,
+              "norm": 0.7211103993441732,
+              "outlier": 0.01735234500371252
             },
             "pred_jaccard": {
               "pos": {
@@ -926,17 +998,19 @@
               "stock": 0.6595744680851063,
               "u_eq_q": 0.3617021276595745,
               "stock_centered": 0.6595744680851063,
-              "u_eq_q_centered": 0.3617021276595745
+              "u_eq_q_centered": 0.3617021276595745,
+              "u_recomp_pc1": 0.6595744680851063,
+              "u_eq_q_pc1": 0.3617021276595745
             },
             "n_used_2a": 47,
             "layer": 10
           },
           {
-            "r2": 0.9807105967821572,
-            "feat_r2_single": {
-              "pos": 0.9747345605183019,
-              "norm": 0.45005399694782844,
-              "outlier": 7.699323957610638e-06
+            "r2": 0.9807247924405563,
+            "feat_r2": {
+              "pos": 0.9748016936948932,
+              "norm": 0.45044766022060434,
+              "outlier": 6.117536341387897e-06
             },
             "pred_jaccard": {
               "pos": {
@@ -958,17 +1032,19 @@
               "stock": 0.6595744680851063,
               "u_eq_q": 0.48936170212765956,
               "stock_centered": 0.6595744680851063,
-              "u_eq_q_centered": 0.48936170212765956
+              "u_eq_q_centered": 0.48936170212765956,
+              "u_recomp_pc1": 0.6595744680851063,
+              "u_eq_q_pc1": 0.46808510638297873
             },
             "n_used_2a": 47,
             "layer": 11
           },
           {
-            "r2": 0.9904347684481658,
-            "feat_r2_single": {
-              "pos": 0.9850387879091289,
-              "norm": 0.02314072989773519,
-              "outlier": 0.08550294560757377
+            "r2": 0.9904303777116631,
+            "feat_r2": {
+              "pos": 0.9850716394678762,
+              "norm": 0.023106699648390294,
+              "outlier": 0.08535359186435543
             },
             "pred_jaccard": {
               "pos": {
@@ -990,17 +1066,19 @@
               "stock": 0.6595744680851063,
               "u_eq_q": 0.3617021276595745,
               "stock_centered": 0.6595744680851063,
-              "u_eq_q_centered": 0.3617021276595745
+              "u_eq_q_centered": 0.3617021276595745,
+              "u_recomp_pc1": 0.6595744680851063,
+              "u_eq_q_pc1": 0.3617021276595745
             },
             "n_used_2a": 47,
             "layer": 12
           },
           {
-            "r2": 0.9888972194882082,
-            "feat_r2_single": {
-              "pos": 0.9868690130350148,
-              "norm": 0.44119435413228614,
-              "outlier": 0.02738695971479832
+            "r2": 0.9888185839004905,
+            "feat_r2": {
+              "pos": 0.9867895315898367,
+              "norm": 0.4416276681414626,
+              "outlier": 0.027288615912247627
             },
             "pred_jaccard": {
               "pos": {
@@ -1022,21 +1100,23 @@
               "stock": 0.6595744680851063,
               "u_eq_q": 0.3404255319148936,
               "stock_centered": 0.6595744680851063,
-              "u_eq_q_centered": 0.3404255319148936
+              "u_eq_q_centered": 0.3404255319148936,
+              "u_recomp_pc1": 0.6595744680851063,
+              "u_eq_q_pc1": 0.3404255319148936
             },
             "n_used_2a": 47,
             "layer": 13
           },
           {
-            "r2": 0.729787697288832,
-            "feat_r2_single": {
-              "pos": 0.4334997312287542,
-              "norm": 0.18361124481901558,
-              "outlier": 0.2019769172744753
+            "r2": 0.7324793591053411,
+            "feat_r2": {
+              "pos": 0.43491616436796865,
+              "norm": 0.18474377781463736,
+              "outlier": 0.20295532699360463
             },
             "pred_jaccard": {
               "pos": {
-                "jaccard": 0.7730496453900709,
+                "jaccard": 0.7872340425531915,
                 "direction": "low"
               },
               "norm": {
@@ -1044,49 +1124,53 @@
                 "direction": "low"
               },
               "outlier": {
-                "jaccard": 0.5460992907801417,
+                "jaccard": 0.5319148936170212,
                 "direction": "high"
               },
-              "combined": 0.6170212765957446
+              "combined": 0.6312056737588652
             },
             "gram_offdiag": 0.984129307117868,
             "hit2": {
-              "stock": 0.6170212765957447,
+              "stock": 0.5957446808510638,
               "u_eq_q": 0.40425531914893614,
               "stock_centered": 0.6170212765957447,
-              "u_eq_q_centered": 0.40425531914893614
+              "u_eq_q_centered": 0.40425531914893614,
+              "u_recomp_pc1": 0.5957446808510638,
+              "u_eq_q_pc1": 0.425531914893617
             },
             "n_used_2a": 47,
             "layer": 14
           },
           {
-            "r2": 0.8222236682310007,
-            "feat_r2_single": {
-              "pos": 0.622900265730913,
-              "norm": 0.3306709226977028,
-              "outlier": 0.2763236982450141
+            "r2": 0.82122163847829,
+            "feat_r2": {
+              "pos": 0.6215861240874172,
+              "norm": 0.3309095908697032,
+              "outlier": 0.2764673793575253
             },
             "pred_jaccard": {
               "pos": {
-                "jaccard": 0.6737588652482269,
+                "jaccard": 0.6879432624113476,
                 "direction": "low"
               },
               "norm": {
-                "jaccard": 0.50354609929078,
+                "jaccard": 0.5177304964539006,
                 "direction": "low"
               },
               "outlier": {
-                "jaccard": 0.4184397163120565,
+                "jaccard": 0.4042553191489359,
                 "direction": "high"
               },
-              "combined": 0.6879432624113474
+              "combined": 0.7021276595744681
             },
             "gram_offdiag": 0.9949156439050715,
             "hit2": {
-              "stock": 0.6170212765957447,
+              "stock": 0.5957446808510638,
               "u_eq_q": 0.44680851063829785,
               "stock_centered": 0.6170212765957447,
-              "u_eq_q_centered": 0.44680851063829785
+              "u_eq_q_centered": 0.44680851063829785,
+              "u_recomp_pc1": 0.48936170212765956,
+              "u_eq_q_pc1": 0.44680851063829785
             },
             "n_used_2a": 47,
             "layer": 15
@@ -1108,6 +1192,14 @@
           "u_eq_q_centered": {
             "layer": 0,
             "hit2": 0.723404255319149
+          },
+          "u_recomp_pc1": {
+            "layer": 2,
+            "hit2": 0.6595744680851063
+          },
+          "u_eq_q_pc1": {
+            "layer": 8,
+            "hit2": 0.6808510638297872
           }
         }
       },
@@ -1118,11 +1210,11 @@
         "chance_hit2": 0.2857142857142857,
         "per_layer": [
           {
-            "r2": 0.3686369915494375,
-            "feat_r2_single": {
-              "pos": 0.0128603620903327,
-              "norm": 0.05417713291727577,
-              "outlier": 0.3507010233778105
+            "r2": 0.3639554410288909,
+            "feat_r2": {
+              "pos": 0.013228484192650547,
+              "norm": 0.05336767737137271,
+              "outlier": 0.3455642139885272
             },
             "pred_jaccard": {
               "pos": {
@@ -1144,25 +1236,27 @@
               "stock": 0.25,
               "u_eq_q": 0.375,
               "stock_centered": 0.25,
-              "u_eq_q_centered": 0.375
+              "u_eq_q_centered": 0.375,
+              "u_recomp_pc1": 0.25,
+              "u_eq_q_pc1": 0.375
             },
             "n_used_2a": 16,
             "layer": 0
           },
           {
-            "r2": 0.6834066175801488,
-            "feat_r2_single": {
-              "pos": 0.044991641124561,
-              "norm": 0.4971680545785355,
-              "outlier": 0.44875564154282765
+            "r2": 0.6838499505448001,
+            "feat_r2": {
+              "pos": 0.04686910377522635,
+              "norm": 0.4943406553509262,
+              "outlier": 0.4489914721627133
             },
             "pred_jaccard": {
               "pos": {
-                "jaccard": 0.20833333333333331,
+                "jaccard": 0.22916666666666666,
                 "direction": "low"
               },
               "norm": {
-                "jaccard": 0.5625,
+                "jaccard": 0.5208333333333333,
                 "direction": "high"
               },
               "outlier": {
@@ -1173,20 +1267,22 @@
             },
             "gram_offdiag": 0.9989853464066982,
             "hit2": {
-              "stock": 0.3125,
+              "stock": 0.375,
               "u_eq_q": 0.0,
               "stock_centered": 0.3125,
-              "u_eq_q_centered": 0.0
+              "u_eq_q_centered": 0.0,
+              "u_recomp_pc1": 0.3125,
+              "u_eq_q_pc1": 0.0
             },
             "n_used_2a": 16,
             "layer": 1
           },
           {
-            "r2": 0.9845662131271394,
-            "feat_r2_single": {
-              "pos": 0.928530300867437,
-              "norm": 0.002558875091627555,
-              "outlier": 0.36032809544769295
+            "r2": 0.9845838287395765,
+            "feat_r2": {
+              "pos": 0.9281239855152303,
+              "norm": 0.002492432464782368,
+              "outlier": 0.36121392334681424
             },
             "pred_jaccard": {
               "pos": {
@@ -1208,17 +1304,19 @@
               "stock": 0.1875,
               "u_eq_q": 0.1875,
               "stock_centered": 0.1875,
-              "u_eq_q_centered": 0.1875
+              "u_eq_q_centered": 0.1875,
+              "u_recomp_pc1": 0.1875,
+              "u_eq_q_pc1": 0.1875
             },
             "n_used_2a": 16,
             "layer": 2
           },
           {
-            "r2": 0.9938263482701861,
-            "feat_r2_single": {
-              "pos": 0.993656912111801,
-              "norm": 0.8792448454775463,
-              "outlier": 0.036661129633940304
+            "r2": 0.9938439751310665,
+            "feat_r2": {
+              "pos": 0.9936743165098406,
+              "norm": 0.8792786731071172,
+              "outlier": 0.0366157351108265
             },
             "pred_jaccard": {
               "pos": {
@@ -1240,17 +1338,19 @@
               "stock": 0.1875,
               "u_eq_q": 0.1875,
               "stock_centered": 0.1875,
-              "u_eq_q_centered": 0.1875
+              "u_eq_q_centered": 0.1875,
+              "u_recomp_pc1": 0.1875,
+              "u_eq_q_pc1": 0.125
             },
             "n_used_2a": 16,
             "layer": 3
           },
           {
-            "r2": 0.9620055410217464,
-            "feat_r2_single": {
-              "pos": 0.8409711701205882,
-              "norm": 0.8476644976177234,
-              "outlier": 0.007625326587074488
+            "r2": 0.9619132969635503,
+            "feat_r2": {
+              "pos": 0.8407725659680927,
+              "norm": 0.8476146910223036,
+              "outlier": 0.007652193939577501
             },
             "pred_jaccard": {
               "pos": {
@@ -1272,17 +1372,19 @@
               "stock": 0.1875,
               "u_eq_q": 0.375,
               "stock_centered": 0.1875,
-              "u_eq_q_centered": 0.375
+              "u_eq_q_centered": 0.375,
+              "u_recomp_pc1": 0.1875,
+              "u_eq_q_pc1": 0.375
             },
             "n_used_2a": 16,
             "layer": 4
           },
           {
-            "r2": 0.9958025934550574,
-            "feat_r2_single": {
-              "pos": 0.9942326836786696,
-              "norm": 0.20359435347522314,
-              "outlier": 0.05232604598079893
+            "r2": 0.9958025266727415,
+            "feat_r2": {
+              "pos": 0.9942137740026222,
+              "norm": 0.2034178522657647,
+              "outlier": 0.05244343117001815
             },
             "pred_jaccard": {
               "pos": {
@@ -1304,17 +1406,19 @@
               "stock": 0.1875,
               "u_eq_q": 0.0,
               "stock_centered": 0.1875,
-              "u_eq_q_centered": 0.0
+              "u_eq_q_centered": 0.0,
+              "u_recomp_pc1": 0.1875,
+              "u_eq_q_pc1": 0.0
             },
             "n_used_2a": 16,
             "layer": 5
           },
           {
-            "r2": 0.947375255046587,
-            "feat_r2_single": {
-              "pos": 0.8783942257711924,
-              "norm": 0.005926751569238609,
-              "outlier": 0.2576837430211084
+            "r2": 0.9473026067283067,
+            "feat_r2": {
+              "pos": 0.8783067031089559,
+              "norm": 0.005997733264450411,
+              "outlier": 0.2578299760011157
             },
             "pred_jaccard": {
               "pos": {
@@ -1336,17 +1440,19 @@
               "stock": 0.1875,
               "u_eq_q": 0.375,
               "stock_centered": 0.1875,
-              "u_eq_q_centered": 0.375
+              "u_eq_q_centered": 0.375,
+              "u_recomp_pc1": 0.1875,
+              "u_eq_q_pc1": 0.4375
             },
             "n_used_2a": 16,
             "layer": 6
           },
           {
-            "r2": 0.9988074679130312,
-            "feat_r2_single": {
-              "pos": 0.9956320575878377,
-              "norm": 0.36804686775326345,
-              "outlier": 0.07667942017279417
+            "r2": 0.9987896071833526,
+            "feat_r2": {
+              "pos": 0.9956562163091524,
+              "norm": 0.36807459804037734,
+              "outlier": 0.0764775537684772
             },
             "pred_jaccard": {
               "pos": {
@@ -1368,49 +1474,53 @@
               "stock": 0.1875,
               "u_eq_q": 0.625,
               "stock_centered": 0.1875,
-              "u_eq_q_centered": 0.625
+              "u_eq_q_centered": 0.625,
+              "u_recomp_pc1": 0.1875,
+              "u_eq_q_pc1": 0.625
             },
             "n_used_2a": 16,
             "layer": 7
           },
           {
-            "r2": 0.5225942377090096,
-            "feat_r2_single": {
-              "pos": 0.4395214132895119,
-              "norm": 0.10256761438729856,
-              "outlier": 0.0005191641862593022
+            "r2": 0.5208897700653132,
+            "feat_r2": {
+              "pos": 0.4370975734425472,
+              "norm": 0.10282078387178217,
+              "outlier": 0.0005965689394723528
             },
             "pred_jaccard": {
               "pos": {
-                "jaccard": 0.875,
+                "jaccard": 0.8333333333333333,
                 "direction": "high"
               },
               "norm": {
-                "jaccard": 0.2708333333333333,
+                "jaccard": 0.3125,
                 "direction": "low"
               },
               "outlier": {
                 "jaccard": 0.3333333333333333,
                 "direction": "high"
               },
-              "combined": 0.875
+              "combined": 0.8333333333333333
             },
             "gram_offdiag": 0.9912848435342312,
             "hit2": {
-              "stock": 0.375,
+              "stock": 0.4375,
               "u_eq_q": 0.1875,
               "stock_centered": 0.375,
-              "u_eq_q_centered": 0.1875
+              "u_eq_q_centered": 0.1875,
+              "u_recomp_pc1": 0.75,
+              "u_eq_q_pc1": 0.1875
             },
             "n_used_2a": 16,
             "layer": 8
           },
           {
-            "r2": 0.9988767354667138,
-            "feat_r2_single": {
-              "pos": 0.9961880823473545,
-              "norm": 0.7887799077198321,
-              "outlier": 0.07592459126613582
+            "r2": 0.9989011735524668,
+            "feat_r2": {
+              "pos": 0.9962031554795876,
+              "norm": 0.788779091260459,
+              "outlier": 0.07597387223084529
             },
             "pred_jaccard": {
               "pos": {
@@ -1432,17 +1542,19 @@
               "stock": 0.1875,
               "u_eq_q": 0.375,
               "stock_centered": 0.1875,
-              "u_eq_q_centered": 0.375
+              "u_eq_q_centered": 0.375,
+              "u_recomp_pc1": 0.1875,
+              "u_eq_q_pc1": 0.375
             },
             "n_used_2a": 16,
             "layer": 9
           },
           {
-            "r2": 0.9977352805227567,
-            "feat_r2_single": {
-              "pos": 0.9846053981769645,
-              "norm": 0.6918031178265367,
-              "outlier": 0.16350288195032525
+            "r2": 0.9977283158020507,
+            "feat_r2": {
+              "pos": 0.9846648960219903,
+              "norm": 0.6917345498345182,
+              "outlier": 0.16330816143163496
             },
             "pred_jaccard": {
               "pos": {
@@ -1464,17 +1576,19 @@
               "stock": 0.1875,
               "u_eq_q": 0.1875,
               "stock_centered": 0.1875,
-              "u_eq_q_centered": 0.1875
+              "u_eq_q_centered": 0.1875,
+              "u_recomp_pc1": 0.1875,
+              "u_eq_q_pc1": 0.1875
             },
             "n_used_2a": 16,
             "layer": 10
           },
           {
-            "r2": 0.9966146247767578,
-            "feat_r2_single": {
-              "pos": 0.9952096932098936,
-              "norm": 0.7466743871214211,
-              "outlier": 0.08308618746560603
+            "r2": 0.9966470066728386,
+            "feat_r2": {
+              "pos": 0.9952243621132295,
+              "norm": 0.7467705786430279,
+              "outlier": 0.08322507359910569
             },
             "pred_jaccard": {
               "pos": {
@@ -1496,17 +1610,19 @@
               "stock": 0.1875,
               "u_eq_q": 0.1875,
               "stock_centered": 0.1875,
-              "u_eq_q_centered": 0.1875
+              "u_eq_q_centered": 0.1875,
+              "u_recomp_pc1": 0.1875,
+              "u_eq_q_pc1": 0.125
             },
             "n_used_2a": 16,
             "layer": 11
           },
           {
-            "r2": 0.9994100885140784,
-            "feat_r2_single": {
-              "pos": 0.9937226001836351,
-              "norm": 0.3114908530371544,
-              "outlier": 0.22175153671799408
+            "r2": 0.9994093662359178,
+            "feat_r2": {
+              "pos": 0.9937555539095262,
+              "norm": 0.3115584331495901,
+              "outlier": 0.22149957075441862
             },
             "pred_jaccard": {
               "pos": {
@@ -1528,17 +1644,19 @@
               "stock": 0.1875,
               "u_eq_q": 0.1875,
               "stock_centered": 0.1875,
-              "u_eq_q_centered": 0.1875
+              "u_eq_q_centered": 0.1875,
+              "u_recomp_pc1": 0.1875,
+              "u_eq_q_pc1": 0.1875
             },
             "n_used_2a": 16,
             "layer": 12
           },
           {
-            "r2": 0.9849580702538338,
-            "feat_r2_single": {
-              "pos": 0.9548447040568624,
-              "norm": 0.34836644018589247,
-              "outlier": 0.15638399058977792
+            "r2": 0.9849964996262772,
+            "feat_r2": {
+              "pos": 0.9547797281501477,
+              "norm": 0.34796512151200965,
+              "outlier": 0.15662692732866723
             },
             "pred_jaccard": {
               "pos": {
@@ -1560,17 +1678,19 @@
               "stock": 0.3125,
               "u_eq_q": 0.25,
               "stock_centered": 0.3125,
-              "u_eq_q_centered": 0.25
+              "u_eq_q_centered": 0.25,
+              "u_recomp_pc1": 0.3125,
+              "u_eq_q_pc1": 0.1875
             },
             "n_used_2a": 16,
             "layer": 13
           },
           {
-            "r2": 0.1213156387038824,
-            "feat_r2_single": {
-              "pos": 0.020448993847433927,
-              "norm": 2.395729717818984e-05,
-              "outlier": 0.024287536399786314
+            "r2": 0.12256295858684929,
+            "feat_r2": {
+              "pos": 0.019715500656856788,
+              "norm": 3.1156192463743793e-06,
+              "outlier": 0.026045127138780044
             },
             "pred_jaccard": {
               "pos": {
@@ -1592,17 +1712,19 @@
               "stock": 0.8125,
               "u_eq_q": 0.3125,
               "stock_centered": 0.8125,
-              "u_eq_q_centered": 0.3125
+              "u_eq_q_centered": 0.3125,
+              "u_recomp_pc1": 0.875,
+              "u_eq_q_pc1": 0.3125
             },
             "n_used_2a": 16,
             "layer": 14
           },
           {
-            "r2": 0.16533979585362701,
-            "feat_r2_single": {
-              "pos": 0.0994022992166711,
-              "norm": 0.08135360513955114,
-              "outlier": 0.003686576607857872
+            "r2": 0.1644920952361325,
+            "feat_r2": {
+              "pos": 0.10016531537234064,
+              "norm": 0.07968021013161253,
+              "outlier": 0.003510436075378265
             },
             "pred_jaccard": {
               "pos": {
@@ -1624,7 +1746,9 @@
               "stock": 0.375,
               "u_eq_q": 0.625,
               "stock_centered": 0.375,
-              "u_eq_q_centered": 0.625
+              "u_eq_q_centered": 0.625,
+              "u_recomp_pc1": 0.375,
+              "u_eq_q_pc1": 0.625
             },
             "n_used_2a": 16,
             "layer": 15
@@ -1646,6 +1770,14 @@
           "u_eq_q_centered": {
             "layer": 7,
             "hit2": 0.625
+          },
+          "u_recomp_pc1": {
+            "layer": 14,
+            "hit2": 0.875
+          },
+          "u_eq_q_pc1": {
+            "layer": 7,
+            "hit2": 0.625
           }
         }
       },
@@ -1656,11 +1788,11 @@
         "chance_hit2": 0.2857142857142857,
         "per_layer": [
           {
-            "r2": 0.3201923920437393,
-            "feat_r2_single": {
-              "pos": 0.00880908507618039,
-              "norm": 0.07026596809578634,
-              "outlier": 0.3137226897531813
+            "r2": 0.31673726431452265,
+            "feat_r2": {
+              "pos": 0.009190284795812076,
+              "norm": 0.07001041335234903,
+              "outlier": 0.30992741404535273
             },
             "pred_jaccard": {
               "pos": {
@@ -1682,17 +1814,19 @@
               "stock": 0.3125,
               "u_eq_q": 0.125,
               "stock_centered": 0.3125,
-              "u_eq_q_centered": 0.125
+              "u_eq_q_centered": 0.125,
+              "u_recomp_pc1": 0.3125,
+              "u_eq_q_pc1": 0.125
             },
             "n_used_2a": 16,
             "layer": 0
           },
           {
-            "r2": 0.8081489808556126,
-            "feat_r2_single": {
-              "pos": 0.027804832954917758,
-              "norm": 0.6624690614915489,
-              "outlier": 0.5054172001823964
+            "r2": 0.8083644139419696,
+            "feat_r2": {
+              "pos": 0.02872577648442054,
+              "norm": 0.6607444249045573,
+              "outlier": 0.5061635397876452
             },
             "pred_jaccard": {
               "pos": {
@@ -1714,17 +1848,19 @@
               "stock": 0.4375,
               "u_eq_q": 0.0,
               "stock_centered": 0.4375,
-              "u_eq_q_centered": 0.0
+              "u_eq_q_centered": 0.0,
+              "u_recomp_pc1": 0.4375,
+              "u_eq_q_pc1": 0.0
             },
             "n_used_2a": 16,
             "layer": 1
           },
           {
-            "r2": 0.9848639929020506,
-            "feat_r2_single": {
-              "pos": 0.9321166849919482,
-              "norm": 0.014017393826632363,
-              "outlier": 0.3424755251226631
+            "r2": 0.9848281144582841,
+            "feat_r2": {
+              "pos": 0.9316716458473544,
+              "norm": 0.013852844100907702,
+              "outlier": 0.34333357595355174
             },
             "pred_jaccard": {
               "pos": {
@@ -1746,17 +1882,19 @@
               "stock": 0.25,
               "u_eq_q": 0.25,
               "stock_centered": 0.25,
-              "u_eq_q_centered": 0.25
+              "u_eq_q_centered": 0.25,
+              "u_recomp_pc1": 0.25,
+              "u_eq_q_pc1": 0.25
             },
             "n_used_2a": 16,
             "layer": 2
           },
           {
-            "r2": 0.9947966175604087,
-            "feat_r2_single": {
-              "pos": 0.994190531133714,
-              "norm": 0.8642828125941417,
-              "outlier": 0.037233966304576094
+            "r2": 0.9948268666996357,
+            "feat_r2": {
+              "pos": 0.994220921838876,
+              "norm": 0.8643112779478908,
+              "outlier": 0.03723451008712053
             },
             "pred_jaccard": {
               "pos": {
@@ -1778,17 +1916,19 @@
               "stock": 0.25,
               "u_eq_q": 0.1875,
               "stock_centered": 0.25,
-              "u_eq_q_centered": 0.1875
+              "u_eq_q_centered": 0.1875,
+              "u_recomp_pc1": 0.25,
+              "u_eq_q_pc1": 0.1875
             },
             "n_used_2a": 16,
             "layer": 3
           },
           {
-            "r2": 0.9787106997069542,
-            "feat_r2_single": {
-              "pos": 0.8501097247928084,
-              "norm": 0.8689380402806438,
-              "outlier": 0.009363041119684112
+            "r2": 0.9787733167301178,
+            "feat_r2": {
+              "pos": 0.8500742955895996,
+              "norm": 0.8689184366282082,
+              "outlier": 0.00939889384997794
             },
             "pred_jaccard": {
               "pos": {
@@ -1810,17 +1950,19 @@
               "stock": 0.1875,
               "u_eq_q": 0.5,
               "stock_centered": 0.1875,
-              "u_eq_q_centered": 0.5
+              "u_eq_q_centered": 0.5,
+              "u_recomp_pc1": 0.1875,
+              "u_eq_q_pc1": 0.5
             },
             "n_used_2a": 16,
             "layer": 4
           },
           {
-            "r2": 0.9956112512742585,
-            "feat_r2_single": {
-              "pos": 0.9938462488171796,
-              "norm": 0.19965761552383265,
-              "outlier": 0.053059065131456085
+            "r2": 0.995604530370605,
+            "feat_r2": {
+              "pos": 0.9938207048828747,
+              "norm": 0.19949420978853094,
+              "outlier": 0.053170368207547836
             },
             "pred_jaccard": {
               "pos": {
@@ -1842,17 +1984,19 @@
               "stock": 0.25,
               "u_eq_q": 0.0,
               "stock_centered": 0.25,
-              "u_eq_q_centered": 0.0
+              "u_eq_q_centered": 0.0,
+              "u_recomp_pc1": 0.25,
+              "u_eq_q_pc1": 0.0
             },
             "n_used_2a": 16,
             "layer": 5
           },
           {
-            "r2": 0.9478393290396243,
-            "feat_r2_single": {
-              "pos": 0.8798295511668565,
-              "norm": 0.005569349243726651,
-              "outlier": 0.263693316707007
+            "r2": 0.9484403366987627,
+            "feat_r2": {
+              "pos": 0.8796688033764861,
+              "norm": 0.0056221681593466855,
+              "outlier": 0.26501259229083285
             },
             "pred_jaccard": {
               "pos": {
@@ -1874,17 +2018,19 @@
               "stock": 0.3125,
               "u_eq_q": 0.1875,
               "stock_centered": 0.3125,
-              "u_eq_q_centered": 0.1875
+              "u_eq_q_centered": 0.1875,
+              "u_recomp_pc1": 0.3125,
+              "u_eq_q_pc1": 0.1875
             },
             "n_used_2a": 16,
             "layer": 6
           },
           {
-            "r2": 0.9988573017177661,
-            "feat_r2_single": {
-              "pos": 0.9948455646076059,
-              "norm": 0.5097255265173739,
-              "outlier": 0.08181852872007689
+            "r2": 0.9988522698128248,
+            "feat_r2": {
+              "pos": 0.9948785593345957,
+              "norm": 0.5096686266220435,
+              "outlier": 0.08165131957910743
             },
             "pred_jaccard": {
               "pos": {
@@ -1906,17 +2052,19 @@
               "stock": 0.25,
               "u_eq_q": 0.375,
               "stock_centered": 0.25,
-              "u_eq_q_centered": 0.375
+              "u_eq_q_centered": 0.375,
+              "u_recomp_pc1": 0.25,
+              "u_eq_q_pc1": 0.375
             },
             "n_used_2a": 16,
             "layer": 7
           },
           {
-            "r2": 0.4927307721889671,
-            "feat_r2_single": {
-              "pos": 0.4135214154444411,
-              "norm": 0.0597214418730897,
-              "outlier": 0.0016767773249325435
+            "r2": 0.4906184479897978,
+            "feat_r2": {
+              "pos": 0.4112841302722787,
+              "norm": 0.05894266892945599,
+              "outlier": 0.0017422007030604147
             },
             "pred_jaccard": {
               "pos": {
@@ -1938,17 +2086,19 @@
               "stock": 0.1875,
               "u_eq_q": 0.25,
               "stock_centered": 0.1875,
-              "u_eq_q_centered": 0.25
+              "u_eq_q_centered": 0.25,
+              "u_recomp_pc1": 0.25,
+              "u_eq_q_pc1": 0.25
             },
             "n_used_2a": 16,
             "layer": 8
           },
           {
-            "r2": 0.9991941027917055,
-            "feat_r2_single": {
-              "pos": 0.9959405898378539,
-              "norm": 0.8244685035573922,
-              "outlier": 0.07906152868781491
+            "r2": 0.9992005992237738,
+            "feat_r2": {
+              "pos": 0.9959578105145857,
+              "norm": 0.8243482470263581,
+              "outlier": 0.07902129570537275
             },
             "pred_jaccard": {
               "pos": {
@@ -1970,17 +2120,19 @@
               "stock": 0.25,
               "u_eq_q": 0.5,
               "stock_centered": 0.25,
-              "u_eq_q_centered": 0.5
+              "u_eq_q_centered": 0.5,
+              "u_recomp_pc1": 0.25,
+              "u_eq_q_pc1": 0.5
             },
             "n_used_2a": 16,
             "layer": 9
           },
           {
-            "r2": 0.9975537920998584,
-            "feat_r2_single": {
-              "pos": 0.9824041288833393,
-              "norm": 0.7324627164363344,
-              "outlier": 0.16527200454843638
+            "r2": 0.9975523793538235,
+            "feat_r2": {
+              "pos": 0.982488523888012,
+              "norm": 0.7323914858477985,
+              "outlier": 0.16502953947407506
             },
             "pred_jaccard": {
               "pos": {
@@ -2002,17 +2154,19 @@
               "stock": 0.25,
               "u_eq_q": 0.1875,
               "stock_centered": 0.25,
-              "u_eq_q_centered": 0.1875
+              "u_eq_q_centered": 0.1875,
+              "u_recomp_pc1": 0.25,
+              "u_eq_q_pc1": 0.1875
             },
             "n_used_2a": 16,
             "layer": 10
           },
           {
-            "r2": 0.9973000898027022,
-            "feat_r2_single": {
-              "pos": 0.9949079672451109,
-              "norm": 0.775915780220523,
-              "outlier": 0.08734491879262252
+            "r2": 0.9973021000428068,
+            "feat_r2": {
+              "pos": 0.9948886523346118,
+              "norm": 0.7759811507137018,
+              "outlier": 0.08747139137250404
             },
             "pred_jaccard": {
               "pos": {
@@ -2034,17 +2188,19 @@
               "stock": 0.25,
               "u_eq_q": 0.1875,
               "stock_centered": 0.25,
-              "u_eq_q_centered": 0.1875
+              "u_eq_q_centered": 0.1875,
+              "u_recomp_pc1": 0.25,
+              "u_eq_q_pc1": 0.125
             },
             "n_used_2a": 16,
             "layer": 11
           },
           {
-            "r2": 0.9994951845550601,
-            "feat_r2_single": {
-              "pos": 0.9923369646487096,
-              "norm": 0.32126976474815494,
-              "outlier": 0.21636839997718815
+            "r2": 0.9994931583546917,
+            "feat_r2": {
+              "pos": 0.9923720015158044,
+              "norm": 0.3213612734053799,
+              "outlier": 0.21615416149366162
             },
             "pred_jaccard": {
               "pos": {
@@ -2066,17 +2222,19 @@
               "stock": 0.25,
               "u_eq_q": 0.25,
               "stock_centered": 0.25,
-              "u_eq_q_centered": 0.25
+              "u_eq_q_centered": 0.25,
+              "u_recomp_pc1": 0.25,
+              "u_eq_q_pc1": 0.25
             },
             "n_used_2a": 16,
             "layer": 12
           },
           {
-            "r2": 0.9912274832842393,
-            "feat_r2_single": {
-              "pos": 0.9495433627327767,
-              "norm": 0.3273110428431859,
-              "outlier": 0.1825974975652781
+            "r2": 0.9912287992988462,
+            "feat_r2": {
+              "pos": 0.9493482719666023,
+              "norm": 0.3268288257031029,
+              "outlier": 0.18298671691012003
             },
             "pred_jaccard": {
               "pos": {
@@ -2098,17 +2256,19 @@
               "stock": 0.25,
               "u_eq_q": 0.4375,
               "stock_centered": 0.25,
-              "u_eq_q_centered": 0.4375
+              "u_eq_q_centered": 0.4375,
+              "u_recomp_pc1": 0.25,
+              "u_eq_q_pc1": 0.4375
             },
             "n_used_2a": 16,
             "layer": 13
           },
           {
-            "r2": 0.28656355120260024,
-            "feat_r2_single": {
-              "pos": 0.056228330691507344,
-              "norm": 0.002219468554637949,
-              "outlier": 0.045781673918523724
+            "r2": 0.28513402835314017,
+            "feat_r2": {
+              "pos": 0.05385320338730637,
+              "norm": 0.0018372903001602214,
+              "outlier": 0.04844240620143658
             },
             "pred_jaccard": {
               "pos": {
@@ -2130,17 +2290,19 @@
               "stock": 0.5625,
               "u_eq_q": 0.375,
               "stock_centered": 0.5625,
-              "u_eq_q_centered": 0.375
+              "u_eq_q_centered": 0.375,
+              "u_recomp_pc1": 0.5625,
+              "u_eq_q_pc1": 0.1875
             },
             "n_used_2a": 16,
             "layer": 14
           },
           {
-            "r2": 0.09636846751728767,
-            "feat_r2_single": {
-              "pos": 0.08251865821168758,
-              "norm": 0.021146809473704953,
-              "outlier": 1.263205642820786e-05
+            "r2": 0.09450457992140959,
+            "feat_r2": {
+              "pos": 0.08158190469792015,
+              "norm": 0.019973936251589275,
+              "outlier": 1.667020397244645e-05
             },
             "pred_jaccard": {
               "pos": {
@@ -2152,7 +2314,7 @@
                 "direction": "low"
               },
               "outlier": {
-                "jaccard": 0.16666666666666666,
+                "jaccard": 0.14583333333333331,
                 "direction": "high"
               },
               "combined": 0.25
@@ -2162,7 +2324,9 @@
               "stock": 0.3125,
               "u_eq_q": 0.4375,
               "stock_centered": 0.3125,
-              "u_eq_q_centered": 0.4375
+              "u_eq_q_centered": 0.4375,
+              "u_recomp_pc1": 0.25,
+              "u_eq_q_pc1": 0.4375
             },
             "n_used_2a": 16,
             "layer": 15
@@ -2184,6 +2348,14 @@
           "u_eq_q_centered": {
             "layer": 4,
             "hit2": 0.5
+          },
+          "u_recomp_pc1": {
+            "layer": 14,
+            "hit2": 0.5625
+          },
+          "u_eq_q_pc1": {
+            "layer": 4,
+            "hit2": 0.5
           }
         }
       }
@@ -2196,43 +2368,45 @@
         "chance_hit2": 0.2878306878306879,
         "per_layer": [
           {
-            "r2": 0.678572009129446,
-            "feat_r2_single": {
-              "pos": 0.3640183970551992,
-              "norm": 0.43168042121879413,
-              "outlier": 0.4184103922781358
+            "r2": 0.6861876431809748,
+            "feat_r2": {
+              "pos": 0.359525555904439,
+              "norm": 0.4524003786054763,
+              "outlier": 0.4151218659352667
             },
             "pred_jaccard": {
               "pos": {
-                "jaccard": 0.1925925925925926,
+                "jaccard": 0.17777777777777776,
                 "direction": "high"
               },
               "norm": {
-                "jaccard": 0.40740740740740733,
+                "jaccard": 0.3703703703703703,
                 "direction": "high"
               },
               "outlier": {
-                "jaccard": 0.22962962962962966,
+                "jaccard": 0.26666666666666666,
                 "direction": "low"
               },
-              "combined": 0.30370370370370375
+              "combined": 0.2222222222222222
             },
             "gram_offdiag": 0.999431049823761,
             "hit2": {
               "stock": 0.0,
               "u_eq_q": 0.17777777777777778,
               "stock_centered": 0.0,
-              "u_eq_q_centered": 0.17777777777777778
+              "u_eq_q_centered": 0.17777777777777778,
+              "u_recomp_pc1": 0.0,
+              "u_eq_q_pc1": 0.17777777777777778
             },
             "n_used_2a": 45,
             "layer": 0
           },
           {
-            "r2": 0.8608400724909033,
-            "feat_r2_single": {
-              "pos": 0.5963052563148725,
-              "norm": 0.6718572575403541,
-              "outlier": 0.6462740978921686
+            "r2": 0.8613845082919752,
+            "feat_r2": {
+              "pos": 0.5947412902506346,
+              "norm": 0.6737489423788257,
+              "outlier": 0.6474988839250848
             },
             "pred_jaccard": {
               "pos": {
@@ -2240,11 +2414,11 @@
                 "direction": "high"
               },
               "norm": {
-                "jaccard": 0.14074074074074072,
+                "jaccard": 0.14814814814814814,
                 "direction": "low"
               },
               "outlier": {
-                "jaccard": 0.2888888888888889,
+                "jaccard": 0.29629629629629634,
                 "direction": "low"
               },
               "combined": 0.3185185185185186
@@ -2254,17 +2428,19 @@
               "stock": 0.06666666666666667,
               "u_eq_q": 0.17777777777777778,
               "stock_centered": 0.06666666666666667,
-              "u_eq_q_centered": 0.17777777777777778
+              "u_eq_q_centered": 0.17777777777777778,
+              "u_recomp_pc1": 0.06666666666666667,
+              "u_eq_q_pc1": 0.17777777777777778
             },
             "n_used_2a": 45,
             "layer": 1
           },
           {
-            "r2": 0.9715874164060004,
-            "feat_r2_single": {
-              "pos": 0.8774175278800165,
-              "norm": 0.3708840441188732,
-              "outlier": 0.515111590556685
+            "r2": 0.9715383480835241,
+            "feat_r2": {
+              "pos": 0.8773639175910575,
+              "norm": 0.37081509951999025,
+              "outlier": 0.5151256328400629
             },
             "pred_jaccard": {
               "pos": {
@@ -2286,17 +2462,19 @@
               "stock": 0.26666666666666666,
               "u_eq_q": 0.17777777777777778,
               "stock_centered": 0.26666666666666666,
-              "u_eq_q_centered": 0.17777777777777778
+              "u_eq_q_centered": 0.17777777777777778,
+              "u_recomp_pc1": 0.26666666666666666,
+              "u_eq_q_pc1": 0.13333333333333333
             },
             "n_used_2a": 45,
             "layer": 2
           },
           {
-            "r2": 0.9914591009499404,
-            "feat_r2_single": {
-              "pos": 0.9535678946784377,
-              "norm": 0.8385364753542146,
-              "outlier": 0.3124720697069284
+            "r2": 0.9914717021080454,
+            "feat_r2": {
+              "pos": 0.953579452617549,
+              "norm": 0.8387991050959284,
+              "outlier": 0.31235460352431754
             },
             "pred_jaccard": {
               "pos": {
@@ -2318,21 +2496,23 @@
               "stock": 0.24444444444444444,
               "u_eq_q": 0.0,
               "stock_centered": 0.24444444444444444,
-              "u_eq_q_centered": 0.0
+              "u_eq_q_centered": 0.0,
+              "u_recomp_pc1": 0.24444444444444444,
+              "u_eq_q_pc1": 0.0
             },
             "n_used_2a": 45,
             "layer": 3
           },
           {
-            "r2": 0.9698728422444092,
-            "feat_r2_single": {
-              "pos": 0.7114742273909043,
-              "norm": 0.6195190753078818,
-              "outlier": 0.5621458659884296
+            "r2": 0.9708057679821916,
+            "feat_r2": {
+              "pos": 0.7118982272166146,
+              "norm": 0.620140805340808,
+              "outlier": 0.5628337204989599
             },
             "pred_jaccard": {
               "pos": {
-                "jaccard": 0.3259259259259259,
+                "jaccard": 0.31851851851851853,
                 "direction": "high"
               },
               "norm": {
@@ -2343,24 +2523,26 @@
                 "jaccard": 0.12592592592592589,
                 "direction": "low"
               },
-              "combined": 0.36296296296296293
+              "combined": 0.34814814814814815
             },
             "gram_offdiag": 0.988517227437761,
             "hit2": {
               "stock": 0.35555555555555557,
               "u_eq_q": 0.6,
               "stock_centered": 0.35555555555555557,
-              "u_eq_q_centered": 0.6
+              "u_eq_q_centered": 0.6,
+              "u_recomp_pc1": 0.35555555555555557,
+              "u_eq_q_pc1": 0.8
             },
             "n_used_2a": 45,
             "layer": 4
           },
           {
-            "r2": 0.999190553687413,
-            "feat_r2_single": {
-              "pos": 0.9957955882240095,
-              "norm": 0.4179193324094511,
-              "outlier": 0.09226292869074382
+            "r2": 0.9991853725742087,
+            "feat_r2": {
+              "pos": 0.9957339423463519,
+              "norm": 0.4177125782116201,
+              "outlier": 0.09257432210831962
             },
             "pred_jaccard": {
               "pos": {
@@ -2382,17 +2564,19 @@
               "stock": 0.24444444444444444,
               "u_eq_q": 0.6,
               "stock_centered": 0.24444444444444444,
-              "u_eq_q_centered": 0.6
+              "u_eq_q_centered": 0.6,
+              "u_recomp_pc1": 0.24444444444444444,
+              "u_eq_q_pc1": 0.5555555555555556
             },
             "n_used_2a": 45,
             "layer": 5
           },
           {
-            "r2": 0.9783869323278972,
-            "feat_r2_single": {
-              "pos": 0.8743385476039802,
-              "norm": 0.00020793272916308503,
-              "outlier": 0.09376093142543196
+            "r2": 0.9781905291907783,
+            "feat_r2": {
+              "pos": 0.8738082622315293,
+              "norm": 0.00021605197694141154,
+              "outlier": 0.09280216461041568
             },
             "pred_jaccard": {
               "pos": {
@@ -2414,17 +2598,19 @@
               "stock": 0.6444444444444445,
               "u_eq_q": 0.5777777777777777,
               "stock_centered": 0.6444444444444445,
-              "u_eq_q_centered": 0.5777777777777777
+              "u_eq_q_centered": 0.5777777777777777,
+              "u_recomp_pc1": 0.6444444444444445,
+              "u_eq_q_pc1": 0.6888888888888889
             },
             "n_used_2a": 45,
             "layer": 6
           },
           {
-            "r2": 0.999414009591401,
-            "feat_r2_single": {
-              "pos": 0.9943845224882434,
-              "norm": 0.19870796916395772,
-              "outlier": 0.19151410520049217
+            "r2": 0.9994078881118599,
+            "feat_r2": {
+              "pos": 0.9944070574869066,
+              "norm": 0.19865771147662403,
+              "outlier": 0.1913755114546185
             },
             "pred_jaccard": {
               "pos": {
@@ -2446,17 +2632,19 @@
               "stock": 0.24444444444444444,
               "u_eq_q": 0.0,
               "stock_centered": 0.24444444444444444,
-              "u_eq_q_centered": 0.0
+              "u_eq_q_centered": 0.0,
+              "u_recomp_pc1": 0.24444444444444444,
+              "u_eq_q_pc1": 0.15555555555555556
             },
             "n_used_2a": 45,
             "layer": 7
           },
           {
-            "r2": 0.8206084403448171,
-            "feat_r2_single": {
-              "pos": 0.12188204792625579,
-              "norm": 0.7681885602214857,
-              "outlier": 0.2761659437514994
+            "r2": 0.8214770979714873,
+            "feat_r2": {
+              "pos": 0.12042877029371812,
+              "norm": 0.7681936033567462,
+              "outlier": 0.2749427454264133
             },
             "pred_jaccard": {
               "pos": {
@@ -2478,17 +2666,19 @@
               "stock": 0.9555555555555556,
               "u_eq_q": 0.35555555555555557,
               "stock_centered": 0.9555555555555556,
-              "u_eq_q_centered": 0.35555555555555557
+              "u_eq_q_centered": 0.35555555555555557,
+              "u_recomp_pc1": 0.9555555555555556,
+              "u_eq_q_pc1": 0.5111111111111111
             },
             "n_used_2a": 45,
             "layer": 8
           },
           {
-            "r2": 0.9993359641348785,
-            "feat_r2_single": {
-              "pos": 0.997772966017573,
-              "norm": 0.005712239013770826,
-              "outlier": 0.20198004979207196
+            "r2": 0.9993282084436895,
+            "feat_r2": {
+              "pos": 0.9977986093238178,
+              "norm": 0.005670958972017082,
+              "outlier": 0.20160873728866913
             },
             "pred_jaccard": {
               "pos": {
@@ -2510,17 +2700,19 @@
               "stock": 0.24444444444444444,
               "u_eq_q": 0.37777777777777777,
               "stock_centered": 0.24444444444444444,
-              "u_eq_q_centered": 0.37777777777777777
+              "u_eq_q_centered": 0.37777777777777777,
+              "u_recomp_pc1": 0.24444444444444444,
+              "u_eq_q_pc1": 0.3333333333333333
             },
             "n_used_2a": 45,
             "layer": 9
           },
           {
-            "r2": 0.9993461175230794,
-            "feat_r2_single": {
-              "pos": 0.9963020211286279,
-              "norm": 0.058480298020638255,
-              "outlier": 0.23780102005044157
+            "r2": 0.9993428138372293,
+            "feat_r2": {
+              "pos": 0.9963177034076496,
+              "norm": 0.05854877036314465,
+              "outlier": 0.23762107011829736
             },
             "pred_jaccard": {
               "pos": {
@@ -2542,17 +2734,19 @@
               "stock": 0.24444444444444444,
               "u_eq_q": 0.0,
               "stock_centered": 0.24444444444444444,
-              "u_eq_q_centered": 0.0
+              "u_eq_q_centered": 0.0,
+              "u_recomp_pc1": 0.24444444444444444,
+              "u_eq_q_pc1": 0.044444444444444446
             },
             "n_used_2a": 45,
             "layer": 10
           },
           {
-            "r2": 0.9936054316919545,
-            "feat_r2_single": {
-              "pos": 0.9743348747305245,
-              "norm": 0.09115797053942976,
-              "outlier": 0.10627020481902083
+            "r2": 0.9934949066564452,
+            "feat_r2": {
+              "pos": 0.9741377871007094,
+              "norm": 0.09133292371947199,
+              "outlier": 0.10611728394930398
             },
             "pred_jaccard": {
               "pos": {
@@ -2574,17 +2768,19 @@
               "stock": 0.24444444444444444,
               "u_eq_q": 0.17777777777777778,
               "stock_centered": 0.24444444444444444,
-              "u_eq_q_centered": 0.17777777777777778
+              "u_eq_q_centered": 0.17777777777777778,
+              "u_recomp_pc1": 0.24444444444444444,
+              "u_eq_q_pc1": 0.022222222222222223
             },
             "n_used_2a": 45,
             "layer": 11
           },
           {
-            "r2": 0.9978923960113283,
-            "feat_r2_single": {
-              "pos": 0.9931065024922509,
-              "norm": 0.3297422583213957,
-              "outlier": 0.31663801691748106
+            "r2": 0.9979263057363024,
+            "feat_r2": {
+              "pos": 0.9931170234931652,
+              "norm": 0.33004660443485645,
+              "outlier": 0.3169088946163533
             },
             "pred_jaccard": {
               "pos": {
@@ -2606,17 +2802,19 @@
               "stock": 0.24444444444444444,
               "u_eq_q": 0.7555555555555555,
               "stock_centered": 0.24444444444444444,
-              "u_eq_q_centered": 0.7555555555555555
+              "u_eq_q_centered": 0.7555555555555555,
+              "u_recomp_pc1": 0.24444444444444444,
+              "u_eq_q_pc1": 0.7555555555555555
             },
             "n_used_2a": 45,
             "layer": 12
           },
           {
-            "r2": 0.9973160035084933,
-            "feat_r2_single": {
-              "pos": 0.9824521861092853,
-              "norm": 0.00410868318581159,
-              "outlier": 0.22299719122270367
+            "r2": 0.9973470056762056,
+            "feat_r2": {
+              "pos": 0.9825001518777693,
+              "norm": 0.004228576620275537,
+              "outlier": 0.22357849994062395
             },
             "pred_jaccard": {
               "pos": {
@@ -2638,17 +2836,19 @@
               "stock": 0.24444444444444444,
               "u_eq_q": 0.5777777777777777,
               "stock_centered": 0.24444444444444444,
-              "u_eq_q_centered": 0.5777777777777777
+              "u_eq_q_centered": 0.5777777777777777,
+              "u_recomp_pc1": 0.24444444444444444,
+              "u_eq_q_pc1": 0.6
             },
             "n_used_2a": 45,
             "layer": 13
           },
           {
-            "r2": 0.640827588086232,
-            "feat_r2_single": {
-              "pos": 0.20967898523910866,
-              "norm": 0.2566809972280113,
-              "outlier": 0.012004283095125023
+            "r2": 0.6409749088564984,
+            "feat_r2": {
+              "pos": 0.21198571421810464,
+              "norm": 0.2574074449056317,
+              "outlier": 0.012420937907207996
             },
             "pred_jaccard": {
               "pos": {
@@ -2670,17 +2870,19 @@
               "stock": 0.9555555555555556,
               "u_eq_q": 0.0,
               "stock_centered": 0.9555555555555556,
-              "u_eq_q_centered": 0.0
+              "u_eq_q_centered": 0.0,
+              "u_recomp_pc1": 0.9555555555555556,
+              "u_eq_q_pc1": 0.35555555555555557
             },
             "n_used_2a": 45,
             "layer": 14
           },
           {
-            "r2": 0.696336461049488,
-            "feat_r2_single": {
-              "pos": 0.002956717874382675,
-              "norm": 0.517783164315782,
-              "outlier": 0.2678851563988386
+            "r2": 0.6976132035377485,
+            "feat_r2": {
+              "pos": 0.0031904518360136302,
+              "norm": 0.5172155888668579,
+              "outlier": 0.26726571882426475
             },
             "pred_jaccard": {
               "pos": {
@@ -2702,7 +2904,9 @@
               "stock": 1.0,
               "u_eq_q": 0.8666666666666667,
               "stock_centered": 1.0,
-              "u_eq_q_centered": 0.8666666666666667
+              "u_eq_q_centered": 0.8666666666666667,
+              "u_recomp_pc1": 0.8222222222222222,
+              "u_eq_q_pc1": 0.9111111111111111
             },
             "n_used_2a": 45,
             "layer": 15
@@ -2724,6 +2928,14 @@
           "u_eq_q_centered": {
             "layer": 15,
             "hit2": 0.8666666666666667
+          },
+          "u_recomp_pc1": {
+            "layer": 8,
+            "hit2": 0.9555555555555556
+          },
+          "u_eq_q_pc1": {
+            "layer": 15,
+            "hit2": 0.9111111111111111
           }
         }
       },
@@ -2734,15 +2946,15 @@
         "chance_hit2": 0.486322188449848,
         "per_layer": [
           {
-            "r2": 0.7204395907072267,
-            "feat_r2_single": {
-              "pos": 0.634092156696997,
-              "norm": 0.028229278497554966,
-              "outlier": 0.045054081541062385
+            "r2": 0.7202629240873788,
+            "feat_r2": {
+              "pos": 0.6355452727019687,
+              "norm": 0.029268843276707535,
+              "outlier": 0.04393545739326943
             },
             "pred_jaccard": {
               "pos": {
-                "jaccard": 0.5035460992907801,
+                "jaccard": 0.5319148936170212,
                 "direction": "high"
               },
               "norm": {
@@ -2750,27 +2962,29 @@
                 "direction": "low"
               },
               "outlier": {
-                "jaccard": 0.3404255319148936,
+                "jaccard": 0.3617021276595744,
                 "direction": "high"
               },
-              "combined": 0.5035460992907801
+              "combined": 0.5319148936170212
             },
             "gram_offdiag": 0.9972070341414594,
             "hit2": {
-              "stock": 0.5106382978723404,
+              "stock": 0.48936170212765956,
               "u_eq_q": 0.48936170212765956,
               "stock_centered": 0.5106382978723404,
-              "u_eq_q_centered": 0.48936170212765956
+              "u_eq_q_centered": 0.48936170212765956,
+              "u_recomp_pc1": 0.5106382978723404,
+              "u_eq_q_pc1": 0.48936170212765956
             },
             "n_used_2a": 47,
             "layer": 0
           },
           {
-            "r2": 0.7740659102751086,
-            "feat_r2_single": {
-              "pos": 0.4927851505338775,
-              "norm": 0.7100102509907007,
-              "outlier": 0.04413270596461272
+            "r2": 0.7721088476335055,
+            "feat_r2": {
+              "pos": 0.4913622990112847,
+              "norm": 0.707931886523629,
+              "outlier": 0.043475620781856184
             },
             "pred_jaccard": {
               "pos": {
@@ -2792,17 +3006,19 @@
               "stock": 0.5957446808510638,
               "u_eq_q": 0.3404255319148936,
               "stock_centered": 0.5957446808510638,
-              "u_eq_q_centered": 0.3404255319148936
+              "u_eq_q_centered": 0.3404255319148936,
+              "u_recomp_pc1": 0.5957446808510638,
+              "u_eq_q_pc1": 0.3404255319148936
             },
             "n_used_2a": 47,
             "layer": 1
           },
           {
-            "r2": 0.9530769082363143,
-            "feat_r2_single": {
-              "pos": 0.9456421935623606,
-              "norm": 0.07735423520182505,
-              "outlier": 0.01436667787615864
+            "r2": 0.9531989658950683,
+            "feat_r2": {
+              "pos": 0.9457459691943849,
+              "norm": 0.07730845217766213,
+              "outlier": 0.014385094695911094
             },
             "pred_jaccard": {
               "pos": {
@@ -2824,17 +3040,19 @@
               "stock": 0.6382978723404256,
               "u_eq_q": 0.7659574468085106,
               "stock_centered": 0.6382978723404256,
-              "u_eq_q_centered": 0.7659574468085106
+              "u_eq_q_centered": 0.7659574468085106,
+              "u_recomp_pc1": 0.6595744680851063,
+              "u_eq_q_pc1": 0.6808510638297872
             },
             "n_used_2a": 47,
             "layer": 2
           },
           {
-            "r2": 0.9961380242647039,
-            "feat_r2_single": {
-              "pos": 0.9944636076219234,
-              "norm": 0.43790769477056923,
-              "outlier": 0.0011104769313634577
+            "r2": 0.9961713865788641,
+            "feat_r2": {
+              "pos": 0.9945346472707505,
+              "norm": 0.4374776160678312,
+              "outlier": 0.001150585540062976
             },
             "pred_jaccard": {
               "pos": {
@@ -2856,49 +3074,53 @@
               "stock": 0.6595744680851063,
               "u_eq_q": 0.3617021276595745,
               "stock_centered": 0.6595744680851063,
-              "u_eq_q_centered": 0.3617021276595745
+              "u_eq_q_centered": 0.3617021276595745,
+              "u_recomp_pc1": 0.6595744680851063,
+              "u_eq_q_pc1": 0.3404255319148936
             },
             "n_used_2a": 47,
             "layer": 3
           },
           {
-            "r2": 0.9263470862439699,
-            "feat_r2_single": {
-              "pos": 0.7076630096143258,
-              "norm": 0.8681184224262806,
-              "outlier": 0.2802245553829874
+            "r2": 0.9245068140805919,
+            "feat_r2": {
+              "pos": 0.7075564324900097,
+              "norm": 0.8668799646885732,
+              "outlier": 0.27788547520290474
             },
             "pred_jaccard": {
               "pos": {
-                "jaccard": 0.7092198581560283,
+                "jaccard": 0.723404255319149,
                 "direction": "high"
               },
               "norm": {
-                "jaccard": 0.6666666666666665,
+                "jaccard": 0.6524822695035459,
                 "direction": "low"
               },
               "outlier": {
                 "jaccard": 0.39007092198581544,
                 "direction": "low"
               },
-              "combined": 0.7517730496453899
+              "combined": 0.7375886524822695
             },
             "gram_offdiag": 0.9846699402687398,
             "hit2": {
               "stock": 0.7872340425531915,
               "u_eq_q": 0.40425531914893614,
               "stock_centered": 0.7872340425531915,
-              "u_eq_q_centered": 0.40425531914893614
+              "u_eq_q_centered": 0.40425531914893614,
+              "u_recomp_pc1": 0.7446808510638298,
+              "u_eq_q_pc1": 0.48936170212765956
             },
             "n_used_2a": 47,
             "layer": 4
           },
           {
-            "r2": 0.9956463361285118,
-            "feat_r2_single": {
-              "pos": 0.9916175438970222,
-              "norm": 0.10004342547649836,
-              "outlier": 0.01493270779882272
+            "r2": 0.9957014769166201,
+            "feat_r2": {
+              "pos": 0.9917516378929139,
+              "norm": 0.09980729437834701,
+              "outlier": 0.015105083047609935
             },
             "pred_jaccard": {
               "pos": {
@@ -2920,17 +3142,19 @@
               "stock": 0.6595744680851063,
               "u_eq_q": 0.3829787234042553,
               "stock_centered": 0.6595744680851063,
-              "u_eq_q_centered": 0.3829787234042553
+              "u_eq_q_centered": 0.3829787234042553,
+              "u_recomp_pc1": 0.6595744680851063,
+              "u_eq_q_pc1": 0.3829787234042553
             },
             "n_used_2a": 47,
             "layer": 5
           },
           {
-            "r2": 0.5172679606424087,
-            "feat_r2_single": {
-              "pos": 0.06488491505064209,
-              "norm": 0.04996269761476624,
-              "outlier": 0.038227230188560224
+            "r2": 0.5168882158167645,
+            "feat_r2": {
+              "pos": 0.06675401835021,
+              "norm": 0.048171009150571376,
+              "outlier": 0.03917578321543913
             },
             "pred_jaccard": {
               "pos": {
@@ -2938,31 +3162,33 @@
                 "direction": "low"
               },
               "norm": {
-                "jaccard": 0.5177304964539006,
+                "jaccard": 0.5319148936170212,
                 "direction": "low"
               },
               "outlier": {
-                "jaccard": 0.41134751773049627,
+                "jaccard": 0.3971631205673757,
                 "direction": "high"
               },
-              "combined": 0.6666666666666666
+              "combined": 0.6666666666666665
             },
             "gram_offdiag": 0.9841546543101047,
             "hit2": {
               "stock": 0.5531914893617021,
               "u_eq_q": 0.3191489361702128,
               "stock_centered": 0.5531914893617021,
-              "u_eq_q_centered": 0.3191489361702128
+              "u_eq_q_centered": 0.3191489361702128,
+              "u_recomp_pc1": 0.574468085106383,
+              "u_eq_q_pc1": 0.3617021276595745
             },
             "n_used_2a": 47,
             "layer": 6
           },
           {
-            "r2": 0.9984569373194216,
-            "feat_r2_single": {
-              "pos": 0.997414979538879,
-              "norm": 0.48756483929702543,
-              "outlier": 0.0009095191637752409
+            "r2": 0.9984447123818059,
+            "feat_r2": {
+              "pos": 0.9974133057343925,
+              "norm": 0.48753852065797254,
+              "outlier": 0.0009199106666880619
             },
             "pred_jaccard": {
               "pos": {
@@ -2984,17 +3210,19 @@
               "stock": 0.6595744680851063,
               "u_eq_q": 0.574468085106383,
               "stock_centered": 0.6595744680851063,
-              "u_eq_q_centered": 0.574468085106383
+              "u_eq_q_centered": 0.574468085106383,
+              "u_recomp_pc1": 0.6595744680851063,
+              "u_eq_q_pc1": 0.7021276595744681
             },
             "n_used_2a": 47,
             "layer": 7
           },
           {
-            "r2": 0.7530802088626604,
-            "feat_r2_single": {
-              "pos": 0.5047459914205531,
-              "norm": 0.1107285241868542,
-              "outlier": 0.462781126057062
+            "r2": 0.7533340901874384,
+            "feat_r2": {
+              "pos": 0.5050208312550837,
+              "norm": 0.11062624805605492,
+              "outlier": 0.46283248273011346
             },
             "pred_jaccard": {
               "pos": {
@@ -3016,17 +3244,19 @@
               "stock": 0.44680851063829785,
               "u_eq_q": 0.48936170212765956,
               "stock_centered": 0.44680851063829785,
-              "u_eq_q_centered": 0.48936170212765956
+              "u_eq_q_centered": 0.48936170212765956,
+              "u_recomp_pc1": 0.3829787234042553,
+              "u_eq_q_pc1": 0.5319148936170213
             },
             "n_used_2a": 47,
             "layer": 8
           },
           {
-            "r2": 0.9976325867502088,
-            "feat_r2_single": {
-              "pos": 0.997534012720616,
-              "norm": 0.5451318016041706,
-              "outlier": 0.00877789907958093
+            "r2": 0.9976245058814197,
+            "feat_r2": {
+              "pos": 0.9975282469989949,
+              "norm": 0.5452410082629484,
+              "outlier": 0.00876297061619713
             },
             "pred_jaccard": {
               "pos": {
@@ -3048,17 +3278,19 @@
               "stock": 0.6595744680851063,
               "u_eq_q": 0.5531914893617021,
               "stock_centered": 0.6595744680851063,
-              "u_eq_q_centered": 0.5531914893617021
+              "u_eq_q_centered": 0.5531914893617021,
+              "u_recomp_pc1": 0.6595744680851063,
+              "u_eq_q_pc1": 0.5957446808510638
             },
             "n_used_2a": 47,
             "layer": 9
           },
           {
-            "r2": 0.9986642284555752,
-            "feat_r2_single": {
-              "pos": 0.9960582692353471,
-              "norm": 0.6094846788404322,
-              "outlier": 0.02861045461926559
+            "r2": 0.9986669845118066,
+            "feat_r2": {
+              "pos": 0.9960526113915733,
+              "norm": 0.6095659128116553,
+              "outlier": 0.028624928814813377
             },
             "pred_jaccard": {
               "pos": {
@@ -3080,17 +3312,19 @@
               "stock": 0.6595744680851063,
               "u_eq_q": 0.3617021276595745,
               "stock_centered": 0.6595744680851063,
-              "u_eq_q_centered": 0.3617021276595745
+              "u_eq_q_centered": 0.3617021276595745,
+              "u_recomp_pc1": 0.6595744680851063,
+              "u_eq_q_pc1": 0.3617021276595745
             },
             "n_used_2a": 47,
             "layer": 10
           },
           {
-            "r2": 0.8909564179336965,
-            "feat_r2_single": {
-              "pos": 0.8228774987633856,
-              "norm": 0.49323492448370476,
-              "outlier": 0.014631015626364041
+            "r2": 0.8909007785090455,
+            "feat_r2": {
+              "pos": 0.8230106480993837,
+              "norm": 0.49341665622758357,
+              "outlier": 0.014540527413703597
             },
             "pred_jaccard": {
               "pos": {
@@ -3112,17 +3346,19 @@
               "stock": 0.7021276595744681,
               "u_eq_q": 0.3191489361702128,
               "stock_centered": 0.7021276595744681,
-              "u_eq_q_centered": 0.3191489361702128
+              "u_eq_q_centered": 0.3191489361702128,
+              "u_recomp_pc1": 0.723404255319149,
+              "u_eq_q_pc1": 0.2978723404255319
             },
             "n_used_2a": 47,
             "layer": 11
           },
           {
-            "r2": 0.9984983253937545,
-            "feat_r2_single": {
-              "pos": 0.9944818380246495,
-              "norm": 0.050236414342670344,
-              "outlier": 0.10150324007454692
+            "r2": 0.9984698124620291,
+            "feat_r2": {
+              "pos": 0.9944001475308698,
+              "norm": 0.0502902704100292,
+              "outlier": 0.10174885503291553
             },
             "pred_jaccard": {
               "pos": {
@@ -3144,17 +3380,19 @@
               "stock": 0.6595744680851063,
               "u_eq_q": 0.3829787234042553,
               "stock_centered": 0.6595744680851063,
-              "u_eq_q_centered": 0.3829787234042553
+              "u_eq_q_centered": 0.3829787234042553,
+              "u_recomp_pc1": 0.6595744680851063,
+              "u_eq_q_pc1": 0.3829787234042553
             },
             "n_used_2a": 47,
             "layer": 12
           },
           {
-            "r2": 0.9819090720919355,
-            "feat_r2_single": {
-              "pos": 0.9794907663674948,
-              "norm": 0.5170302587865385,
-              "outlier": 0.05741297557240099
+            "r2": 0.9816664406825047,
+            "feat_r2": {
+              "pos": 0.9792018888120123,
+              "norm": 0.5171480741812337,
+              "outlier": 0.05759621871882681
             },
             "pred_jaccard": {
               "pos": {
@@ -3176,21 +3414,23 @@
               "stock": 0.6595744680851063,
               "u_eq_q": 0.23404255319148937,
               "stock_centered": 0.6595744680851063,
-              "u_eq_q_centered": 0.23404255319148937
+              "u_eq_q_centered": 0.23404255319148937,
+              "u_recomp_pc1": 0.6595744680851063,
+              "u_eq_q_pc1": 0.2553191489361702
             },
             "n_used_2a": 47,
             "layer": 13
           },
           {
-            "r2": 0.12776926411968093,
-            "feat_r2_single": {
-              "pos": 0.06980990134866683,
-              "norm": 0.09480752943088688,
-              "outlier": 0.0073841923302889745
+            "r2": 0.12783160393932635,
+            "feat_r2": {
+              "pos": 0.07079643443525785,
+              "norm": 0.09406892872832051,
+              "outlier": 0.007286039428567204
             },
             "pred_jaccard": {
               "pos": {
-                "jaccard": 0.5390070921985815,
+                "jaccard": 0.5460992907801417,
                 "direction": "low"
               },
               "norm": {
@@ -3198,27 +3438,29 @@
                 "direction": "low"
               },
               "outlier": {
-                "jaccard": 0.39716312056737574,
+                "jaccard": 0.3900709219858155,
                 "direction": "high"
               },
-              "combined": 0.46808510638297857
+              "combined": 0.48226950354609915
             },
             "gram_offdiag": 0.9779344264497148,
             "hit2": {
-              "stock": 0.8085106382978723,
+              "stock": 0.8297872340425532,
               "u_eq_q": 0.425531914893617,
               "stock_centered": 0.8085106382978723,
-              "u_eq_q_centered": 0.425531914893617
+              "u_eq_q_centered": 0.425531914893617,
+              "u_recomp_pc1": 0.8297872340425532,
+              "u_eq_q_pc1": 0.425531914893617
             },
             "n_used_2a": 47,
             "layer": 14
           },
           {
-            "r2": 0.6305854954767057,
-            "feat_r2_single": {
-              "pos": 0.08395838975553815,
-              "norm": 0.3998036185896754,
-              "outlier": 0.5829873408157953
+            "r2": 0.6289109054418838,
+            "feat_r2": {
+              "pos": 0.08263688413012071,
+              "norm": 0.399403291348594,
+              "outlier": 0.5818063361372627
             },
             "pred_jaccard": {
               "pos": {
@@ -3240,7 +3482,9 @@
               "stock": 0.6170212765957447,
               "u_eq_q": 0.425531914893617,
               "stock_centered": 0.6170212765957447,
-              "u_eq_q_centered": 0.425531914893617
+              "u_eq_q_centered": 0.425531914893617,
+              "u_recomp_pc1": 0.6595744680851063,
+              "u_eq_q_pc1": 0.425531914893617
             },
             "n_used_2a": 47,
             "layer": 15
@@ -3249,7 +3493,7 @@
         "best_layer": {
           "stock": {
             "layer": 14,
-            "hit2": 0.8085106382978723
+            "hit2": 0.8297872340425532
           },
           "u_eq_q": {
             "layer": 2,
@@ -3262,6 +3506,14 @@
           "u_eq_q_centered": {
             "layer": 2,
             "hit2": 0.7659574468085106
+          },
+          "u_recomp_pc1": {
+            "layer": 14,
+            "hit2": 0.8297872340425532
+          },
+          "u_eq_q_pc1": {
+            "layer": 7,
+            "hit2": 0.7021276595744681
           }
         }
       },
@@ -3272,11 +3524,11 @@
         "chance_hit2": 0.2857142857142857,
         "per_layer": [
           {
-            "r2": 0.5412785313842672,
-            "feat_r2_single": {
-              "pos": 0.28905635870373825,
-              "norm": 0.019781959170077412,
-              "outlier": 0.3526097911514482
+            "r2": 0.5344604378649715,
+            "feat_r2": {
+              "pos": 0.2780260900767453,
+              "norm": 0.017561491286999464,
+              "outlier": 0.355881805045248
             },
             "pred_jaccard": {
               "pos": {
@@ -3298,49 +3550,53 @@
               "stock": 0.125,
               "u_eq_q": 0.125,
               "stock_centered": 0.125,
-              "u_eq_q_centered": 0.125
+              "u_eq_q_centered": 0.125,
+              "u_recomp_pc1": 0.125,
+              "u_eq_q_pc1": 0.25
             },
             "n_used_2a": 16,
             "layer": 0
           },
           {
-            "r2": 0.2924931400416515,
-            "feat_r2_single": {
-              "pos": 0.006789483945957686,
-              "norm": 0.20259473896797464,
-              "outlier": 0.2005274289041291
+            "r2": 0.2902499748260503,
+            "feat_r2": {
+              "pos": 0.007071164485479953,
+              "norm": 0.20199091392702095,
+              "outlier": 0.19865716884426354
             },
             "pred_jaccard": {
               "pos": {
-                "jaccard": 0.14583333333333331,
+                "jaccard": 0.16666666666666666,
                 "direction": "high"
               },
               "norm": {
-                "jaccard": 0.4375,
+                "jaccard": 0.3958333333333333,
                 "direction": "high"
               },
               "outlier": {
-                "jaccard": 0.375,
+                "jaccard": 0.3333333333333333,
                 "direction": "low"
               },
-              "combined": 0.4375
+              "combined": 0.3958333333333333
             },
             "gram_offdiag": 0.9981842897832394,
             "hit2": {
               "stock": 0.5,
               "u_eq_q": 0.25,
               "stock_centered": 0.5,
-              "u_eq_q_centered": 0.25
+              "u_eq_q_centered": 0.25,
+              "u_recomp_pc1": 0.5,
+              "u_eq_q_pc1": 0.25
             },
             "n_used_2a": 16,
             "layer": 1
           },
           {
-            "r2": 0.9729319241339145,
-            "feat_r2_single": {
-              "pos": 0.9649625179509439,
-              "norm": 0.00928665072698287,
-              "outlier": 0.08558598500883163
+            "r2": 0.9729665694340557,
+            "feat_r2": {
+              "pos": 0.9651346785675374,
+              "norm": 0.009398124085596815,
+              "outlier": 0.08515350694050572
             },
             "pred_jaccard": {
               "pos": {
@@ -3362,17 +3618,19 @@
               "stock": 0.25,
               "u_eq_q": 0.1875,
               "stock_centered": 0.25,
-              "u_eq_q_centered": 0.1875
+              "u_eq_q_centered": 0.1875,
+              "u_recomp_pc1": 0.25,
+              "u_eq_q_pc1": 0.1875
             },
             "n_used_2a": 16,
             "layer": 2
           },
           {
-            "r2": 0.9983837362383802,
-            "feat_r2_single": {
-              "pos": 0.996408197556095,
-              "norm": 0.9351812812895423,
-              "outlier": 0.0455498280939487
+            "r2": 0.9983860371522033,
+            "feat_r2": {
+              "pos": 0.9963663270612421,
+              "norm": 0.9350366298653998,
+              "outlier": 0.04576374578427933
             },
             "pred_jaccard": {
               "pos": {
@@ -3394,17 +3652,19 @@
               "stock": 0.1875,
               "u_eq_q": 0.1875,
               "stock_centered": 0.1875,
-              "u_eq_q_centered": 0.1875
+              "u_eq_q_centered": 0.1875,
+              "u_recomp_pc1": 0.1875,
+              "u_eq_q_pc1": 0.125
             },
             "n_used_2a": 16,
             "layer": 3
           },
           {
-            "r2": 0.962487519559516,
-            "feat_r2_single": {
-              "pos": 0.7057283827884183,
-              "norm": 0.8244354791679589,
-              "outlier": 0.4473700977249886
+            "r2": 0.962394783053983,
+            "feat_r2": {
+              "pos": 0.7025924769589575,
+              "norm": 0.8253681871608437,
+              "outlier": 0.4499712645108297
             },
             "pred_jaccard": {
               "pos": {
@@ -3419,24 +3679,26 @@
                 "jaccard": 0.20833333333333331,
                 "direction": "high"
               },
-              "combined": 0.5416666666666666
+              "combined": 0.47916666666666663
             },
             "gram_offdiag": 0.9767472259700298,
             "hit2": {
               "stock": 0.5,
               "u_eq_q": 0.5,
               "stock_centered": 0.5,
-              "u_eq_q_centered": 0.5
+              "u_eq_q_centered": 0.5,
+              "u_recomp_pc1": 0.375,
+              "u_eq_q_pc1": 0.5625
             },
             "n_used_2a": 16,
             "layer": 4
           },
           {
-            "r2": 0.9983504178508826,
-            "feat_r2_single": {
-              "pos": 0.996721278448352,
-              "norm": 0.5760392645016563,
-              "outlier": 0.09440281530866024
+            "r2": 0.9983206671874163,
+            "feat_r2": {
+              "pos": 0.9967252691509466,
+              "norm": 0.5762795887102369,
+              "outlier": 0.0941503570257296
             },
             "pred_jaccard": {
               "pos": {
@@ -3458,17 +3720,19 @@
               "stock": 0.1875,
               "u_eq_q": 0.0,
               "stock_centered": 0.1875,
-              "u_eq_q_centered": 0.0
+              "u_eq_q_centered": 0.0,
+              "u_recomp_pc1": 0.1875,
+              "u_eq_q_pc1": 0.0
             },
             "n_used_2a": 16,
             "layer": 5
           },
           {
-            "r2": 0.8891358305336364,
-            "feat_r2_single": {
-              "pos": 0.5724688320043128,
-              "norm": 0.8614948539390443,
-              "outlier": 0.3333543116289782
+            "r2": 0.8876106648941371,
+            "feat_r2": {
+              "pos": 0.5717189012504531,
+              "norm": 0.8609188075996745,
+              "outlier": 0.330287205355819
             },
             "pred_jaccard": {
               "pos": {
@@ -3490,17 +3754,19 @@
               "stock": 0.125,
               "u_eq_q": 0.4375,
               "stock_centered": 0.125,
-              "u_eq_q_centered": 0.4375
+              "u_eq_q_centered": 0.4375,
+              "u_recomp_pc1": 0.25,
+              "u_eq_q_pc1": 0.4375
             },
             "n_used_2a": 16,
             "layer": 6
           },
           {
-            "r2": 0.999506171105399,
-            "feat_r2_single": {
-              "pos": 0.9978642514859046,
-              "norm": 0.42447319708288533,
-              "outlier": 0.04636776535511167
+            "r2": 0.9995052988402798,
+            "feat_r2": {
+              "pos": 0.9978834699264533,
+              "norm": 0.4243141914352144,
+              "outlier": 0.04626841744602217
             },
             "pred_jaccard": {
               "pos": {
@@ -3522,17 +3788,19 @@
               "stock": 0.1875,
               "u_eq_q": 0.1875,
               "stock_centered": 0.1875,
-              "u_eq_q_centered": 0.1875
+              "u_eq_q_centered": 0.1875,
+              "u_recomp_pc1": 0.1875,
+              "u_eq_q_pc1": 0.375
             },
             "n_used_2a": 16,
             "layer": 7
           },
           {
-            "r2": 0.7088380853119779,
-            "feat_r2_single": {
-              "pos": 0.545019037014944,
-              "norm": 0.019039380923913884,
-              "outlier": 0.38755018338831115
+            "r2": 0.7128059161953175,
+            "feat_r2": {
+              "pos": 0.5476396251371343,
+              "norm": 0.01918837599483847,
+              "outlier": 0.3902814632004298
             },
             "pred_jaccard": {
               "pos": {
@@ -3554,17 +3822,19 @@
               "stock": 0.25,
               "u_eq_q": 0.375,
               "stock_centered": 0.25,
-              "u_eq_q_centered": 0.375
+              "u_eq_q_centered": 0.375,
+              "u_recomp_pc1": 0.25,
+              "u_eq_q_pc1": 0.375
             },
             "n_used_2a": 16,
             "layer": 8
           },
           {
-            "r2": 0.9992528164862737,
-            "feat_r2_single": {
-              "pos": 0.9980349417112717,
-              "norm": 0.8301817756233146,
-              "outlier": 0.06899514820209218
+            "r2": 0.9992522033001745,
+            "feat_r2": {
+              "pos": 0.998018382048767,
+              "norm": 0.830001262257648,
+              "outlier": 0.06910392066522408
             },
             "pred_jaccard": {
               "pos": {
@@ -3586,17 +3856,19 @@
               "stock": 0.1875,
               "u_eq_q": 0.5,
               "stock_centered": 0.1875,
-              "u_eq_q_centered": 0.5
+              "u_eq_q_centered": 0.5,
+              "u_recomp_pc1": 0.1875,
+              "u_eq_q_pc1": 0.5
             },
             "n_used_2a": 16,
             "layer": 9
           },
           {
-            "r2": 0.9997874947385404,
-            "feat_r2_single": {
-              "pos": 0.9964952724090045,
-              "norm": 0.49369005053519854,
-              "outlier": 0.1273538563895542
+            "r2": 0.9997913172785982,
+            "feat_r2": {
+              "pos": 0.9965422416988077,
+              "norm": 0.4938162274601062,
+              "outlier": 0.12710842812493528
             },
             "pred_jaccard": {
               "pos": {
@@ -3618,17 +3890,19 @@
               "stock": 0.1875,
               "u_eq_q": 0.1875,
               "stock_centered": 0.1875,
-              "u_eq_q_centered": 0.1875
+              "u_eq_q_centered": 0.1875,
+              "u_recomp_pc1": 0.1875,
+              "u_eq_q_pc1": 0.1875
             },
             "n_used_2a": 16,
             "layer": 10
           },
           {
-            "r2": 0.261158934907579,
-            "feat_r2_single": {
-              "pos": 0.06691971654571394,
-              "norm": 0.07357765352716594,
-              "outlier": 0.08838716431612403
+            "r2": 0.259976338230257,
+            "feat_r2": {
+              "pos": 0.0678890147576009,
+              "norm": 0.07507063409427317,
+              "outlier": 0.0859140882915338
             },
             "pred_jaccard": {
               "pos": {
@@ -3650,17 +3924,19 @@
               "stock": 0.5,
               "u_eq_q": 0.25,
               "stock_centered": 0.5,
-              "u_eq_q_centered": 0.25
+              "u_eq_q_centered": 0.25,
+              "u_recomp_pc1": 0.5625,
+              "u_eq_q_pc1": 0.375
             },
             "n_used_2a": 16,
             "layer": 11
           },
           {
-            "r2": 0.9991703117454809,
-            "feat_r2_single": {
-              "pos": 0.9944593629985513,
-              "norm": 0.035108557856298295,
-              "outlier": 0.2015409688009948
+            "r2": 0.9991767888365634,
+            "feat_r2": {
+              "pos": 0.9943656559593514,
+              "norm": 0.03497847790112729,
+              "outlier": 0.20215143418015835
             },
             "pred_jaccard": {
               "pos": {
@@ -3682,17 +3958,19 @@
               "stock": 0.1875,
               "u_eq_q": 0.1875,
               "stock_centered": 0.1875,
-              "u_eq_q_centered": 0.1875
+              "u_eq_q_centered": 0.1875,
+              "u_recomp_pc1": 0.1875,
+              "u_eq_q_pc1": 0.1875
             },
             "n_used_2a": 16,
             "layer": 12
           },
           {
-            "r2": 0.9736609477913548,
-            "feat_r2_single": {
-              "pos": 0.9628534580825208,
-              "norm": 0.5387295762367127,
-              "outlier": 0.17931214944151563
+            "r2": 0.9735191178977962,
+            "feat_r2": {
+              "pos": 0.9629793732312274,
+              "norm": 0.5399414949913198,
+              "outlier": 0.17822073699446694
             },
             "pred_jaccard": {
               "pos": {
@@ -3714,17 +3992,19 @@
               "stock": 0.3125,
               "u_eq_q": 0.0,
               "stock_centered": 0.3125,
-              "u_eq_q_centered": 0.0
+              "u_eq_q_centered": 0.0,
+              "u_recomp_pc1": 0.3125,
+              "u_eq_q_pc1": 0.0
             },
             "n_used_2a": 16,
             "layer": 13
           },
           {
-            "r2": 0.7081789888808095,
-            "feat_r2_single": {
-              "pos": 0.6360494127421297,
-              "norm": 0.027080808169224535,
-              "outlier": 0.2707244562844551
+            "r2": 0.7083485760232864,
+            "feat_r2": {
+              "pos": 0.6352107870269905,
+              "norm": 0.027122938266943786,
+              "outlier": 0.2724838416740264
             },
             "pred_jaccard": {
               "pos": {
@@ -3746,39 +4026,43 @@
               "stock": 0.6875,
               "u_eq_q": 0.375,
               "stock_centered": 0.6875,
-              "u_eq_q_centered": 0.375
+              "u_eq_q_centered": 0.375,
+              "u_recomp_pc1": 0.6875,
+              "u_eq_q_pc1": 0.0625
             },
             "n_used_2a": 16,
             "layer": 14
           },
           {
-            "r2": 0.8822155526141585,
-            "feat_r2_single": {
-              "pos": 0.8142996958875391,
-              "norm": 0.3533327575900217,
-              "outlier": 1.4231191043378999e-05
+            "r2": 0.8821533483624474,
+            "feat_r2": {
+              "pos": 0.8160104838520986,
+              "norm": 0.3516413946467106,
+              "outlier": 5.3690292631358716e-05
             },
             "pred_jaccard": {
               "pos": {
-                "jaccard": 0.875,
+                "jaccard": 0.7916666666666666,
                 "direction": "high"
               },
               "norm": {
-                "jaccard": 0.41666666666666663,
+                "jaccard": 0.375,
                 "direction": "low"
               },
               "outlier": {
                 "jaccard": 0.3333333333333333,
                 "direction": "high"
               },
-              "combined": 0.875
+              "combined": 0.7916666666666666
             },
             "gram_offdiag": 0.9900012649595737,
             "hit2": {
-              "stock": 0.375,
+              "stock": 0.4375,
               "u_eq_q": 0.25,
               "stock_centered": 0.375,
-              "u_eq_q_centered": 0.25
+              "u_eq_q_centered": 0.25,
+              "u_recomp_pc1": 0.4375,
+              "u_eq_q_pc1": 0.375
             },
             "n_used_2a": 16,
             "layer": 15
@@ -3800,6 +4084,14 @@
           "u_eq_q_centered": {
             "layer": 4,
             "hit2": 0.5
+          },
+          "u_recomp_pc1": {
+            "layer": 14,
+            "hit2": 0.6875
+          },
+          "u_eq_q_pc1": {
+            "layer": 4,
+            "hit2": 0.5625
           }
         }
       },
@@ -3810,11 +4102,11 @@
         "chance_hit2": 0.2857142857142857,
         "per_layer": [
           {
-            "r2": 0.6079648431012651,
-            "feat_r2_single": {
-              "pos": 0.3075800412376277,
-              "norm": 0.011321394860839717,
-              "outlier": 0.41752671760159443
+            "r2": 0.6016570659062515,
+            "feat_r2": {
+              "pos": 0.299644192293798,
+              "norm": 0.010287377516787766,
+              "outlier": 0.41808505165801646
             },
             "pred_jaccard": {
               "pos": {
@@ -3836,17 +4128,19 @@
               "stock": 0.5,
               "u_eq_q": 0.125,
               "stock_centered": 0.5,
-              "u_eq_q_centered": 0.125
+              "u_eq_q_centered": 0.125,
+              "u_recomp_pc1": 0.375,
+              "u_eq_q_pc1": 0.125
             },
             "n_used_2a": 16,
             "layer": 0
           },
           {
-            "r2": 0.325462163334325,
-            "feat_r2_single": {
-              "pos": 0.014624325770535629,
-              "norm": 0.2650110296889626,
-              "outlier": 0.10604496777286754
+            "r2": 0.32292588781607257,
+            "feat_r2": {
+              "pos": 0.014264617628510612,
+              "norm": 0.2624817749386852,
+              "outlier": 0.10536414113702974
             },
             "pred_jaccard": {
               "pos": {
@@ -3868,17 +4162,19 @@
               "stock": 0.3125,
               "u_eq_q": 0.125,
               "stock_centered": 0.3125,
-              "u_eq_q_centered": 0.125
+              "u_eq_q_centered": 0.125,
+              "u_recomp_pc1": 0.3125,
+              "u_eq_q_pc1": 0.125
             },
             "n_used_2a": 16,
             "layer": 1
           },
           {
-            "r2": 0.9734503951556418,
-            "feat_r2_single": {
-              "pos": 0.9617397977608915,
-              "norm": 0.017279634712152436,
-              "outlier": 0.09874753793092894
+            "r2": 0.9733912785506998,
+            "feat_r2": {
+              "pos": 0.9618101842999469,
+              "norm": 0.017491590952904312,
+              "outlier": 0.09829089139766956
             },
             "pred_jaccard": {
               "pos": {
@@ -3886,7 +4182,7 @@
                 "direction": "high"
               },
               "norm": {
-                "jaccard": 0.3333333333333333,
+                "jaccard": 0.3125,
                 "direction": "low"
               },
               "outlier": {
@@ -3900,17 +4196,19 @@
               "stock": 0.25,
               "u_eq_q": 0.25,
               "stock_centered": 0.25,
-              "u_eq_q_centered": 0.25
+              "u_eq_q_centered": 0.25,
+              "u_recomp_pc1": 0.3125,
+              "u_eq_q_pc1": 0.25
             },
             "n_used_2a": 16,
             "layer": 2
           },
           {
-            "r2": 0.9982462305499537,
-            "feat_r2_single": {
-              "pos": 0.9947505686324405,
-              "norm": 0.9373940834425393,
-              "outlier": 0.07052800583347096
+            "r2": 0.9982575114063051,
+            "feat_r2": {
+              "pos": 0.9946921943941479,
+              "norm": 0.937200474691115,
+              "outlier": 0.07085464142901443
             },
             "pred_jaccard": {
               "pos": {
@@ -3932,17 +4230,19 @@
               "stock": 0.25,
               "u_eq_q": 0.1875,
               "stock_centered": 0.25,
-              "u_eq_q_centered": 0.1875
+              "u_eq_q_centered": 0.1875,
+              "u_recomp_pc1": 0.25,
+              "u_eq_q_pc1": 0.25
             },
             "n_used_2a": 16,
             "layer": 3
           },
           {
-            "r2": 0.9710132874987707,
-            "feat_r2_single": {
-              "pos": 0.692792951847697,
-              "norm": 0.8263687860692062,
-              "outlier": 0.49808774957532664
+            "r2": 0.9708401170269157,
+            "feat_r2": {
+              "pos": 0.6899736988997855,
+              "norm": 0.828056783207058,
+              "outlier": 0.5002734390218779
             },
             "pred_jaccard": {
               "pos": {
@@ -3957,24 +4257,26 @@
                 "jaccard": 0.24999999999999997,
                 "direction": "high"
               },
-              "combined": 0.4375
+              "combined": 0.41666666666666663
             },
             "gram_offdiag": 0.9777325130999088,
             "hit2": {
               "stock": 0.375,
               "u_eq_q": 0.3125,
               "stock_centered": 0.375,
-              "u_eq_q_centered": 0.3125
+              "u_eq_q_centered": 0.3125,
+              "u_recomp_pc1": 0.3125,
+              "u_eq_q_pc1": 0.375
             },
             "n_used_2a": 16,
             "layer": 4
           },
           {
-            "r2": 0.998151342769736,
-            "feat_r2_single": {
-              "pos": 0.995683295609074,
-              "norm": 0.5417908933287345,
-              "outlier": 0.10573365746919117
+            "r2": 0.9981556469980858,
+            "feat_r2": {
+              "pos": 0.9957400749167722,
+              "norm": 0.5421162803124546,
+              "outlier": 0.1053941177661637
             },
             "pred_jaccard": {
               "pos": {
@@ -3996,17 +4298,19 @@
               "stock": 0.25,
               "u_eq_q": 0.0,
               "stock_centered": 0.25,
-              "u_eq_q_centered": 0.0
+              "u_eq_q_centered": 0.0,
+              "u_recomp_pc1": 0.25,
+              "u_eq_q_pc1": 0.0
             },
             "n_used_2a": 16,
             "layer": 5
           },
           {
-            "r2": 0.8415424576626058,
-            "feat_r2_single": {
-              "pos": 0.5658196855449932,
-              "norm": 0.7871025578030447,
-              "outlier": 0.4016139880019244
+            "r2": 0.8400544398493917,
+            "feat_r2": {
+              "pos": 0.5652688910661712,
+              "norm": 0.7863981880931745,
+              "outlier": 0.3994805254730319
             },
             "pred_jaccard": {
               "pos": {
@@ -4028,17 +4332,19 @@
               "stock": 0.125,
               "u_eq_q": 0.375,
               "stock_centered": 0.125,
-              "u_eq_q_centered": 0.375
+              "u_eq_q_centered": 0.375,
+              "u_recomp_pc1": 0.125,
+              "u_eq_q_pc1": 0.375
             },
             "n_used_2a": 16,
             "layer": 6
           },
           {
-            "r2": 0.999407446464306,
-            "feat_r2_single": {
-              "pos": 0.9971677052991026,
-              "norm": 0.5204810982959072,
-              "outlier": 0.04992372677143997
+            "r2": 0.9993964326264182,
+            "feat_r2": {
+              "pos": 0.9971865335197203,
+              "norm": 0.5202852495284019,
+              "outlier": 0.04978353100361177
             },
             "pred_jaccard": {
               "pos": {
@@ -4060,17 +4366,19 @@
               "stock": 0.25,
               "u_eq_q": 0.25,
               "stock_centered": 0.25,
-              "u_eq_q_centered": 0.25
+              "u_eq_q_centered": 0.25,
+              "u_recomp_pc1": 0.25,
+              "u_eq_q_pc1": 0.25
             },
             "n_used_2a": 16,
             "layer": 7
           },
           {
-            "r2": 0.8215966893723994,
-            "feat_r2_single": {
-              "pos": 0.6298314679944692,
-              "norm": 0.010431603298583392,
-              "outlier": 0.41013342285835286
+            "r2": 0.8224060598199927,
+            "feat_r2": {
+              "pos": 0.6307077121865379,
+              "norm": 0.00976621789478116,
+              "outlier": 0.41348252428546284
             },
             "pred_jaccard": {
               "pos": {
@@ -4092,17 +4400,19 @@
               "stock": 0.3125,
               "u_eq_q": 0.4375,
               "stock_centered": 0.3125,
-              "u_eq_q_centered": 0.4375
+              "u_eq_q_centered": 0.4375,
+              "u_recomp_pc1": 0.375,
+              "u_eq_q_pc1": 0.4375
             },
             "n_used_2a": 16,
             "layer": 8
           },
           {
-            "r2": 0.9993424478684168,
-            "feat_r2_single": {
-              "pos": 0.9976217123920272,
-              "norm": 0.8514333714269342,
-              "outlier": 0.0713410155325036
+            "r2": 0.9993472468961478,
+            "feat_r2": {
+              "pos": 0.9976052533633283,
+              "norm": 0.8513950274782789,
+              "outlier": 0.07147351171512162
             },
             "pred_jaccard": {
               "pos": {
@@ -4124,17 +4434,19 @@
               "stock": 0.25,
               "u_eq_q": 0.5,
               "stock_centered": 0.25,
-              "u_eq_q_centered": 0.5
+              "u_eq_q_centered": 0.5,
+              "u_recomp_pc1": 0.25,
+              "u_eq_q_pc1": 0.5
             },
             "n_used_2a": 16,
             "layer": 9
           },
           {
-            "r2": 0.9997581873305954,
-            "feat_r2_single": {
-              "pos": 0.995691628528657,
-              "norm": 0.5161894951844783,
-              "outlier": 0.12511810660420297
+            "r2": 0.9997578431364569,
+            "feat_r2": {
+              "pos": 0.99571039961902,
+              "norm": 0.5162458943661892,
+              "outlier": 0.1250198182380201
             },
             "pred_jaccard": {
               "pos": {
@@ -4156,17 +4468,19 @@
               "stock": 0.25,
               "u_eq_q": 0.1875,
               "stock_centered": 0.25,
-              "u_eq_q_centered": 0.1875
+              "u_eq_q_centered": 0.1875,
+              "u_recomp_pc1": 0.25,
+              "u_eq_q_pc1": 0.1875
             },
             "n_used_2a": 16,
             "layer": 10
           },
           {
-            "r2": 0.42768712480326454,
-            "feat_r2_single": {
-              "pos": 0.15290576649952647,
-              "norm": 0.16388436789045413,
-              "outlier": 0.09341814485480326
+            "r2": 0.4284244853103797,
+            "feat_r2": {
+              "pos": 0.15558642393650124,
+              "norm": 0.16725747277994985,
+              "outlier": 0.09089607459611437
             },
             "pred_jaccard": {
               "pos": {
@@ -4188,17 +4502,19 @@
               "stock": 0.25,
               "u_eq_q": 0.4375,
               "stock_centered": 0.25,
-              "u_eq_q_centered": 0.4375
+              "u_eq_q_centered": 0.4375,
+              "u_recomp_pc1": 0.25,
+              "u_eq_q_pc1": 0.4375
             },
             "n_used_2a": 16,
             "layer": 11
           },
           {
-            "r2": 0.9991745212278705,
-            "feat_r2_single": {
-              "pos": 0.9937122241838106,
-              "norm": 0.03235952570165779,
-              "outlier": 0.19160687700734003
+            "r2": 0.9991806139748167,
+            "feat_r2": {
+              "pos": 0.9935977324193247,
+              "norm": 0.03224248483232517,
+              "outlier": 0.19230052176054346
             },
             "pred_jaccard": {
               "pos": {
@@ -4220,17 +4536,19 @@
               "stock": 0.25,
               "u_eq_q": 0.1875,
               "stock_centered": 0.25,
-              "u_eq_q_centered": 0.1875
+              "u_eq_q_centered": 0.1875,
+              "u_recomp_pc1": 0.25,
+              "u_eq_q_pc1": 0.1875
             },
             "n_used_2a": 16,
             "layer": 12
           },
           {
-            "r2": 0.9768804276028951,
-            "feat_r2_single": {
-              "pos": 0.9621724183899676,
-              "norm": 0.5323229188476355,
-              "outlier": 0.19035078724862808
+            "r2": 0.976651349582922,
+            "feat_r2": {
+              "pos": 0.9622060014290719,
+              "norm": 0.533141176481366,
+              "outlier": 0.18937793627966926
             },
             "pred_jaccard": {
               "pos": {
@@ -4252,17 +4570,19 @@
               "stock": 0.25,
               "u_eq_q": 0.0625,
               "stock_centered": 0.25,
-              "u_eq_q_centered": 0.0625
+              "u_eq_q_centered": 0.0625,
+              "u_recomp_pc1": 0.25,
+              "u_eq_q_pc1": 0.0
             },
             "n_used_2a": 16,
             "layer": 13
           },
           {
-            "r2": 0.9107961862544035,
-            "feat_r2_single": {
-              "pos": 0.7518118237636571,
-              "norm": 0.04140338166576307,
-              "outlier": 0.43570072084829836
+            "r2": 0.9089755731910029,
+            "feat_r2": {
+              "pos": 0.7478991177567861,
+              "norm": 0.040635249200303036,
+              "outlier": 0.4378527995375907
             },
             "pred_jaccard": {
               "pos": {
@@ -4284,17 +4604,19 @@
               "stock": 0.25,
               "u_eq_q": 0.4375,
               "stock_centered": 0.25,
-              "u_eq_q_centered": 0.4375
+              "u_eq_q_centered": 0.4375,
+              "u_recomp_pc1": 0.25,
+              "u_eq_q_pc1": 0.3125
             },
             "n_used_2a": 16,
             "layer": 14
           },
           {
-            "r2": 0.9138151108765664,
-            "feat_r2_single": {
-              "pos": 0.864690407054316,
-              "norm": 0.2861564300329371,
-              "outlier": 0.004657791085724172
+            "r2": 0.915910605076078,
+            "feat_r2": {
+              "pos": 0.867509610300624,
+              "norm": 0.28580564208970183,
+              "outlier": 0.00496902073285399
             },
             "pred_jaccard": {
               "pos": {
@@ -4316,7 +4638,9 @@
               "stock": 0.25,
               "u_eq_q": 0.25,
               "stock_centered": 0.25,
-              "u_eq_q_centered": 0.25
+              "u_eq_q_centered": 0.25,
+              "u_recomp_pc1": 0.25,
+              "u_eq_q_pc1": 0.1875
             },
             "n_used_2a": 16,
             "layer": 15
@@ -4336,6 +4660,14 @@
             "hit2": 0.5
           },
           "u_eq_q_centered": {
+            "layer": 9,
+            "hit2": 0.5
+          },
+          "u_recomp_pc1": {
+            "layer": 0,
+            "hit2": 0.375
+          },
+          "u_eq_q_pc1": {
             "layer": 9,
             "hit2": 0.5
           }

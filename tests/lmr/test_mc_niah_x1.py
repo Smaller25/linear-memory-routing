@@ -143,7 +143,7 @@ def test_h_blind_scores_linear_in_pos_gives_high_r2_and_pos_jaccard():
 
     assert tracker["max_diff"] < 1e-3, "internal sanity gate should pass for constructed data"
     assert stats["r2"] > 0.95, f"expected near-1 R2 for pure pos-linear scores, got {stats['r2']}"
-    assert stats["feat_r2_single"]["pos"] > 0.95
+    assert stats["feat_r2"]["pos"] > 0.95
     # pos should win with "high" direction (scores increase with pos)
     assert stats["pred_jaccard"]["pos"]["jaccard"] > 0.9
     assert stats["pred_jaccard"]["pos"]["direction"] == "high"
@@ -272,6 +272,76 @@ def test_centering_changes_scores_when_offset_present():
     # produces a boolean, not a crash/None.
     assert stats["hit2"]["stock"] in (0.0, 1.0)
     assert stats["hit2"]["stock_centered"] in (0.0, 1.0)
+
+
+def test_pc1_removal_raises_hit2_when_dominant_common_direction_masks_signal():
+    """Review finding 5: synthetic case where a planted dominant common
+    direction masks a discriminative signal -> pc1 removal must raise hit@2.
+
+    Construction: each segment's raw descriptor c_i = (A + eps_i)*common_hat
+    + tiny_noise, plus a small discriminative bump `b*d_hat` (d_hat orthogonal
+    to common_hat) ONLY on the gold segment. `eps_i` (per-segment magnitude
+    noise along the shared common direction, uncorrelated with which segment
+    is gold) is deliberately made large relative to `b`, so the raw dot
+    product <u, c_i> = c1*(A+eps_i) + c2*b*1[i==gold] + ... is dominated by
+    the eps_i noise term and the stock/u_eq_q (raw, unnormalized-c) hit@2
+    collapses toward chance.
+
+    Normalizing c_i (c_hat_i = c_i/||c_i||) already cancels most of the
+    eps_i-driven magnitude noise (since it is collinear with the dominant
+    direction the norm measures), and removing the top-1 PC (~= common_hat,
+    the shared direction across all rows in c_hat-space) removes what's left
+    of it, leaving the small discriminative component along d_hat to
+    dominate the ranking -> u_recomp_pc1 hit@2 should be high and clearly
+    above stock's."""
+    rng = np.random.default_rng(123)
+    H, K = 4, 4
+    D = H * K
+    n_seg = 6
+    gold_seg = 2
+
+    common_hat = rng.normal(size=D)
+    common_hat /= np.linalg.norm(common_hat)
+    d_raw = rng.normal(size=D)
+    d_hat = d_raw - (d_raw @ common_hat) * common_hat
+    d_hat /= np.linalg.norm(d_hat)
+
+    A, eps_scale, b, tiny = 20.0, 8.0, 1.0, 0.05
+    n_samples = 60
+    samples = []
+    for s_i in range(n_samples):
+        eps = rng.uniform(-eps_scale, eps_scale, size=n_seg)
+        c = np.zeros((n_seg, D))
+        for i in range(n_seg):
+            c[i] = (A + eps[i]) * common_hat + tiny * rng.normal(size=D)
+            if i == gold_seg:
+                c[i] += b * d_hat
+        u = 5.0 * common_hat + 5.0 * d_hat + tiny * rng.normal(size=D)
+        q = u.copy()
+
+        stock_scores = np.full((1, n_seg), float("-inf"), dtype=np.float32)
+        stock_scores[0, :n_seg] = c @ u
+        meta = {"gold_seg": gold_seg, "cur_seg": n_seg, "n_seg": n_seg, "n_tok": 999,
+                "eligible": True, "key_segs": [gold_seg], "sample_id": s_i}
+        samples.append({
+            "meta": meta,
+            "u": u.reshape(1, H, K).astype(np.float32),
+            "q": q.reshape(1, H, K).astype(np.float32),
+            "c_full": c.reshape(1, n_seg, H, K).astype(np.float32),
+            "stock_scores": stock_scores,
+        })
+
+    tracker = {"max_diff": 0.0, "n": 0, "worst": None}
+    stats = xa.analyze_layer(samples, layer=0, sanity_tracker=tracker)
+
+    chance = 2.0 / n_seg  # hit@2 out of 6 candidates
+    assert stats["hit2"]["stock"] < chance + 0.25, (
+        f"expected the dominant common-direction noise to mask the signal in the "
+        f"raw (unnormalized) stock scores, got stock hit2={stats['hit2']['stock']}")
+    assert stats["hit2"]["u_recomp_pc1"] > 0.9, (
+        f"expected pc1 removal to uncover the masked signal, got "
+        f"u_recomp_pc1 hit2={stats['hit2']['u_recomp_pc1']}")
+    assert stats["hit2"]["u_recomp_pc1"] > stats["hit2"]["stock"] + 0.4
 
 
 def test_sanity_gate_flags_mismatched_stock_scores():
