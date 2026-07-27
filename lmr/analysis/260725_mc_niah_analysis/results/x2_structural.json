@@ -1,0 +1,122 @@
+{
+  "niah_multiquery": {
+    "2048": {
+      "task": "niah_multiquery",
+      "length": 2048,
+      "n_total": 50,
+      "n_eligible_samples": 50,
+      "needle_null_hit2": 0.7500000000000001,
+      "needle_null_hit2_formula": "mean_over_eligible_samples(min(1, 2/M)), M = count of eligible (seg < cur_seg) segments containing ANY needle (any key) -- the 'perfect needle detector, zero key discrimination' null",
+      "structural_ceiling": 0.7833333333333333,
+      "structural_ceiling_formula": "mean_over_eligible_samples(1.0 if G<=2 else top2_needle_counts_sum/n_e), G = count of distinct eligible GOLD (queried) segments, n_e = count of eligible queried needle instances -- max achievable macro hit@2 given routing scores are computed once per sample (single shared top-2, not independent per needle) and possible needle-segment collisions (plausible here: cur_seg is often only 4-7 at length=2048, a mini birthday-paradox regime for 4 needles)"
+    },
+    "4096": {
+      "task": "niah_multiquery",
+      "length": 4096,
+      "n_total": 50,
+      "n_eligible_samples": 50,
+      "needle_null_hit2": 0.6066666666666669,
+      "needle_null_hit2_formula": "mean_over_eligible_samples(min(1, 2/M)), M = count of eligible (seg < cur_seg) segments containing ANY needle (any key) -- the 'perfect needle detector, zero key discrimination' null",
+      "structural_ceiling": 0.6233333333333334,
+      "structural_ceiling_formula": "mean_over_eligible_samples(1.0 if G<=2 else top2_needle_counts_sum/n_e), G = count of distinct eligible GOLD (queried) segments, n_e = count of eligible queried needle instances -- max achievable macro hit@2 given routing scores are computed once per sample (single shared top-2, not independent per needle) and possible needle-segment collisions (plausible here: cur_seg is often only 4-7 at length=2048, a mini birthday-paradox regime for 4 needles)"
+    },
+    "8192": {
+      "task": "niah_multiquery",
+      "length": 8192,
+      "n_total": 50,
+      "n_eligible_samples": 50,
+      "needle_null_hit2": 0.53,
+      "needle_null_hit2_formula": "mean_over_eligible_samples(min(1, 2/M)), M = count of eligible (seg < cur_seg) segments containing ANY needle (any key) -- the 'perfect needle detector, zero key discrimination' null",
+      "structural_ceiling": 0.5316666666666667,
+      "structural_ceiling_formula": "mean_over_eligible_samples(1.0 if G<=2 else top2_needle_counts_sum/n_e), G = count of distinct eligible GOLD (queried) segments, n_e = count of eligible queried needle instances -- max achievable macro hit@2 given routing scores are computed once per sample (single shared top-2, not independent per needle) and possible needle-segment collisions (plausible here: cur_seg is often only 4-7 at length=2048, a mini birthday-paradox regime for 4 needles)"
+    }
+  },
+  "niah_multivalue": {
+    "2048": {
+      "task": "niah_multivalue",
+      "length": 2048,
+      "n_total": 50,
+      "n_eligible_samples": 50,
+      "needle_null_hit2": 0.7233333333333334,
+      "needle_null_hit2_formula": "mean_over_eligible_samples(min(1, 2/M)), M = count of eligible (seg < cur_seg) segments containing ANY needle (any key) -- the 'perfect needle detector, zero key discrimination' null",
+      "structural_ceiling": 0.7616666666666666,
+      "structural_ceiling_formula": "mean_over_eligible_samples(1.0 if G<=2 else top2_needle_counts_sum/n_e), G = count of distinct eligible GOLD (queried) segments, n_e = count of eligible queried needle instances -- max achievable macro hit@2 given routing scores are computed once per sample (single shared top-2, not independent per needle) and possible needle-segment collisions (plausible here: cur_seg is often only 4-7 at length=2048, a mini birthday-paradox regime for 4 needles)"
+    },
+    "4096": {
+      "task": "niah_multivalue",
+      "length": 4096,
+      "n_total": 50,
+      "n_eligible_samples": 50,
+      "needle_null_hit2": 0.55,
+      "needle_null_hit2_formula": "mean_over_eligible_samples(min(1, 2/M)), M = count of eligible (seg < cur_seg) segments containing ANY needle (any key) -- the 'perfect needle detector, zero key discrimination' null",
+      "structural_ceiling": 0.5683333333333334,
+      "structural_ceiling_formula": "mean_over_eligible_samples(1.0 if G<=2 else top2_needle_counts_sum/n_e), G = count of distinct eligible GOLD (queried) segments, n_e = count of eligible queried needle instances -- max achievable macro hit@2 given routing scores are computed once per sample (single shared top-2, not independent per needle) and possible needle-segment collisions (plausible here: cur_seg is often only 4-7 at length=2048, a mini birthday-paradox regime for 4 needles)"
+    },
+    "8192": {
+      "task": "niah_multivalue",
+      "length": 8192,
+      "n_total": 50,
+      "n_eligible_samples": 50,
+      "needle_null_hit2": 0.52,
+      "needle_null_hit2_formula": "mean_over_eligible_samples(min(1, 2/M)), M = count of eligible (seg < cur_seg) segments containing ANY needle (any key) -- the 'perfect needle detector, zero key discrimination' null",
+      "structural_ceiling": 0.5233333333333333,
+      "structural_ceiling_formula": "mean_over_eligible_samples(1.0 if G<=2 else top2_needle_counts_sum/n_e), G = count of distinct eligible GOLD (queried) segments, n_e = count of eligible queried needle instances -- max achievable macro hit@2 given routing scores are computed once per sample (single shared top-2, not independent per needle) and possible needle-segment collisions (plausible here: cur_seg is often only 4-7 at length=2048, a mini birthday-paradox regime for 4 needles)"
+    }
+  },
+  "niah_multikey_1": {
+    "2048": {
+      "task": "niah_multikey_1",
+      "length": 2048,
+      "n_total": 50,
+      "n_eligible_samples": 47,
+      "needle_null_hit2": 0.7730496453900709,
+      "needle_null_hit2_formula": "mean_over_eligible_samples(min(1, 2/M)), M = count of eligible (seg < cur_seg) segments containing ANY needle (any key) -- the 'perfect needle detector, zero key discrimination' null",
+      "structural_ceiling": 1.0,
+      "structural_ceiling_formula": "mean_over_eligible_samples(1.0 if G<=2 else top2_needle_counts_sum/n_e), G = count of distinct eligible GOLD (queried) segments, n_e = count of eligible queried needle instances -- max achievable macro hit@2 given routing scores are computed once per sample (single shared top-2, not independent per needle) and possible needle-segment collisions (plausible here: cur_seg is often only 4-7 at length=2048, a mini birthday-paradox regime for 4 needles)"
+    },
+    "4096": {
+      "task": "niah_multikey_1",
+      "length": 4096,
+      "n_total": 50,
+      "n_eligible_samples": 49,
+      "needle_null_hit2": 0.5918367346938777,
+      "needle_null_hit2_formula": "mean_over_eligible_samples(min(1, 2/M)), M = count of eligible (seg < cur_seg) segments containing ANY needle (any key) -- the 'perfect needle detector, zero key discrimination' null",
+      "structural_ceiling": 1.0,
+      "structural_ceiling_formula": "mean_over_eligible_samples(1.0 if G<=2 else top2_needle_counts_sum/n_e), G = count of distinct eligible GOLD (queried) segments, n_e = count of eligible queried needle instances -- max achievable macro hit@2 given routing scores are computed once per sample (single shared top-2, not independent per needle) and possible needle-segment collisions (plausible here: cur_seg is often only 4-7 at length=2048, a mini birthday-paradox regime for 4 needles)"
+    },
+    "8192": {
+      "task": "niah_multikey_1",
+      "length": 8192,
+      "n_total": 50,
+      "n_eligible_samples": 50,
+      "needle_null_hit2": 0.53,
+      "needle_null_hit2_formula": "mean_over_eligible_samples(min(1, 2/M)), M = count of eligible (seg < cur_seg) segments containing ANY needle (any key) -- the 'perfect needle detector, zero key discrimination' null",
+      "structural_ceiling": 1.0,
+      "structural_ceiling_formula": "mean_over_eligible_samples(1.0 if G<=2 else top2_needle_counts_sum/n_e), G = count of distinct eligible GOLD (queried) segments, n_e = count of eligible queried needle instances -- max achievable macro hit@2 given routing scores are computed once per sample (single shared top-2, not independent per needle) and possible needle-segment collisions (plausible here: cur_seg is often only 4-7 at length=2048, a mini birthday-paradox regime for 4 needles)"
+    }
+  },
+  "niah_multiquery_q2": {
+    "2048": {
+      "task": "niah_multiquery_q2",
+      "length": 2048,
+      "n_total": 50,
+      "n_eligible_samples": 48,
+      "needle_null_hit2": 1.0,
+      "needle_null_hit2_formula": "mean_over_eligible_samples(min(1, 2/M)), M = count of eligible (seg < cur_seg) segments containing ANY needle (any key) -- the 'perfect needle detector, zero key discrimination' null",
+      "structural_ceiling": 1.0,
+      "structural_ceiling_formula": "mean_over_eligible_samples(1.0 if G<=2 else top2_needle_counts_sum/n_e), G = count of distinct eligible GOLD (queried) segments, n_e = count of eligible queried needle instances -- max achievable macro hit@2 given routing scores are computed once per sample (single shared top-2, not independent per needle) and possible needle-segment collisions (plausible here: cur_seg is often only 4-7 at length=2048, a mini birthday-paradox regime for 4 needles)"
+    }
+  },
+  "niah_single_2": {
+    "2048": {
+      "task": "niah_single_2",
+      "length": 2048,
+      "n_total": 50,
+      "n_eligible_samples": 40,
+      "needle_null_hit2": 1.0,
+      "needle_null_hit2_formula": "mean_over_eligible_samples(min(1, 2/M)), M = count of eligible (seg < cur_seg) segments containing ANY needle (any key) -- the 'perfect needle detector, zero key discrimination' null",
+      "structural_ceiling": 1.0,
+      "structural_ceiling_formula": "mean_over_eligible_samples(1.0 if G<=2 else top2_needle_counts_sum/n_e), G = count of distinct eligible GOLD (queried) segments, n_e = count of eligible queried needle instances -- max achievable macro hit@2 given routing scores are computed once per sample (single shared top-2, not independent per needle) and possible needle-segment collisions (plausible here: cur_seg is often only 4-7 at length=2048, a mini birthday-paradox regime for 4 needles)"
+    }
+  }
+}
