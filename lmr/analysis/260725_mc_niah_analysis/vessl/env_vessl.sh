@@ -18,6 +18,10 @@ export XDG_CACHE_HOME=/tmp/cache
 
 export HF_HUB_DISABLE_TELEMETRY=1
 export TOKENIZERS_PARALLELISM=false
+# torch 2.9 renamed this: the legacy name still works but emits a deprecation
+# warning, and (unverified) may be ignored — set BOTH so expandable_segments
+# actually applies (fragmentation matters when another job shares the GPU).
+export PYTORCH_ALLOC_CONF=expandable_segments:True
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 # fla pinned at 4b02d15d (worktree kernels need pre-0d0a2f9a GLA API) — see

@@ -156,10 +156,21 @@ def run_grid(model_kind, task, lengths=LENGTHS_DEFAULT, seeds=SEEDS_DEFAULT,
                 continue
             x4_gen.set_mode(overrides, mode, seed=(seed if seed is not None else 0))
             t0 = time.time()
-            cell = _run_rows(model, tok, engine, rows, n_gen)
+            torch.cuda.reset_peak_memory_stats()
+            try:
+                cell = _run_rows(model, tok, engine, rows, n_gen)
+            except torch.cuda.OutOfMemoryError:
+                # Another job may share this GPU (observed: a concurrent eval
+                # holding ~70/80GB). Drop our cached blocks and retry the cell
+                # once before giving up on it.
+                print(f"[x4][oom] {key}: retrying once after empty_cache", flush=True)
+                torch.cuda.empty_cache()
+                cell = _run_rows(model, tok, engine, rows, n_gen)
             dt = time.time() - t0
             cell["wall_seconds"] = dt
             cell["seed"] = seed
+            cell["peak_gpu_gb"] = round(torch.cuda.max_memory_allocated() / 2**30, 2)
+            torch.cuda.empty_cache()
             raw = _load_raw()
             raw[key] = cell
             _save_raw(raw)
