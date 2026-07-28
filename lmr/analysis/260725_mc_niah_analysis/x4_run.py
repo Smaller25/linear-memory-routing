@@ -71,7 +71,15 @@ def _save_raw(raw):
     on_disk = _load_raw()
     on_disk.update(raw)
     os.makedirs(os.path.dirname(p), exist_ok=True)
-    json.dump(on_disk, open(p, "w"))
+    # atomic replace: with several jobs writing concurrently (GPU util is only
+    # ~20% for one job, so we oversubscribe), a plain truncating write leaves a
+    # window where a reader/crash sees a half-written file. os.replace is atomic
+    # within a filesystem. Losing a cell to a read-modify-write interleave is
+    # still possible but harmless: skip-existing recomputes it on a later pass.
+    tmp = f"{p}.tmp.{os.getpid()}"
+    with open(tmp, "w") as f:
+        json.dump(on_disk, f)
+    os.replace(tmp, p)
     return on_disk
 
 
