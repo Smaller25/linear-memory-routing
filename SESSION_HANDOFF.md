@@ -50,7 +50,7 @@ env; by owner convention the env is **`sh_routing`** and all custom vars are `SH
   (`SH_PY`, default 3.11; lands in `~/.conda/envs`) and populates it via `setup_env.sh` (GPU=blackwell).
 - `sbatch scripts/sh_slurm_run.sh [cmd...]` — all GPU work goes through Slurm (partition `main`,
   `--gres=gpu:rtx6000:N`, 6h cap). No args → runs the GDN correctness gate; else runs the given
-  command inside `sh_routing`. e.g. `sbatch scripts/sh_slurm_run.sh python -m lmr.scripts.eval_long ...`.
+  command inside `sh_routing`. e.g. `sbatch scripts/sh_slurm_run.sh python -m lmr.scripts.eval.eval_long ...`.
 
 Underlying env (what the script installs): torch 2.9.1+cu128, **transformers 5.12**, **fla = the
 in-repo `fla/`** (use `PYTHONPATH=.`; do NOT pip-install a different fla), `mamba_ssm`/`causal_conv1d`
@@ -64,14 +64,14 @@ Core commands (mamba2 = gpt-neox tok; GDN = Mistral tok, auto):
 # convert/verify pretrained mamba2 -> FLA (logit-match)
 python -m lmr.scripts.convert_mamba2 --repo state-spaces/mamba2-1.3b
 # train an SSC router (frozen backbone), then eval vanilla/RM/SSC
-python -m lmr.scripts.train_grm_passkey --arch mamba2 --variant ssc --topk 4 --low-rank-dim 64 \
+python -m lmr.scripts.train.train_grm_passkey --arch mamba2 --variant ssc --topk 4 --low-rank-dim 64 \
     --train-len 2048 --batch 2 --steps 250 --eval-lengths 512 2048 4096
 # long-context eval (memory-light: lm_head only at labelled positions; avoids OOM at >=8k)
-python -m lmr.scripts.eval_long --arch mamba2 --heads ckpt/ssc_k4_mamba13b.pt --variant ssc \
+python -m lmr.scripts.eval.eval_long --arch mamba2 --heads ckpt/ssc_k4_mamba13b.pt --variant ssc \
     --topk 4 --low-rank-dim 64 --lengths 512 2048 4096 8192
 # RULER (standard): prepare data then eval (teacher-forced, single-answer tasks)
 python scripts/ruler.py prepare --lengths 4096 8192 --tasks niah_single_1,niah_multikey_2
-python -m lmr.scripts.eval_ruler --heads ckpt/ssc_k4_mamba13b.pt --variant ssc --topk 4 \
+python -m lmr.scripts.eval.eval_ruler --heads ckpt/ssc_k4_mamba13b.pt --variant ssc --topk 4 \
     --low-rank-dim 64 --tasks niah_single_1 --lengths 4096 8192
 ```
 Checkpoints (`ckpt/*.pt`) and data are gitignored → retrain/regenerate (SSC train ~25 min; eval at
@@ -112,7 +112,7 @@ Checkpoints (`ckpt/*.pt`) and data are gitignored → retrain/regenerate (SSC tr
    metric: DONE** — `lmr/scripts/predict_ruler.py` does greedy free generation with the read-out in
    the decode loop (segment-cache built once over the prompt; current partial segment re-run per
    step) and writes `pred.jsonl` in RULER's format, so scoring is the official unchanged metric.
-   Pipeline: `scripts/ruler.py prepare …` → `python -m lmr.scripts.predict_ruler --arch mamba2
+   Pipeline: `scripts/ruler.py prepare …` → `python -m lmr.scripts.eval.predict_ruler --arch mamba2
    --variant ssc --heads ckpt/ssc.pt --topk 4 --lengths 4096 8192 --tasks niah_single_1 …` →
    `scripts/ruler.py eval …`. (`--variant vanilla` = native generate baseline.) Loop validated on
    Blackwell: one-segment+RM matches native greedy token-for-token; multi-segment plumbing runs.
