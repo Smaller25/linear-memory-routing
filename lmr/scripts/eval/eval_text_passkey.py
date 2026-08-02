@@ -10,7 +10,7 @@ vanilla recall is at the noise floor), so it cannot fairly test training-free MC
 uses :func:`lmr.tasks.make_text_passkey` (real English NIAH prompt, gpt-neox tokenizer) so the
 pretrained model is in-distribution, then sweeps context length.
 
-    python -m lmr.scripts.eval_text_passkey --repo state-spaces/mamba2-1.3b \
+    python -m lmr.scripts.eval.eval_text_passkey --repo state-spaces/mamba2-1.3b \
         --chunk-size 256 --lengths 1024 2048 4096 8192
 """
 

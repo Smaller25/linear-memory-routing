@@ -9,7 +9,7 @@ Standardized synthetic long-context recall (real essay haystack) via vendored RU
 the memory-light teacher-forced scorer so vanilla and the MC heads are compared identically. Prepare
 data first:  ``python scripts/ruler.py prepare --lengths 4096 8192 --tasks niah_single_1,niah_multikey_2``
 
-    python -m lmr.scripts.eval_ruler --arch mamba2 --heads ckpt/ssc_heads_2048.pt --variant ssc \
+    python -m lmr.scripts.eval.eval_ruler --arch mamba2 --heads ckpt/ssc_heads_2048.pt --variant ssc \
         --topk 2 --tasks niah_single_1 niah_multikey_2 --lengths 4096 8192
 """
 

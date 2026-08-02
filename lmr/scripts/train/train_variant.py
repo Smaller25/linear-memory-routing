@@ -9,7 +9,7 @@ Only the per-layer read-out parameters (``W_u`` / router) are trained; the Mamba
 frozen, so this is hours on a single A100. SSC adds the load-balance aux loss returned by the
 segment runner.
 
-    python -m lmr.scripts.train_variant --variant grm --chunk-size 256 --steps 2000
+    python -m lmr.scripts.train.train_variant --variant grm --chunk-size 256 --steps 2000
 """
 
 from __future__ import annotations

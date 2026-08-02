@@ -8,7 +8,7 @@
 Reuses ``evals/harness.py`` (``@register_model('fla')``). This is a thin convenience wrapper
 that documents the task set and forwards to ``lm_eval``; run on GPU/local.
 
-    python -m lmr.scripts.eval_real --model-path <converted-fla-mamba2> \
+    python -m lmr.scripts.eval.eval_real --model-path <converted-fla-mamba2> \
         --tasks fda swde squad_completion nq_open
 """
 

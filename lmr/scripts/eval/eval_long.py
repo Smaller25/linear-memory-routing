@@ -9,7 +9,7 @@ Uses :func:`lmr.scripts.eval_recall.score_hidden` (apply lm_head only at labelle
 reaches 8k-16k without the full-vocab-logit OOM. Loads trained GRM/SSC/MoM/AoM heads from --heads.
 Works for both backbones via ``--arch {mamba2,gdn}``.
 
-    python -m lmr.scripts.eval_long --arch gdn --heads ckpt/ssc_heads.pt --variant ssc \
+    python -m lmr.scripts.eval.eval_long --arch gdn --heads ckpt/ssc_heads.pt --variant ssc \
         --low-rank-dim 64 --lengths 512 2048 4096 8192 --num-examples 32
 """
 

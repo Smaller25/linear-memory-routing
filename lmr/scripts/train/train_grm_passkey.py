@@ -16,7 +16,7 @@ Works for both backbones via ``--arch {mamba2,gdn}`` and any trained head via
 
 After training it evaluates vanilla vs +RM (training-free) vs +trained-head on held-out passkeys.
 
-    python -m lmr.scripts.train_grm_passkey --arch gdn --variant ssc --train-len 1024 --steps 300 \
+    python -m lmr.scripts.train.train_grm_passkey --arch gdn --variant ssc --train-len 1024 --steps 300 \
         --batch 8 --low-rank-dim 64 --eval-lengths 512 1024 2048 4096
 """
 

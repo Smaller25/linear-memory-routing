@@ -13,7 +13,7 @@ NVIDIA RULER's evaluator consumes, so scoring is the official, unmodified metric
     # 1. official data (vendored RULER generators)
     python scripts/ruler.py prepare --lengths 4096 8192 --tasks niah_single_1,niah_multikey_2
     # 2. free-gen prediction WITH the read-out (this script)
-    python -m lmr.scripts.predict_ruler --arch mamba2 --variant ssc --heads ckpt/ssc.pt --topk 4 \
+    python -m lmr.scripts.eval.predict_ruler --arch mamba2 --variant ssc --heads ckpt/ssc.pt --topk 4 \
         --lengths 4096 8192 --tasks niah_single_1 niah_multikey_2
     # 3. official string-match scoring (unchanged RULER metric)
     python scripts/ruler.py eval --lengths 4096 8192 --tasks niah_single_1,niah_multikey_2

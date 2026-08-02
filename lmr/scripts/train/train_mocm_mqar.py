@@ -12,7 +12,7 @@ recall accuracy across kv-pair counts. ``--num-memories 1`` = single-memory base
 count at which a from-scratch linear model still recalls? (Temporal caching is NOT used here — short
 single-segment MQAR; this isolates the parallel axis.)
 
-    python -m lmr.scripts.train_mocm_mqar --num-memories 4 --train-kv 16 32 64 --eval-kv 16 32 64 128
+    python -m lmr.scripts.train.train_mocm_mqar --num-memories 4 --train-kv 16 32 64 --eval-kv 16 32 64 128
 """
 
 from __future__ import annotations

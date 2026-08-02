@@ -8,7 +8,7 @@
 GPU/local: needs the converted checkpoint and CUDA. Prints a side-by-side accuracy table over
 lengths; a measurable RM gain at >=8k with zero training is the Phase-0 success signal.
 
-    python -m lmr.scripts.run_baseline --repo state-spaces/mamba2-1.3b --chunk-size 256
+    python -m lmr.scripts.eval.run_baseline --repo state-spaces/mamba2-1.3b --chunk-size 256
 """
 
 from __future__ import annotations
