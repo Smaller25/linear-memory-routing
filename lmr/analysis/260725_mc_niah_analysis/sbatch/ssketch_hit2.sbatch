@@ -55,7 +55,7 @@ echo "[ssketch] router_query=$MC_RQ online_score=$MC_ONLINE tag=$MC_TAG"
 echo "[ssketch] worktree=$MC_LONGGDN_WORKTREE sketch_root=$MC_SKETCH_ROOT kernel=$MC_KERNEL_VERSION"
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader || true
 
-$PY "$ANA/routing_stats.py" \
+$PY "$ANA/ssketch_routing_stats.py" \
     --model "$MC_MODEL" \
     --descriptor "$MC_DESC" \
     --rank "$MC_RANK" \

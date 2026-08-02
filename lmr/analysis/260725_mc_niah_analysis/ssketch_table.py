@@ -1,6 +1,6 @@
 """arm별 shard -> 병합 JSON + 그림 + main-table-ready 마크다운 표 (GPU 불필요).
 
-입력은 `routing_stats.py` 가 잡마다 따로 쓴 shard들이다:
+입력은 `ssketch_routing_stats.py` 가 잡마다 따로 쓴 shard들이다:
 
     results/{tag}/{arm_key}.json  및  $MC_OUT/results/{tag}/{arm_key}.json
 
@@ -49,7 +49,7 @@ PRIOR = {
 
 
 def arm_slug(key):
-    """routing_stats.arm_slug 와 같은 규칙(`|` -> `__`)."""
+    """ssketch_routing_stats.arm_slug 와 같은 규칙(`|` -> `__`)."""
     return key.replace("|", "__")
 
 
