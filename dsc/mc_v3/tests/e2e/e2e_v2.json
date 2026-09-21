@@ -1,0 +1,10 @@
+{
+  "ckpt": "/home/work/.projects/LLM-OS-Models/long-gdn/dsc/runs/outputs/tsz128x4k_30B_mc_370m_fineweb_edu_30bt_v2_meanpool/checkpoint-30B-model-ckpt.pth",
+  "config_name": "mc_370M",
+  "kernel_version": "v2",
+  "seq_len": 4096,
+  "micro_batch": 2,
+  "nll": 10.384757995605469,
+  "ppl": 32362.578125,
+  "logits_mean_abs": 2.3240244388580322
+}
