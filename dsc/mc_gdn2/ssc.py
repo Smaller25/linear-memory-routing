@@ -83,6 +83,45 @@ def _segment_gdn2_sequential(q, k, v, g, b, w, *, chunk_size, chunk_gdn2_fn):
     return torch.cat(outputs, dim=1), torch.stack(states, dim=1)
 
 
+def _segment_gdn2_chained(q, k, v, g, b, w, *, chunk_size, chunk_gdn2_fn):
+    """Section 3.4's OTHER mode: each segment starts from the previous one's state.
+
+    Independent compressors reset the recurrence every `chunk_size` tokens, so
+    a position only ever sees its own segment and the sole bridge across
+    segments is the top-k read. That is not "more capacity than a single
+    state" — it is a fragmented recurrence plus a retrieval, and when the
+    retrieval sits at chance what remains is a 256-token model. It is the
+    straightforward reading of MC-SSC scoring 2.3 at 8K where the same
+    backbone's unfragmented vanilla scores 18.7.
+
+    Chaining removes the fragmentation: `online_output` at position t then
+    reflects every token up to t, as vanilla does, and the cached read becomes
+    additive rather than load-bearing. This exists to measure what the
+    fragmentation costs.
+
+    Two consequences to keep in view. The scan is sequential by construction,
+    so it gives up the batched speedup independent compressors were chosen
+    for. And the cached state per segment is now CUMULATIVE — the state after
+    segment i carries segments 0..i — so a read overlaps what the online
+    branch already holds, instead of supplying something only the cache has.
+    """
+    length = q.shape[1]
+    outputs, states = [], []
+    state = None
+    for start in range(0, length, chunk_size):
+        stop = min(start + chunk_size, length)
+        out, state = chunk_gdn2_fn(
+            q=q[:, start:stop], k=k[:, start:stop], v=v[:, start:stop],
+            g=g[:, start:stop], b=b[:, start:stop], w=w[:, start:stop],
+            initial_state=state, output_final_state=True,
+            use_qk_l2norm_in_kernel=True, use_gate_in_kernel=False,
+            cu_seqlens=None,
+        )
+        outputs.append(out)
+        states.append(state)
+    return torch.cat(outputs, dim=1), torch.stack(states, dim=1)
+
+
 def gdn2_ssc_forward(
     ssc: GDN2SSC,
     hidden_states: torch.Tensor,
@@ -101,20 +140,24 @@ def gdn2_ssc_forward(
     Inputs use GDN-2's native ``[B,T,H,*]`` layout and are expected to be the
     already activated projections produced by ``GatedDeltaNet2.forward``.
 
-    Only ``checkpoint_mode="independent"`` is implemented: both segment scans
-    below hardcode ``initial_state=None``.  The chained ``"checkpoint"`` mode of
-    paper section 3.4 is rejected rather than silently ignored; ``mc_gdn1`` still
-    offers it via ``scan_segments`` if the ablation is needed.
+    ``checkpoint_mode="independent"`` is the deployed path and the default:
+    both segment scans hardcode ``initial_state=None`` and every segment is
+    scanned in one batched call. ``"chained"`` is section 3.4's other mode,
+    carrying each segment's final state into the next; it is sequential and
+    therefore slower, and it exists to measure what fragmenting the recurrence
+    costs. Anything else is rejected rather than silently ignored.
     """
-    if checkpoint_mode != "independent":
+    if checkpoint_mode not in ("independent", "chained"):
         raise ValueError(
-            "GDN-2 SSC supports independent compressors only, got "
-            f"checkpoint_mode={checkpoint_mode!r}"
+            "GDN-2 SSC supports checkpoint_mode 'independent' or 'chained', "
+            f"got {checkpoint_mode!r}"
         )
     if chunk_gdn2_fn is None:
         from dsc.lit_gpt.gdn2_ops.chunk_gdn2 import chunk_gdn2 as chunk_gdn2_fn
 
-    online_output, memories = _segment_gdn2_batched(
+    scan = (_segment_gdn2_batched if checkpoint_mode == "independent"
+            else _segment_gdn2_chained)
+    online_output, memories = scan(
         q, k, v, g, b, w,
         chunk_size=ssc.chunk_size, chunk_gdn2_fn=chunk_gdn2_fn,
     )

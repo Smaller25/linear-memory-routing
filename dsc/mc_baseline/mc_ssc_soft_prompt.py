@@ -183,28 +183,52 @@ class SoftPromptEmbedding(nn.Module):
                     "are silently unused")
             return x
         b, t, d = x.shape
-        if m.numel() != t:
-            raise ValueError(f"slot_mask length {m.numel()} does not match "
-                             f"the forward's T={t}")
         per = self.n_prefix + self.n_suffix
         if per == 0:
             return x
-        x = x.clone()
-        # Slots repeat with the segment period, so a single tiled write covers
-        # every segment without a Python loop over them.
-        filled = int(m.sum())
-        if filled % per:
-            raise ValueError(f"{filled} slots is not a multiple of "
-                             f"{per} prompt vectors per segment")
         rows = [v for v in (self.prefix, self.suffix) if v is not None]
         tile = torch.cat(rows, dim=0).to(x.dtype)
-        reps = filled // per
-        x[:, m] = tile.repeat(reps, 1).unsqueeze(0).expand(b, -1, -1)
+        x = x.clone()
+        if m.ndim == 1:
+            if m.numel() != t:
+                raise ValueError(f"slot_mask length {m.numel()} does not "
+                                 f"match the forward's T={t}")
+            filled = int(m.sum())
+            if filled % per:
+                raise ValueError(f"{filled} slots is not a multiple of {per}")
+            x[:, m] = tile.repeat(filled // per, 1).unsqueeze(0).expand(
+                b, -1, -1)
+            return x
+        # [B,T]: the evaluation right-pads rows of different lengths, so each
+        # row has its own layout and its own number of slots. A single 1-D
+        # mask would put another row's prefixes inside this row's text.
+        if m.shape[0] != b:
+            raise ValueError(f"slot_mask batch {m.shape[0]} does not match "
+                             f"the forward's B={b}")
+        if m.shape[1] < t:
+            m = torch.cat([m, m.new_zeros(b, t - m.shape[1])], dim=1)
+        elif m.shape[1] > t:
+            if bool(m[:, t:].any()):
+                raise ValueError("slot_mask carries slots past the forward's "
+                                 "T — the plan and the batch disagree")
+            m = m[:, :t]
+        for i in range(b):
+            filled = int(m[i].sum())
+            if filled == 0:
+                continue
+            if filled % per:
+                raise ValueError(f"row {i}: {filled} slots is not a multiple "
+                                 f"of {per}")
+            x[i, m[i]] = tile.repeat(filled // per, 1)
         return x
 
-    def set_plan(self, pm: PositionMap | None) -> None:
-        self.slot_mask = None if pm is None else pm.slot_mask.to(
-            self.wte.weight.device)
+    def set_plan(self, pm) -> None:
+        """Accepts a PositionMap, a [B,T] bool mask, or None to detach."""
+        if pm is None:
+            self.slot_mask = None
+            return
+        m = pm if torch.is_tensor(pm) else pm.slot_mask
+        self.slot_mask = m.to(self.wte.weight.device)
 
 
 def attach_soft_prompt(model, n_prefix: int, n_suffix: int = 0,

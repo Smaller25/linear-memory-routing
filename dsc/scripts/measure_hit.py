@@ -48,7 +48,16 @@ for p in (REPO, os.path.join(REPO, "dsc")):
 def build_model(args):
     from lit_gpt.config import Config
     from lit_gpt.model import GPT
-    cfg = Config.from_name(args.config_name, mc_topk=args.topk)
+    over = {"mc_topk": args.topk}
+    n_prompt = args.n_prefix + args.n_suffix
+    if n_prompt:
+        # One cached state must still cover one group of `chunk_in` real
+        # tokens, so the model's segment size grows by the inserted slots.
+        # Getting this wrong would keep the model's grid at 256 while the
+        # sequence grew, silently re-segmenting every sample.
+        base = Config.from_name(args.config_name).mc_chunk_size
+        over["mc_chunk_size"] = base + n_prompt
+    cfg = Config.from_name(args.config_name, **over)
     model = GPT(cfg).to(args.device).to(torch.bfloat16).eval()
     sd = torch.load(args.ckpt, map_location="cpu", weights_only=False)
     sd = sd.get("model", sd) if isinstance(sd, dict) else sd
@@ -101,11 +110,36 @@ def main() -> int:
     ap.add_argument("--batch-size", type=int, default=8)
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--pad-id", type=int, default=0)
+    ap.add_argument("--soft-prompt", default=None,
+                    help="directory holding prompt.pt from train_soft_prompt")
+    ap.add_argument("--n-prefix", type=int, default=0)
+    ap.add_argument("--n-suffix", type=int, default=0)
+    ap.add_argument("--wandb-name", default=None)
     args = ap.parse_args()
     if args.arm != "native" and not args.router_dir:
         ap.error(f"--arm {args.arm} needs --router-dir")
 
-    model, chunk = build_model(args)
+    model, chunk_out = build_model(args)
+    # chunk_in is the grid the DATA was built on; gold segment indices and
+    # eligibility are expressed on it, and the expansion preserves
+    # position // chunk_out == position // chunk_in by construction.
+    chunk = chunk_out - (args.n_prefix + args.n_suffix)
+    sp = None
+    if args.n_prefix or args.n_suffix:
+        from dsc.mc_baseline.mc_ssc_soft_prompt import (
+            attach_soft_prompt, expand_ids, plan_expansion)
+        sp = attach_soft_prompt(model, args.n_prefix, args.n_suffix)
+        if args.soft_prompt:
+            st = torch.load(os.path.join(args.soft_prompt, "prompt.pt"),
+                            map_location=args.device, weights_only=False)
+            with torch.no_grad():
+                for k in ("prefix", "suffix"):
+                    if st.get(k) is not None:
+                        getattr(sp, k).copy_(st[k].to(getattr(sp, k).dtype))
+            print(f"[hit] loaded prompt from {args.soft_prompt}", flush=True)
+        else:
+            print("[hit] soft prompt is UNTRAINED (warm start only) — this "
+                  "arm measures the layout cost, not the prompt", flush=True)
     print(f"[hit] {attach_arm(model, args)}", flush=True)
 
     mc_layers = [m for m in model.modules()
@@ -152,11 +186,33 @@ def main() -> int:
             t = tok(prompt, return_tensors="pt",
                     add_special_tokens=False).input_ids[0]
             ids_list.append(t); lens.append(len(t))
-        maxlen = max(lens)
-        batch = torch.full((len(ids_list), maxlen), args.pad_id,
-                           dtype=torch.long)
-        for b, t in enumerate(ids_list):
-            batch[b, :len(t)] = t
+        read_pos = [L - 1 for L in lens]
+        if sp is None:
+            maxlen = max(lens)
+            batch = torch.full((len(ids_list), maxlen), args.pad_id,
+                               dtype=torch.long)
+            for b, t in enumerate(ids_list):
+                batch[b, :len(t)] = t
+        else:
+            # Each row gets its own layout: rows differ in length, so they
+            # differ in how many segments they have and therefore in how many
+            # prompt slots they carry.
+            pms = [plan_expansion(L, chunk, args.n_prefix, args.n_suffix)
+                   for L in lens]
+            maxlen = max(pm.length_out for pm in pms)
+            batch = torch.full((len(ids_list), maxlen), args.pad_id,
+                               dtype=torch.long)
+            mask = torch.zeros(len(ids_list), maxlen, dtype=torch.bool)
+            for b, (t, pm) in enumerate(zip(ids_list, pms)):
+                ex = expand_ids(t[None], pm, fill_id=args.pad_id)[0]
+                batch[b, :pm.length_out] = ex
+                mask[b, :pm.length_out] = pm.slot_mask
+            sp.set_plan(mask.to(args.device))
+            # `lens` stays the ORIGINAL lengths: n_segments and the gold index
+            # are expressed on the data's grid. Only the position the routing
+            # is read at moves, and with a suffix the last expanded position
+            # is a prompt slot rather than the query's last token.
+            read_pos = [int(pm.new_of_old[-1].item()) for pm in pms]
         batch = batch.to(args.device)
         for lyr in mc_layers:
             lyr.last_route_indices = None
@@ -164,7 +220,7 @@ def main() -> int:
             model(batch)
 
         for b, (cell, idx, s) in enumerate(chunk_items):
-            last = lens[b] - 1
+            last = read_pos[b]
             gold = s["token_position_answer"] // chunk
             n_seg = (lens[b] + chunk - 1) // chunk
             per_layer, picks = [], []

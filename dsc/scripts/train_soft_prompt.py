@@ -94,8 +94,19 @@ def token_ppl(model, ids, pm, sp) -> float:
     """
     with torch.no_grad():
         if pm is None:
-            sp.set_plan(None) if sp is not None else None
-            logits = model(ids)
+            # The p=0 baseline. A prefix of zero vectors is still a token, so
+            # the only way to measure the unmodified model is to detach the
+            # prompt entirely -- and the wrapper refuses to run attached with
+            # no plan, precisely so this cannot be done by accident.
+            n_pre, n_suf = (sp.n_prefix, sp.n_suffix) if sp else (0, 0)
+            if sp is not None:
+                sp.n_prefix = sp.n_suffix = 0
+                sp.set_plan(None)
+            try:
+                logits = model(ids)
+            finally:
+                if sp is not None:
+                    sp.n_prefix, sp.n_suffix = n_pre, n_suf
             pred, tgt = logits[0, :-1], ids[0, 1:]
         else:
             sp.set_plan(pm)
@@ -264,3 +275,7 @@ def main() -> int:
             "margin passed its own read check and still scored 0.0 at N=16.")
     print(f"[sp] wrote {args.out}/prompt.pt and verdict.json", flush=True)
     return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

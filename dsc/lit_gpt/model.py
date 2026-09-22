@@ -261,7 +261,8 @@ class Block(nn.Module):
                         base,
                         topk=getattr(config, "mc_topk", 2),
                         chunk_size=getattr(config, "mc_chunk_size", 256),
-                        checkpoint_mode="independent",
+                        checkpoint_mode=getattr(
+                            config, "mc_checkpoint_mode", "independent"),
                     )
                 else:
                     # Lazy import keeps the production SSC-v2 import path

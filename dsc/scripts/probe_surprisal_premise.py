@@ -46,6 +46,8 @@ def main() -> int:
                     default=[0.0, 0.5, 1.0, 2.0])
     ap.add_argument("--floor", type=float, default=1e-2)
     ap.add_argument("--out", default=None)
+    ap.add_argument("--wandb-name", default=None,
+                    help="log to wandb under this run name")
     args = ap.parse_args()
 
     import torch
@@ -121,6 +123,32 @@ def main() -> int:
     if args.out:
         json.dump(report, open(args.out, "w"), indent=1)
         print(f"[probe] wrote {args.out}")
+
+    if args.wandb_name:
+        from dsc.scripts import wandb_log as W
+        seeds = sorted({c.split("_")[0] for c in report["cells"]})
+        needles = sorted({int(c.rsplit("_n", 1)[1]) for c in report["cells"]})
+        n_tot = sum(c["n"] for c in report["cells"].values())
+        W.start(args.wandb_name,
+                {"arm": "surprisal-premise", "seeds": seeds,
+                 "lengths": sorted({int(c.split("_len")[1].split("_")[0])
+                                    for c in report["cells"]}),
+                 "needles": needles, "max_samples": n_tot, "topk": None,
+                 "taus": args.taus, "floor": args.floor,
+                 "chunk": chunk, "blocks": blocks, "cache": args.cache},
+                group="track1-surprisal", tags=["probe", "cpu", "gate"])
+        rows = [dict(cell=k, **{"ratio": v["ratio"], "rank": v["rank"]})
+                for k, v in report["cells"].items()]
+        W.log_cells(rows, "ratio")
+        W.log_cells(rows, "rank")
+        for t in args.taus:
+            W.log_cells([dict(cell=k, share=v["share"][str(t)])
+                         for k, v in report["cells"].items()], "share")
+            W.log({f"share_tau/{t:g}": float(np.mean(
+                [c["share"][str(t)] for c in report["cells"].values()]))})
+        W.summary(pooled_ratio=float(np.mean(allr)), n_items=n_tot,
+                  verdict="dead" if np.mean(allr) < 1.2 else "alive")
+        W.finish()
     return 0
 
 

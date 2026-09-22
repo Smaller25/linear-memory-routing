@@ -46,6 +46,12 @@ class Config:
     mc_chunk_size: int = 256
     mc_topk: int = 2
     mc_route_block_size: int = 16
+    # Section 3.4 has two compressor modes. "independent" resets the
+    # recurrence at every segment boundary, which is what every checkpoint
+    # here was trained with and stays the default. "chained" carries each
+    # segment's final state into the next, which is the control for how much
+    # the fragmentation costs.
+    mc_checkpoint_mode: str = "independent"
     # GDN-2 head geometry. None keeps the library defaults (num_heads=16,
     # head_dim=128), which is what every existing preset was built and
     # trained with, so leaving these unset changes nothing. They exist for

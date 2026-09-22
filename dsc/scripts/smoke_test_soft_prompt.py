@@ -169,4 +169,46 @@ assert bool(((src5[1:] - src5[:-1]) == 1).all()), \
     "with p=0 nothing may be dropped"
 print("[sp] p=0 drops nothing, so the gate's baseline uses every target")
 
+# --- per-row masks, which is how the evaluation batches ------------------------
+# Rows of different lengths are right-padded into one batch, so each row has
+# its own layout and its own slot count. A single 1-D mask reused across rows
+# would drop one row's prefix vectors into another row's text, and the run
+# would still produce a routing number.
+m6 = sp.SoftPromptEmbedding(wte, 2, 0)
+with torch.no_grad():
+    m6.prefix.copy_(torch.arange(2 * D, dtype=torch.float).view(2, D) + 100)
+lens = [8, 4]                                   # 2 segments and 1 segment
+pms = [sp.plan_expansion(L, 4, 2, 0) for L in lens]
+T6 = max(p.length_out for p in pms)
+mask = torch.zeros(2, T6, dtype=torch.bool)
+ids6 = torch.zeros(2, T6, dtype=torch.long)
+for i, pm_i in enumerate(pms):
+    mask[i, :pm_i.length_out] = pm_i.slot_mask
+    ids6[i, :pm_i.length_out] = sp.expand_ids(
+        torch.arange(1, lens[i] + 1)[None], pm_i)[0]
+m6.set_plan(mask)
+e6 = m6(ids6)
+assert int(mask[0].sum()) == 4 and int(mask[1].sum()) == 2
+for i, pm_i in enumerate(pms):
+    for j, pos in enumerate(torch.nonzero(pm_i.slot_mask).flatten().tolist()):
+        want = m6.prefix[j % 2].to(e6.dtype)
+        assert torch.allclose(e6[i, pos], want, atol=1e-6), (i, pos)
+    # and this row's real tokens are untouched
+    assert torch.allclose(e6[i, pm_i.new_of_old],
+                          wte(torch.arange(1, lens[i] + 1)), atol=1e-6)
+print("[sp] per-row masks: rows with 4 and 2 slots each get their own layout")
+
+# a shorter mask is padded with non-slots; a longer one with live slots is an error
+m6.set_plan(mask[:, :T6 - 1])
+m6(ids6)
+print("[sp] a short mask is padded with non-slots")
+bad = torch.zeros(2, T6 + 2, dtype=torch.bool); bad[:, -1] = True
+m6.set_plan(bad)
+try:
+    m6(ids6)
+except ValueError as e:
+    print(f"[sp] slots past the batch rejected: {str(e)[:46]}")
+else:
+    raise AssertionError("slots beyond T must raise")
+
 print("ALL SOFT PROMPT CHECKS PASS")
