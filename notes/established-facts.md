@@ -86,6 +86,10 @@ _0024는 length 2048에서 "routing이 지배 병목"을 oracle 주입으로 확
 - **G21. 동결 백본 위 학습 파라미터는 7/7 패배.** 사영 262k, 어텐션 pooling 2k, 혼합 1개·헤드별 16개·질의조건부 D+1개, prefix 8k. 이긴 둘은 파라미터 0개(라우팅 공유, max-sim). [0027 §5, §8]
 
 
+- **G22. chained 추론 대조는 판정에 실패했다 (교란).** `checkpoint_mode=chained`로 추론만 바꾸면 두 팔 모두 **6셀 전부 0.00**(base 대비 0획득/8상실 p=0.0078, vanilla30b 대비 0/33 p=0.0000, maxsim+chained는 maxsim 대비 0/39). 체크포인트가 `initial_state=None`으로 학습돼 경계를 넘는 상태를 본 적이 없으므로 이 붕괴가 분절 탓인지 분포 이동 탓인지 **구분되지 않는다.** 실험 설계 시 "올라가면 증거, 내려가면 미결"로 미리 적어둔 그대로다. **chained 판정은 from-scratch 학습 외에 길이 없다.** 부수: chained가 셀당 ~460초로 independent ~430초와 거의 같다 — 8K에 세그먼트가 32개뿐이라 배치 병렬 이득이 작고, 따라서 from-scratch에서 속도는 장애물이 아니다. [0027, run_chained_pod.sh]
+- **G23. 이 프로토콜의 점수는 바닥에서 분해능이 거의 없다.** vanilla 11.0 / MC 2.7 / chained 0.0 / dense 0.0이 모두 하위 구간에 눌려 있어 2.7과 4.0을 구별할 수 없다(셀당 50문항, 1문항 = 2점, 검출 하한 12pp). 바닥 근처 팔은 점수가 아니라 **적중률로 먼저 스크리닝**할 것. chained를 점수부터 잰 것이 이 규칙을 어긴 사례다. [0027]
+
+
 ---
 
 _이 문서는 사실만 담는다. 진행 중 가설(multi-vector + late-interaction으로 E2/E3 공략 등)·설계·추천은 `notes/adaptive-boundary-research.md` 및 각 report 참조._
