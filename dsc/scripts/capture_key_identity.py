@@ -48,12 +48,48 @@ for p in (REPO, os.path.join(REPO, "dsc")):
     if p not in sys.path:
         sys.path.insert(0, p)
 
+from dsc.mc_baseline.mc_ssc_mlp_router import (  # noqa: E402
+    block_weighted_sums, surprisal_weights, token_surprisal)
+
 KEY_RE = re.compile(r"magic number(?:s)? for (.+?) mentioned", re.I)
 
 
 def query_key(sample: dict) -> str | None:
     m = KEY_RE.search(sample.get("answer_prefix") or "")
     return m.group(1).strip() if m else None
+
+
+def answer_token_span(tok, prompt: str, answer, hint: int | None = None
+                     ) -> tuple[int, int] | None:
+    """Token span of the answer VALUE inside the prompt.
+
+    `key_token_span` deliberately takes the LAST occurrence of the key, which
+    is the question's copy in the final segment. The surprisal premise is
+    about the needle instead: the answer value sitting in the gold segment.
+    Those are different spans and conflating them makes the premise
+    unfalsifiable, since the question's copy is trivially predictable.
+
+    `hint` is `token_position_answer`; the occurrence nearest to it is taken,
+    because a magic number can appear both in the needle and in the answer
+    prefix of some templates.
+    """
+    text = answer[0] if isinstance(answer, (list, tuple)) else answer
+    if not text:
+        return None
+    best = None
+    start = 0
+    while True:
+        c = prompt.find(str(text), start)
+        if c < 0:
+            break
+        start = c + 1
+        pre = len(tok(prompt[:c], add_special_tokens=False).input_ids)
+        span = (pre, pre + len(tok(str(text), add_special_tokens=False).input_ids))
+        if hint is None:
+            return span
+        if best is None or abs(span[0] - hint) < abs(best[0] - hint):
+            best = span
+    return best
 
 
 def key_token_span(tok, prompt: str, key: str) -> tuple[int, int] | None:
@@ -97,6 +133,10 @@ def main() -> int:
     ap.add_argument("--seeds", type=int, nargs="+", default=[42, 43])
     ap.add_argument("--max-samples", type=int, default=50)
     ap.add_argument("--blocks", type=int, default=8)
+    ap.add_argument("--taus", type=float, nargs="+", default=[0.0, 0.5, 1.0, 2.0],
+                    help="surprisal exponents to store descriptors for. Each "
+                         "one costs another copy of the block sums, so keep "
+                         "--layers short when sweeping many.")
     ap.add_argument("--layers", type=int, nargs="+", default=[0, 1])
     args = ap.parse_args()
 
@@ -137,7 +177,7 @@ def main() -> int:
     from transformers import AutoTokenizer
     tok = AutoTokenizer.from_pretrained(args.tokenizer)
 
-    rows, skipped = [], 0
+    rows, skipped, no_needle = [], 0, 0
     for seed in args.seeds:
         for cell in args.cells:
             ctx, ndl = (int(x) for x in cell.split(":"))
@@ -163,17 +203,40 @@ def main() -> int:
                     a.cap_h = a.cap_k = None
                 with torch.no_grad(), torch.autocast("cuda",
                                                      dtype=torch.bfloat16):
-                    model(ids)
+                    out = model(ids)
+                logits = out[0] if isinstance(out, (tuple, list)) else out
+                sur = token_surprisal(logits.float(), ids)[0]  # [T], nats
                 lo, hi = span
                 rec = {"cell": f"seed{seed}_len{ctx}_n{ndl}",
                        "sample_index": i, "key": key,
                        "gold": s["token_position_answer"] // chunk,
                        "nseg": (ids.shape[1] + chunk - 1) // chunk,
                        "key_span": [lo, hi]}
+                nspan = answer_token_span(
+                    tok, prompt, s.get("outputs"),
+                    s.get("token_position_answer"))
+                if nspan is None:
+                    no_needle += 1
+                    continue
+                rec["needle_span"] = list(nspan)
+                rec["surprisal"] = sur.cpu().numpy().astype(np.float16)
                 for li, L in enumerate(args.layers):
                     a = aggs[L]
                     blk = block_means(a.cap_k.float(), chunk, args.blocks)
                     rec[f"g{L}"] = blk[0].cpu().numpy().astype(np.float16)
+                    # Store the block-level SUMS rather than the means, one
+                    # pair per tau. Sums compose: adjacent blocks merge by
+                    # adding numerator and denominator, so a single capture
+                    # serves both the tau sweep and the m sweep. Means would
+                    # only serve the tau sweep.
+                    for ti, tau in enumerate(args.taus):
+                        w = surprisal_weights(sur[None], tau)
+                        num, den = block_weighted_sums(
+                            a.cap_k.float(), chunk, args.blocks, w)
+                        rec[f"gs{L}_t{ti}"] = num[0].cpu().numpy(
+                        ).astype(np.float16)
+                        rec[f"ws{L}_t{ti}"] = den[0].cpu().numpy(
+                        ).astype(np.float32)
                     rec[f"h{L}"] = a.cap_h[0, -1].float().cpu().numpy(
                     ).astype(np.float16)
                     # The query key's own k vectors, averaged over its tokens:
@@ -188,10 +251,14 @@ def main() -> int:
 
     if skipped:
         print(f"[warn] {skipped} samples had no locatable query key", flush=True)
+    if no_needle:
+        print(f"[warn] {no_needle} samples had no locatable answer span",
+              flush=True)
     if not rows:
         raise RuntimeError("captured nothing")
     meta = {"D": cfg.n_embd, "H": aggs[0].num_heads, "Kd": aggs[0].head_qk_dim,
-            "chunk": chunk, "blocks": args.blocks, "layers": args.layers}
+            "chunk": chunk, "blocks": args.blocks, "layers": args.layers,
+            "taus": list(args.taus)}
     torch.save({"rows": rows, "meta": meta}, args.out)
     print(f"[capture] {len(rows)} rows, meta {meta}")
     print(f"[capture] wrote {args.out} "

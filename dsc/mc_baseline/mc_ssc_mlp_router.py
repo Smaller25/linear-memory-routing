@@ -100,6 +100,106 @@ def block_summaries(keys: torch.Tensor, chunk: int, blocks: int) -> torch.Tensor
     return keys.view(b, nseg, blocks, per, h, kd).mean(dim=3)
 
 
+def token_surprisal(logits: torch.Tensor, input_ids: torch.Tensor) -> torch.Tensor:
+    """[B,T,V] x [B,T] -> [B,T] surprisal in nats, -log P(x_t | x_<t).
+
+    ``logits[:, t]`` predicts ``input_ids[:, t+1]``, so the surprisal carried
+    BY token t comes from the row before it. Position 0 has no predecessor and
+    is given the row mean rather than 0, because a 0 would be read as "utterly
+    predictable" and delete that token from a weighted descriptor.
+    """
+    if logits.ndim != 3 or input_ids.ndim != 2:
+        raise ValueError("expected logits [B,T,V] and input_ids [B,T]")
+    if logits.shape[:2] != input_ids.shape:
+        raise ValueError(f"logits {tuple(logits.shape[:2])} does not match "
+                         f"input_ids {tuple(input_ids.shape)}")
+    lp = torch.log_softmax(logits[:, :-1].float(), dim=-1)
+    nats = -lp.gather(-1, input_ids[:, 1:, None].long()).squeeze(-1)
+    head = nats.mean(dim=1, keepdim=True) if nats.shape[1] else \
+        torch.zeros_like(nats[:, :1])
+    return torch.cat([head, nats], dim=1)
+
+
+def surprisal_weights(surprisal: torch.Tensor, tau: float,
+                      floor: float = 1e-2) -> torch.Tensor | None:
+    """Turn surprisal into pooling weights, w = max(s, floor) ** tau.
+
+    Returns None at tau=0 so the caller takes the unweighted path and the
+    reduction is bit-identical to the deployed descriptor rather than merely
+    close to it. That exact-identity property is what makes tau a dial with a
+    known zero rather than a new descriptor.
+
+    The floor matters: a token the model predicts with near-certainty has
+    surprisal near 0, and 0 ** tau removes it from the descriptor entirely.
+    Dropping tokens is a different intervention from down-weighting them, and
+    only the second is under test here.
+    """
+    if tau == 0:
+        return None
+    if tau < 0:
+        raise ValueError(f"tau must be >= 0, got {tau}")
+    return surprisal.float().clamp_min(floor) ** tau
+
+
+def weighted_block_summaries(keys: torch.Tensor, chunk: int, blocks: int,
+                             weights: torch.Tensor | None = None
+                             ) -> torch.Tensor:
+    """[B,T,H,Kd] -> [B,Nseg,blocks,H,Kd], the WEIGHTED mean of each sub-block.
+
+    ``weights=None`` reproduces :func:`block_summaries` exactly, so this
+    generalizes the current descriptor instead of replacing it.
+
+    Why weight at all: the failure being attacked is dilution. A 6-token
+    answer span inside a 256-token mean is 2% of the vector, and the m=8
+    sub-block split recovers part of that by not averaging across the whole
+    segment. Weighting attacks the same dilution along the other axis --
+    inside whatever window is being averaged, let the tokens the model found
+    surprising dominate, since a magic number or a proper noun is exactly
+    what a diverse-key query has to match.
+
+    Deployment cost is not what it looks like. A completed segment's
+    descriptor is only ever read by tokens in LATER segments, so the logits of
+    the same forward pass are causally available and no second pass is needed.
+    The evaluation harness here does use two passes, for simplicity.
+    """
+    num, den = block_weighted_sums(keys, chunk, blocks, weights)
+    return (num / den.clamp_min(1e-6)).to(keys.dtype)
+
+
+def block_weighted_sums(keys: torch.Tensor, chunk: int, blocks: int,
+                        weights: torch.Tensor | None = None
+                        ) -> tuple[torch.Tensor, torch.Tensor]:
+    """[B,T,H,Kd] -> ([B,Nseg,blocks,H,Kd] numerator, [B,Nseg,blocks,1,1] denom).
+
+    Returned separately because sums compose and means do not: merging
+    adjacent blocks is adding both parts, so one capture of the sums serves a
+    sweep over the block count AND a sweep over the weighting exponent. A
+    capture of means would serve only the second.
+    """
+    b, t, h, kd = keys.shape
+    nseg = (t + chunk - 1) // chunk
+    pad = nseg * chunk - t
+    if chunk % blocks:
+        raise ValueError(f"chunk {chunk} not divisible by blocks {blocks}")
+    per = chunk // blocks
+    if pad:
+        keys = torch.cat([keys, keys.new_zeros(b, pad, h, kd)], dim=1)
+    kb = keys.view(b, nseg, blocks, per, h, kd).float()
+    if weights is None:
+        wb = kb.new_ones(b, nseg, blocks, per, 1, 1)
+    else:
+        if weights.shape != (b, t):
+            raise ValueError(f"weights {tuple(weights.shape)} does not match "
+                             f"keys [B,T] = {(b, t)}")
+        w = weights.float()
+        if pad:
+            # Padded positions carry no token, so they must not vote. Zero
+            # weight is right here, unlike the surprisal floor above.
+            w = torch.cat([w, w.new_zeros(b, pad)], dim=1)
+        wb = w.view(b, nseg, blocks, per, 1, 1)
+    return (kb * wb).sum(dim=3), wb.sum(dim=3)
+
+
 class MLPRouterHead(nn.Module):
     """Router u = L2norm(MLP(h)), architecture-identical to the trained one.
 
@@ -436,6 +536,10 @@ class BroadcastGDN2SSC:
     gate_mode: str = "native"
     gate_margin: float = 1.0
     gate_scope: str = "all"
+    # [B,T] pooling weights for the ranking descriptor, or None for the plain
+    # mean. Set by the harness before the forward (see enable_surprisal_weights)
+    # because surprisal needs the LM head, which runs after this layer.
+    desc_weights = None
 
     def forward(self, hidden_states, queries, keys, online_output, memories):
         if hidden_states.ndim != 3 or queries.ndim != 4 or keys.shape != queries.shape:
@@ -466,14 +570,21 @@ class BroadcastGDN2SSC:
                     router = getattr(self, "mlp_router", None)
                     if router is None:
                         raise RuntimeError("broadcast source has no mlp_router")
-                    desc = summaries
-                    if router.blocks > 1:
-                        # Sub-block descriptors are a routing-side change
-                        # only: the cached states, the gate logits and the
-                        # read are all untouched, so this cannot move the
-                        # score except through which segments get picked.
-                        desc = block_summaries(keys, self.chunk_size,
-                                               router.blocks)
+                    w = getattr(self, "desc_weights", None)
+                    if router.blocks > 1 or w is not None:
+                        # Sub-block descriptors and surprisal weighting are
+                        # both routing-side changes only: the cached states,
+                        # the gate logits and the read are all untouched, so
+                        # neither can move the score except through which
+                        # segments get picked. With blocks=1 the block axis is
+                        # squeezed back out so the head's strict layout check
+                        # still applies.
+                        desc = weighted_block_summaries(
+                            keys, self.chunk_size, router.blocks, w)
+                        if router.blocks == 1:
+                            desc = desc[:, :, 0]
+                    else:
+                        desc = summaries
                     rank = router.scores(hidden_states, desc).masked_fill(
                         elig_mask, -torch.inf)
                 else:
@@ -564,6 +675,29 @@ class BroadcastGDN2SSC:
 
 
 GATE_MODES = ("native", "order", "top1", "boost")
+
+
+def enable_surprisal_weights(layers, weights) -> int:
+    """Attach [B,T] ranking-descriptor weights to already-patched MC layers.
+
+    Only the broadcast SOURCE layer reads them, but they are set on every
+    patched layer so a change of source needs no second call. Pass None to go
+    back to the plain mean.
+
+    Returns how many layers were touched, so a caller that expects 16 and
+    gets 0 fails loudly instead of quietly measuring the baseline again.
+    """
+    n = 0
+    for m in layers:
+        if not hasattr(m, "bcast_last_seq"):
+            raise RuntimeError(
+                f"{type(m).__name__} is not a broadcast-patched MC layer; "
+                "call enable_broadcast_routing first")
+        m.desc_weights = weights
+        n += 1
+    if n == 0:
+        raise RuntimeError("no layers received descriptor weights")
+    return n
 
 
 def enable_broadcast_routing(model, source_layer: int = 0, source: str = "mlp",

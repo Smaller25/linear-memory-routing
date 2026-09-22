@@ -48,6 +48,11 @@ def main() -> int:
     ap.add_argument("--cache", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--blocks", type=int, default=8)
+    ap.add_argument("--tau", type=float, default=None,
+                    help="surprisal exponent. Omit (or 0) for the plain mean. "
+                         "Must be one of the grid the cache was captured "
+                         "with; the sums are stored per tau and cannot be "
+                         "interpolated.")
     ap.add_argument("--layers", type=int, nargs="+", default=[0, 1])
     ap.add_argument("--steps", type=int, default=12000)
     ap.add_argument("--lr", type=float, default=1e-3)
@@ -69,16 +74,46 @@ def main() -> int:
     print(f"[train] {len(rows)} rows over {len(cells)} cells, stored blocks "
           f"{stored} -> m={args.blocks}", flush=True)
 
+    # Resolve tau against the captured grid. Sums compose across blocks but
+    # not across tau, so an unlisted tau is an error rather than something to
+    # approximate with the nearest one.
+    ti = None
+    if args.tau:
+        grid = meta.get("taus")
+        if not grid:
+            raise SystemExit("cache has no tau grid — recapture with --taus")
+        if args.tau not in grid:
+            raise SystemExit(f"cache stores taus {grid}, not {args.tau}")
+        ti = grid.index(args.tau)
+        if f"gs{args.layers[0]}_t{ti}" not in rows[0]:
+            raise SystemExit(f"cache lists tau {args.tau} but stores no sums "
+                             f"for it at layer {args.layers[0]}")
+        print(f"[train] tau={args.tau} (grid index {ti})", flush=True)
+
     verdict = {"blocks": args.blocks, "scorer": "dot", "steps": args.steps,
-               "cache": args.cache, "n_rows": len(rows), "cells": cells}
+               "cache": args.cache, "n_rows": len(rows), "cells": cells,
+               "tau": args.tau}
     for L in args.layers:
         items = []
         for r in rows:
             elig = r["nseg"] - 1
             if elig <= 0 or r["gold"] >= elig:
                 continue
-            g = coarsen(torch.tensor(np.asarray(r[f"g{L}"][:elig])).float(),
-                        args.blocks)
+            if ti is None:
+                g = coarsen(
+                    torch.tensor(np.asarray(r[f"g{L}"][:elig])).float(),
+                    args.blocks)
+            else:
+                # Coarsen numerator and denominator separately, then divide.
+                # Averaging the per-block means instead would silently weight
+                # every block equally and throw the weighting away.
+                num = coarsen(
+                    torch.tensor(np.asarray(r[f"gs{L}_t{ti}"][:elig])).float(),
+                    args.blocks)
+                den = coarsen(
+                    torch.tensor(np.asarray(r[f"ws{L}_t{ti}"][:elig])).float(),
+                    args.blocks)
+                g = num / den.clamp_min(1e-6)
             if args.blocks == 1:
                 # blocks=1 is the deployed layout, [E,H,Kd] with no block
                 # axis. The head checks the layout strictly on purpose — that

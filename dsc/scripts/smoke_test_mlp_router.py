@@ -332,4 +332,98 @@ except RuntimeError as e:
 else:
     raise AssertionError("blocks conflict must be rejected")
 
+# ---- 11. surprisal-weighted descriptors ------------------------------------
+# The whole idea rests on tau=0 being the CURRENT descriptor, not something
+# close to it. If that identity does not hold, a "gain" at tau>0 could just be
+# a different descriptor scale and the dial would have no known zero.
+torch.manual_seed(0)
+B, T, H, Kd, CH = 2, 512, 4, 8, 256
+keys = torch.randn(B, T, H, Kd)
+
+plain = inj.block_summaries(keys, CH, 8)
+w_none = inj.weighted_block_summaries(keys, CH, 8, None)
+assert torch.equal(plain, w_none), "weights=None must be bit-identical"
+print("[11] weights=None is bit-identical to block_summaries")
+
+ids = torch.randint(0, 97, (B, T))
+logits = torch.randn(B, T, 97)
+sur = inj.token_surprisal(logits, ids)
+assert sur.shape == (B, T) and torch.isfinite(sur).all()
+assert (sur[:, 1:] > 0).all(), "surprisal in nats is positive"
+print(f"[11] surprisal shape {tuple(sur.shape)}, "
+      f"range {sur.min():.2f}-{sur.max():.2f} nats")
+
+assert inj.surprisal_weights(sur, 0.0) is None, "tau=0 must take the None path"
+w1 = inj.surprisal_weights(sur, 1.0)
+uniform = torch.ones(B, T)
+got = inj.weighted_block_summaries(keys, CH, 8, uniform)
+assert torch.allclose(plain, got, atol=1e-6), "uniform weights == plain mean"
+print("[11] tau=0 returns None; uniform weights reproduce the mean to 1e-6")
+
+# a weight vector that keeps one token per block must return that token's key
+onehot = torch.zeros(B, T)
+onehot[:, ::(CH // 8)] = 1.0
+picked = inj.weighted_block_summaries(keys, CH, 8, onehot)
+want = keys[:, ::(CH // 8)].view(B, T // CH, 8, H, Kd)
+assert torch.allclose(picked, want, atol=1e-6), "one-hot weights must select"
+print("[11] one-hot weights select a single token per block")
+
+# blocks=1 must still reduce to the deployed [B,N,H,Kd] segment mean
+seg = mc_ssc.segment_key_sums(keys, CH)
+one = inj.weighted_block_summaries(keys, CH, 1, None)[:, :, 0]
+assert torch.allclose(seg, one, atol=1e-6), "blocks=1 == segment_key_sums"
+print("[11] blocks=1 reduces to the deployed segment descriptor")
+
+# padding must not vote: a short sequence weighted uniformly equals the mean
+# over real tokens only
+Tp = 300  # 2 segments, second one 44/256 full
+kp = torch.randn(B, Tp, H, Kd)
+wp = torch.ones(B, Tp)
+got = inj.weighted_block_summaries(kp, CH, 1, wp)[:, 1, 0]
+want = kp[:, CH:].mean(dim=1)
+assert torch.allclose(got, want, atol=1e-5), "padded positions must not vote"
+print("[11] padded tail does not dilute the last segment")
+
+m7 = FakeModel(16)
+on = inj.enable_broadcast_routing(m7, 0, "native")
+n = inj.enable_surprisal_weights([l.ssc for l in m7.layers], w1)
+assert n == 16 and m7.layers[0].ssc.desc_weights is w1
+inj.enable_surprisal_weights([l.ssc for l in m7.layers], None)
+assert m7.layers[3].ssc.desc_weights is None
+print(f"[11] enable_surprisal_weights reached {n} layers and clears back to None")
+
+try:
+    inj.enable_surprisal_weights([object()], w1)
+except RuntimeError as e:
+    print(f"[11] unpatched layer rejected: {str(e)[:44]}")
+else:
+    raise AssertionError("an unpatched layer must be rejected")
+
+try:
+    inj.weighted_block_summaries(keys, CH, 8, torch.ones(B, T + 1))
+except ValueError as e:
+    print(f"[11] wrong weight length rejected: {str(e)[:44]}")
+else:
+    raise AssertionError("a mismatched weight length must be rejected")
+
+# The offline sweep coarsens stored SUMS with a mean, on both numerator and
+# denominator. That is only correct because mean(num)/mean(den) equals
+# sum(num)/sum(den) — if it were applied to stored means instead, every block
+# would get equal say and the weighting would silently vanish.
+w2 = inj.surprisal_weights(sur, 1.0)
+num, den = inj.block_weighted_sums(keys, CH, 8, w2)
+direct = inj.weighted_block_summaries(keys, CH, 2, w2)
+cn = num.view(B, T // CH, 2, 4, H, Kd).mean(dim=3)
+cd = den.view(B, T // CH, 2, 4, 1, 1).mean(dim=3)
+assert torch.allclose(direct.float(), cn / cd, atol=1e-5), \
+    "coarsening sums must reproduce a direct weighted mean at the coarser m"
+print("[11] coarsening stored sums reproduces the direct weighted mean (m 8->2)")
+
+# and the dangerous alternative is measurably different, so the check has teeth
+wrong = inj.weighted_block_summaries(keys, CH, 8, w2).view(
+    B, T // CH, 2, 4, H, Kd).mean(dim=3)
+gap = (wrong.float() - direct.float()).abs().max().item()
+assert gap > 1e-4, "averaging per-block means should differ; check is vacuous"
+print(f"[11] averaging per-block means instead differs by {gap:.3f} — not vacuous")
+
 print("ALL BROADCAST CHECKS PASS")
