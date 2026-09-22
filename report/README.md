@@ -3,6 +3,8 @@
 > **Current honest state (start here):** [`RESEARCH_STATE.md`](RESEARCH_STATE.md) — established vs
 > confounded as of 2026-07-12, the crystallized open problem (query-conditioned selection from
 > compressed memory), and scope. The index below is the Track-A frozen-story narrative (0001–0021).
+> **0024–0026** diagnose MC-SSC GDN2-370M multi-NIAH at 2K (branch `sh/mc-niah-analysis`); **0027**
+> extends that to 8K and reports the first two interventions that win.
 
 **Thesis (frozen story).** Take an *already-pretrained, frozen* linear-recurrent LM (Mamba2, Gated
 DeltaNet) and add a small **trained read-out router over cached recurrent-state checkpoints** — no
@@ -52,6 +54,7 @@ router instead of retraining a 1.3–2.7B model.
 | 0016 | unsupervised boundary learning | **fails 3 ways** (soft=attention-bypass, STE+L1=collapse, warm-start=drift to 0.00 top-k(p) overlap) — boundary signal needs oracle supervision; unsupervised is open |
 | 0022 | **decorrelated-write (design idea A)** | write-into-idle-directions **helps multi-key recall ONLY under overload** (H1×16: kv64 0.081→**0.181** w/ decorrelation-reg C4, 2.2×); **neutral w/ slack, hurts near-saturation**. Winner=C4 (loss-only, free). erank↔recall co-move only under load (eRank≠capacity). Testbed has no decay → targets secondary lever only |
 | 0023 | **idea A / C4 on REAL GDN-2 (w/ decay)** | **does NOT transfer — C4 hurts recall in every regime** (hd32 0.497→0.430; λ=0.1 0.497→0.480; hd16 blocks learning) and **collapses state erank (16→3–6)**, opposite of the decay-free 0022 toy. Decay is the dominant rank-limiter (F7); forcing isotropic keys fights the learned key↔gate coupling. **(a) fails → (b) finetuning not run.** Pivot to the **decay/retention** lever |
+| 0027 | **MC-SSC @8K diverse-key — two parameter-free routing fixes** | Extends 0024 from 2K to 8K (~31 candidates). **The sign inverts**: untouched 2.3 vs single-state vanilla 18.7, oracle 74.0 — 0024's routing verdict holds and worsens with candidate count. **Two fixes, zero parameters:** share L0's routing decision across all 16 layers (learnable gold signal exists only at L0/L1; N=4 4→18, p=0.039) and score a segment by its best 32-token sub-block (E3's untried late-interaction cell; hit 0.325→0.450, p=0.0059, **interior optimum at m=8**, +6% memory). Combined **3.0 → 18.5** (paired 200 items, p=0.0000). Residual is read-side: selection 0.640 but conversion 0.328 vs oracle 0.67. Every document-side learned parameter loses. Shape reproduced at 76.7M |
 
 ## Future work
 - **MoCM (Mixture of Cached Memories)** — combine MoM's *parallel* memory axis with MC's *temporal*
