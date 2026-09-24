@@ -161,7 +161,21 @@ def main(args):
                 except Exception as e:
                     fabric.print(f"[warn] code snapshot skipped: {e}")                
     
-    config = Config.from_name(args.model_name)
+    over = {}
+    for pair in (p for p in args.config_overrides.split(",") if p):
+        if "=" not in pair:
+            raise ValueError(f"--config_overrides expects key=value, got {pair!r}")
+        key, value = pair.split("=", 1)
+        for cast in (int, float):
+            try:
+                value = cast(value)
+                break
+            except ValueError:
+                continue
+        over[key] = value
+    config = Config.from_name(args.model_name, **over)
+    if over:
+        fabric.print(f"config overrides: {over}")
     # Loud effective-batch check: micro x accum x world must reproduce the
     # recipe's global batch (paper-matched 128x4k arm => 128 seqs = 524,288
     # tokens per optimizer step) regardless of any --micro_batch_size override.
@@ -660,6 +674,11 @@ if __name__ == "__main__":
     group.add_argument('--val_data_dir', default='', type=str, help='validation data directory')
     group.add_argument('--val_data_dir_raw', default='', type=str, help='validation data directory (raw file for stream tok)')
     group.add_argument('--model_name', default='Samba_421M', type=str, help='model name')
+    group.add_argument('--config_overrides', default='', type=str,
+                       help="comma-separated key=value applied to the model "
+                            "config, e.g. mc_checkpoint_mode=chained. Values "
+                            "are cast to int or float when they parse as one, "
+                            "so a mode name stays a string.")
     group.add_argument('--exp_name', default='', type=str, help='experiment name')
     group.add_argument('--exp_group', default='', type=str, help='experiment group name')
     group.add_argument('--train_config', default='tsz512x4k_20B', type=str, help='training config')
