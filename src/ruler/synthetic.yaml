@@ -120,3 +120,112 @@ qa_2:
   task: qa
   args:
     dataset: hotpotqa
+# ---------------------------------------------------------------------------
+# Diverse-key NIAH (added for the diverse-key ReLU routing experiment,
+# sh_exp/diverse-key-niah-relu). Straight extension of niah_multikey_1 along
+# its own num_needle_k axis: N distinct keys each carry ONE "special magic
+# number" needle, the query asks about exactly ONE of them (num_needle_q=1).
+# essay = PaulGraham haystack (niah_multikey lineage); noise variants use the
+# repeated-sentence haystack (niah_single_1 lineage). All other generation
+# parameters (needle template, words keys, numbers values) are unchanged so
+# the annotation regex and string_match scoring stay compatible.
+
+niah_diversekey_essay_1:
+  task: niah
+  args:
+    type_haystack: essay
+    type_needle_k: words
+    type_needle_v: numbers
+    num_needle_k: 1
+    num_needle_v: 1
+    num_needle_q: 1
+
+niah_diversekey_essay_4:
+  task: niah
+  args:
+    type_haystack: essay
+    type_needle_k: words
+    type_needle_v: numbers
+    num_needle_k: 4
+    num_needle_v: 1
+    num_needle_q: 1
+
+niah_diversekey_essay_8:
+  task: niah
+  args:
+    type_haystack: essay
+    type_needle_k: words
+    type_needle_v: numbers
+    num_needle_k: 8
+    num_needle_v: 1
+    num_needle_q: 1
+
+niah_diversekey_essay_16:
+  task: niah
+  args:
+    type_haystack: essay
+    type_needle_k: words
+    type_needle_v: numbers
+    num_needle_k: 16
+    num_needle_v: 1
+    num_needle_q: 1
+
+niah_diversekey_essay_32:
+  task: niah
+  args:
+    type_haystack: essay
+    type_needle_k: words
+    type_needle_v: numbers
+    num_needle_k: 32
+    num_needle_v: 1
+    num_needle_q: 1
+
+niah_diversekey_noise_1:
+  task: niah
+  args:
+    type_haystack: noise
+    type_needle_k: words
+    type_needle_v: numbers
+    num_needle_k: 1
+    num_needle_v: 1
+    num_needle_q: 1
+
+niah_diversekey_noise_4:
+  task: niah
+  args:
+    type_haystack: noise
+    type_needle_k: words
+    type_needle_v: numbers
+    num_needle_k: 4
+    num_needle_v: 1
+    num_needle_q: 1
+
+niah_diversekey_noise_8:
+  task: niah
+  args:
+    type_haystack: noise
+    type_needle_k: words
+    type_needle_v: numbers
+    num_needle_k: 8
+    num_needle_v: 1
+    num_needle_q: 1
+
+niah_diversekey_noise_16:
+  task: niah
+  args:
+    type_haystack: noise
+    type_needle_k: words
+    type_needle_v: numbers
+    num_needle_k: 16
+    num_needle_v: 1
+    num_needle_q: 1
+
+niah_diversekey_noise_32:
+  task: niah
+  args:
+    type_haystack: noise
+    type_needle_k: words
+    type_needle_v: numbers
+    num_needle_k: 32
+    num_needle_v: 1
+    num_needle_q: 1

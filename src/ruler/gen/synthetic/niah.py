@@ -221,6 +221,12 @@ def generate_samples(num_samples: int, max_seq_length: int, save_dir: str, incre
     if args.type_haystack != 'essay' and args.max_seq_length < 4096:
         incremental = 5
 
+    # noise/needle haystacks insert needles via random.sample(range(num_haystack), ...),
+    # which requires num_haystack >= num_needle_k at every probe (estimate AND binary
+    # search lower bound) — otherwise diverse-key cells with many needles crash.
+    if args.type_haystack != 'essay':
+        incremental = max(incremental, args.num_needle_k)
+
     # Estimate tokens per question to determine reasonable upper bound
     sample_input_text, _ = generate_input_output(incremental)
     sample_tokens = len(TOKENIZER.text_to_tokens(sample_input_text))
