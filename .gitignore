@@ -6,6 +6,8 @@ data
 
 # bash scripts
 *.sh
+# except the experiment runners, which hold the run configuration
+!dsc/scripts/*.sh
 
 # docs
 docs/_build
