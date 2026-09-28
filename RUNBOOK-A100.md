@@ -1,8 +1,12 @@
 # Running GDN-2 on a single A100
 
-Everything needed is in this file. Bring your own GDN-2 codebase; what follows
-is the environment it needs and the failure modes that cost us days. Setup to
-a first training step is about an hour, most of it downloading.
+Everything needed is in this file. Setup to a first training step is about an
+hour, most of it downloading.
+
+The code is [NVlabs/GatedDeltaNet-2](https://github.com/NVlabs/GatedDeltaNet-2),
+which is public. Everything below was verified against a fork of it, so if your
+copy is a different vintage, check the two call sites this file names rather
+than trusting the advice blind.
 
 ## The box
 
@@ -44,9 +48,10 @@ dies about 15 seconds in with
 TypeError: chunk_gla_fwd_o_gk() got an unexpected keyword argument 'use_exp2'
 ```
 
-which reads like a bug in your code and is not one. Check your own call site
-first — if it does not pass `use_exp2`, you do not need the pin and can use a
-current release.
+which reads like a bug in your code and is not one. The call site is
+`lit_gpt/gdn2_ops/chunk_gdn2.py`, in `chunk_gdn2_fwd`. Check it first: if it
+does not pass `use_exp2`, you do not need the pin and a current release is
+fine.
 
 If you reinstall fla by hand, delete `site-packages/fla` first. A stale
 `fla/utils.py` left beside the `fla/utils/` package produces a circular import
@@ -158,11 +163,13 @@ PY
 echo "=== FETCH DONE ($(date +%T)) ==="
 ```
 
-Two things about the layout. Trainers of this lineage glob training shards as
-`{train_dir}/*/*.parquet` and validation as `{val_dir}/*.parquet`, so the files
-must sit at exactly those depths — `hf_hub_download` preserves the
-repo-relative path and puts them two levels too deep, which silently yields an
-empty glob. And train and val must be disjoint shards; pointing val at a
+Two things about the layout. Check your loader's glob before trusting the
+download: `data.py` upstream matches `["*.parquet", "**/*.parquet"]` and takes
+any depth, but forks of it hardcode `{dir}/*.parquet` and `{dir}/*/*.parquet`.
+Against a hardcoded pattern, letting `hf_hub_download` keep the repo-relative
+path puts the shards two levels too deep and the glob silently comes back
+empty, so the script above writes them at a fixed depth and prints the counts.
+Separately, train and val must be disjoint shards; pointing val at a
 subdirectory of train makes the reported perplexity a training-set number.
 
 Published GDN-2 370M checkpoints, if you want a baseline to compare against:
