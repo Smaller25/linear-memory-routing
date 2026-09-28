@@ -1,15 +1,12 @@
-# Running the MC-GDN2 routing experiments on a single A100
+# Running GDN-2 on a single A100
 
-Everything here fits on one A100 80GB. The three things you can run are a
-370M evaluation (hours), a 50M from-scratch pretrain (about a day per arm),
-and a routing-hit measurement (minutes). Setup to first number is roughly an
-hour, most of it downloading.
+Setup to a first training step is about an hour, most of it downloading. One
+A100 80GB is enough; nothing here assumes more than one GPU.
 
 ## The box
 
-The original runs were on a VESSL pod, `betelgeuse.cloud.vessl.ai`, A100-SXM4
-80GB, one GPU. **The image tag was never written down.** What matters is the
-fingerprint, measured on the box that produced every number in `report/`:
+The runs this was written from were on a VESSL pod, A100-SXM4 80GB, one GPU.
+**The image tag was never recorded.** What matters is the fingerprint:
 
 | | |
 |---|---|
@@ -19,163 +16,139 @@ fingerprint, measured on the box that produced every number in `report/`:
 | transformers | 5.17.0 |
 | GPU | A100-SXM4-80GB |
 
-Any CUDA 12.x image with torch >= 2.7 should work; nothing in the code is
-pinned to 2.9. `setup_a100.sh` prints the versions it ends up with, so compare
-against the table before trusting a divergent result.
+Any CUDA 12.x image with torch >= 2.7 should work; nothing in the code pins
+2.9. `setup_a100.sh` prints what it ends up with, so compare before trusting a
+divergent result.
 
-Two directories matter and they are not interchangeable. Put the repo and
-every cache on **container-local disk** — network mounts are slow for caches
-and unreliable for git. Put checkpoints and results on a **mount that outlives
-the container**. A pod that kept checkpoints locally took 22 GPU-hours of
-training with it when it stopped.
+Two directories matter and they are not interchangeable. The repo and every
+cache go on **container-local disk** — network mounts are slow for caches and
+unreliable for git. Checkpoints and results go on a mount that **outlives the
+container**. A pod that kept checkpoints locally took 22 GPU-hours of training
+with it when it stopped.
 
 ## Setup
 
 ```bash
-git clone -b sh/mc-routing-tracks https://github.com/Smaller25/linear-memory-routing
-cd linear-memory-routing
-
-export REPO=$PWD
-export PERSIST=/root/smaller/mc      # must survive the container
-export CACHE=/root/cache             # container-local is fine
+git clone <repo> && cd <repo>
+export PERSIST=/root/smaller     # must survive the container
+export CACHE=/root/cache         # container-local is fine
 
 bash dsc/scripts/setup_a100.sh
-bash dsc/scripts/fetch_a100.sh       # 20 GB, no GPU needed
+bash dsc/scripts/fetch_a100.sh   # 13 GB of FineWeb-Edu, no GPU needed
 ```
 
-`setup_a100.sh` ends by printing whether `chunk_gla_fwd_o_gk` has `use_exp2`
-and `transpose_state_layout`. If either says MISSING, stop — nothing will run,
-see below.
+`setup_a100.sh` exits non-zero if `chunk_gla_fwd_o_gk` is missing `use_exp2`
+or `transpose_state_layout`. That check is the whole point of the script; see
+the fla note below.
 
-Every script needs three paths importable:
+Every run needs:
 
 ```bash
-export PYTHONPATH=$REPO:$REPO/dsc:$REPO/src
+export PYTHONPATH=$REPO:$REPO/dsc
 ```
 
-`$REPO/src` is the one people forget. It holds the vendored RULER generator,
-and without it the evaluation dies about 15 seconds in on
-`ModuleNotFoundError: ruler`.
+## flash-linear-attention must be pinned
 
-## Running things
+`lit_gpt/gdn2_ops/chunk_gdn2.py` calls
 
-**Routing hit rate** — the cheapest useful measurement, a few minutes, no
-generation at all. It asks whether the top-k segment read includes the segment
-holding the needle.
+```python
+chunk_gla_fwd_o_gk(..., use_exp2=True, transpose_state_layout=...)
+```
+
+Neither pypi `flash-linear-attention==0.5.1` nor current upstream has those
+keyword arguments. Commit **`4b02d15d`** does. Without it, every forward pass
+dies about 15 seconds in with
+
+```
+TypeError: chunk_gla_fwd_o_gk() got an unexpected keyword argument 'use_exp2'
+```
+
+which reads like a code bug and is not one. `setup_a100.sh` installs the pin
+and asserts the signature. If you reinstall fla by hand, delete
+`site-packages/fla` first — a stale `fla/utils.py` left beside `fla/utils/`
+produces a circular import that looks unrelated to the version.
+
+## Data layout
+
+`pretrain.py` globs training shards as `{train_dir}/*/*.parquet` and
+validation as `{val_dir}/*.parquet`. Files must land at exactly those depths.
+`hf_hub_download` preserves the repo-relative path and puts them two levels
+too deep, which silently yields an empty glob; `fetch_a100.sh` writes them by
+hand instead.
+
+Train and val shards must be disjoint. Pointing val at a subdirectory of train
+makes the reported perplexity a training-set number.
+
+Validation reports four cumulative losses, over tokens `0..4096`, `0..8192`,
+`0..12288` and `0..16384`, printed as `1 x` through `4 x`
+(`pretrain.py:557`). With a 4096 training length, `2x` and beyond are
+extrapolation. They are cumulative averages, so to read a single window you
+have to difference them.
+
+## Training
 
 ```bash
-python dsc/scripts/measure_hit.py \
-  --ckpt $PERSIST/ckpts/LLM-OS-Models2_mc-gdn2-370m-fineweb-edu-30b-v2-meanpool/checkpoint-30B-model-ckpt.pth \
-  --config-name mc_370M --data-root $PERSIST/dk_data \
-  --out $PERSIST/out/hit.jsonl \
-  --arm native --topk 2 --cells 8192:4 8192:16 --seeds 42 43 44 \
-  --max-samples 50 --batch-size 8 --device cuda
+CKPT_MODE=... EXP_NAME=myrun bash dsc/scripts/pretrain_mc_50m_chinchilla.sh
 ```
 
-`--arm shared` needs a trained MLP router directory; use `native` for a model
-that has not had one fitted.
+The script is a thin wrapper over `pretrain.py`; read it and change what you
+need. The knobs that matter, all overridable by environment variable:
 
-Compare the reported hit against chance, which the script does not print:
-chance is `mean(min(topk, n_segments) / n_segments)` over items, about 0.065
-for topk 2 at 8192. A hit rate of 0.067 is not a low score, it is chance.
+| variable | default | note |
+|---|---|---|
+| `MODEL` | `mc_50M` | a preset in `lit_gpt/config.py` |
+| `MAX_TOKENS` | `1530000000` | budget; global batch is 128 x 4096 = 524,288 |
+| `LR` | `4e-4` | warmup 1% |
+| `MICRO_BATCH_SIZE` | `2` | grad accum absorbs it; global batch unchanged |
+| `SAVE_STEP_INTERVAL` | `500` | |
+| `OUTPUT_ROOT` | `/root/smaller/mc/ladder` | put this on the persistent mount |
 
-**Diverse-key NIAH** — free generation, RULER official `string_match`. About
-15-18 minutes per cell of 50 items at 8192.
+`--config_overrides "key=value,key=value"` sets model config fields without
+adding a preset. Values cast to int or float when they parse as one, so a
+string-valued field stays a string.
 
-```bash
-python dsc/scripts/diverse_key_niah_eval.py \
-  --backend lit_gpt --ckpt <ckpt.pth> --config-name mc_370M \
-  --data-root $PERSIST/dk_data --lengths 8192 --needles 4 16 --seeds 42 43 44 \
-  --max-examples 50 --batch-size 8 --device cuda \
-  --model-label mc30b --gate-label base --out-dir $PERSIST/out/base
-```
+`micro_batch_size 2` peaks near 12 GB against 19.6 GB at 4, which leaves room
+for a co-tenant on the same GPU. Throughput on an otherwise idle A100 is about
+15K tokens/s for a 50M model; a co-tenant drops it to roughly 12K.
 
-Add `--oracle-routing` for the ceiling arm: routing is replaced by the segment
-that actually holds the needle, everything else identical. Run it every time
-you run a base arm. A base score near zero means nothing on its own — the
-oracle is what tells you whether the readout has any resolution at this scale.
+wandb is optional. Write the key to `/root/.wandb_key` (chmod 600); a missing
+key degrades to `WANDB_MODE=disabled` rather than killing a day-long job. The
+project name is set in `pretrain.py`, not the launcher.
 
-Pair the checkpoint with the right config or nothing loads: `mc_370M` for the
-MC checkpoints, `gdn2_370M` for the vanilla ones, `mc_50M` for the ladder. The
-eval hard-fails on a state-dict mismatch rather than loading partially, which
-is deliberate — a partially loaded model still produces plausible scores.
+Model presets live in `lit_gpt/config.py`. `gdn2_370M` is the plain GDN-2
+370M; `mc_50M` is a 52M-non-embedding shrink holding `ffn = 2d`,
+`H * d_head = 2d`, `d_head = 128`, depth 16.
 
-The full protocol table (vanilla / MC / oracle / dense / chained arms in one
-pass) is `dsc/scripts/run_protocol_baseline_pod.sh`.
+### Sanity numbers
 
-**50M from-scratch pretrain** — about 22 hours per arm at 15K tokens/s on an
-otherwise idle A100. Two arms, sequential.
-
-```bash
-bash dsc/scripts/run_fromscratch_chained_pod.sh
-```
-
-The two arms differ in exactly one config field, `mc_checkpoint_mode`:
-`independent` resets the recurrent state every 256 tokens, which is the
-deployed behaviour, and `chained` threads it across segments. Everything else
-is the 370M anchor's recipe — global batch 128 x 4096, LR 4e-4, warmup 1%,
-1.53B tokens (20 per total parameter), TinyLlama tokenizer, FineWeb-Edu.
-
-`MICRO_BATCH_SIZE=2` keeps peak allocation near 12 GB instead of the 19.6 GB
-that micro 4 measured, so a co-tenant on the same GPU does not take the run
-down. Global batch is unchanged; gradient accumulation absorbs it.
-
-wandb is optional. Write the key to `/root/.wandb_key` (chmod 600) and the run
-logs to project `llm_next_gen`. No key means `WANDB_MODE=disabled` and the run
-continues rather than dying 24 hours in.
-
-The scripts hardcode `/root/work/lmr` in a few places. Either clone there or
-`sed -i 's#/root/work/lmr#'"$REPO"'#g' dsc/scripts/run_*.sh`.
-
-## What a working run looks like
-
-From the 370M anchor, fixed protocol, 8192 tokens, 50 items per cell, seeds
-42/43/44, topk 2:
-
-| arm | N=4 | N=16 | pooled |
-|---|---|---|---|
-| vanilla 30B | 17.3 | 4.7 | 11.00 |
-| MC-SSC 30B | 2.0 | 3.3 | 2.67 |
-| oracle routing | 76.7 | 71.3 | 74.00 |
-
-Routing hit for the MC 30B base arm is about 0.05 at layer 0 and 0.067
-averaged over layers, against a chance of 0.065.
-
-From the 50M from-scratch `independent` arm, 1.53B tokens: final validation
-loss 3.287 / 3.254 / 3.333 / 3.410 at 4096 / 8192 / 12288 / 16384, and NIAH
-0.00 for both base and oracle. That zero is not a result about routing. The
-model emits prose and never attempts a number — it cannot follow the
-instruction format at this size and token budget, which puts free-generation
-NIAH below its floor. Read the generated text in
-`<out-dir>/<label>/per_sample/*.jsonl` before drawing any conclusion from a
-score, at any scale.
+A 50M run on FineWeb-Edu starts at loss 10.54 and reaches about 3.3 by 1.5B
+tokens, with validation 3.287 / 3.254 / 3.333 / 3.410 at the four lengths. If
+the first hundred iterations are not falling off 10.5, something is wrong
+before you have spent a day finding out.
 
 ## Things that cost us time
 
-**The fla version decides whether anything runs at all.** `chunk_gdn2.py`
-calls `chunk_gla_fwd_o_gk(use_exp2=True, transpose_state_layout=...)`. pypi
-`flash-linear-attention==0.5.1` does not have those kwargs, and neither does
-the `fla/` vendored at the head of this fork. Commit `4b02d15d` does — that is
-the pin, and `setup_a100.sh` installs it. The symptom is
-`TypeError: chunk_gla_fwd_o_gk() got an unexpected keyword argument 'use_exp2'`
-about 15 seconds into any forward pass. If you reinstall fla by hand, delete
-`site-packages/fla` first: a stale `fla/utils.py` left beside `fla/utils/`
-produces a circular import that looks unrelated.
-
 **Never `pgrep -f` or `pkill -f` a script name over ssh.** The pattern matches
-the ssh command line carrying it, so the check finds itself and a kill finds
-its own session. This bit us three times, once killing the monitoring session
-and once stalling a run 27 minutes. Use an explicit completion marker in the
+the ssh command line carrying it, so a check finds itself and a kill finds its
+own session. This bit us three times, once killing the monitoring session and
+once stalling a run for 27 minutes. Write an explicit completion marker to the
 log and grep for that.
 
-**The eval buffers per-sample output until a cell ends.** An empty
-`per_sample/*.jsonl` 15 minutes in is normal, not a hang. Progress prints only
-at `[cell]` lines. Check `/proc/<pid>/fdinfo` if you need to know it is alive.
+**`pretrain.py` keeps only `latest-model-ckpt.pth`**, replaced at every save,
+plus `final-model-ckpt.pth` at the end. To evaluate mid-training, copy it
+first — reading the live file can catch a half-written one. There are no
+intermediate checkpoints unless you add them.
 
-**A cell that overwrites its checkpoint.** `pretrain.py` writes only
-`latest-model-ckpt.pth`, replaced at every save. To evaluate mid-training, copy
-it first; evaluating the live file can read a half-written one.
+**The checkpoint is a dict, not a state dict.** `torch.load` on
+`latest-model-ckpt.pth` gives `{model, optimizer, hparams, iter_num,
+step_count}`, with the weights under `"model"`. `final-model-ckpt.pth` is a
+third of the size, consistent with weights only. Load with
+`sd.get("model", sd)` so either shape works.
+
+**`| tail` swallows the pipeline's exit status.** A runner that pipes a
+training command into `tail` and then checks `$?` reports success for a job
+that crashed.
 
 **Pull results off the box as they appear.** Ephemeral containers take
-everything. Checkpoints are re-downloadable from HuggingFace and FineWeb-Edu
-is re-downloadable, but a training run is not.
+everything. FineWeb-Edu and published checkpoints are re-downloadable; a
+training run is not.
