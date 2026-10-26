@@ -124,7 +124,7 @@ class LM(nn.Module):
             except ImportError:
                 FusedLinearCrossEntropyLoss = None
             if FusedLinearCrossEntropyLoss is not None:
-                return FusedLinearCrossEntropyLoss()(h, targets, self.lm_head.weight)
+                return FusedLinearCrossEntropyLoss()(h.contiguous(), targets.contiguous(), self.lm_head.weight)
         logits = self.lm_head(h).float()
         return F.cross_entropy(logits.view(-1, logits.shape[-1]), targets.reshape(-1))
 
