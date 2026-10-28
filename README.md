@@ -1,670 +1,267 @@
-<div align="center">
+# linear-memory-routing — multi-state linear attention 사전학습·평가
 
-<img width="50%" alt="Flash Linear Attention" src="images/logo.png">
+GDN-2 위에 **Memory Caching(MC)** 을 얹은 언어모델을 처음부터(from scratch) 학습하고,
+RULER NIAH 로 공정하게 평가하는 저장소다.
 
-[![hf_model](https://img.shields.io/badge/-Models-gray.svg?logo=huggingface&style=flat-square)](https://huggingface.co/fla-hub) [![Discord](https://img.shields.io/badge/Discord-%235865F2.svg?&logo=discord&logoColor=white&style=flat-square)](https://discord.gg/vDaJTmKNcS)
+MC 는 `MC_CHUNK`(기본 256) 토큰마다 GDN-2 state 를 하나씩 저장해 두고,
+토큰마다 라우터가 고른 top-k 구간 state 를 지금 state 와 게이트로 섞어 읽는다
+(논문 *Memory Caching: RNNs with Growing Memory*, arXiv:2602.24281 의 SSC).
 
-</div>
+지난 실험 코드와 보고서 0001–0026 은 [`legacy/`](legacy/README.md) 에 있다.
 
-<p>
-  💥 Flash Linear Attention brings together hardware-efficient building blocks, training-ready layers, and components for modern sequence models, spanning linear attention, sparse attention, state space models, and hybrid LLM architectures. All implementations are platform-agnostic and verified on NVIDIA, AMD, and Intel hardware. Pull requests are welcome!
-</p>
+---
 
---------
-
-* [News](#news)
-* [Models](#models)
-* [Installation](#installation)
-* [Usage](#usage)
-  * [Token Mixing](#token-mixing)
-  * [Fused Modules](#fused-modules)
-  * [Generation](#generation)
-  * [Hybrid Models](#hybrid-models)
-* [Training](#training)
-* [Evaluation](#evaluation)
-* [Benchmarks](#benchmarks)
-* [Citation](#citation)
-* [Star History](#star-history)
-* [Acknowledgements](#acknowledgements)
-
-## News
-
-- [2026-04] ⚡ Add fused [AttnRes](fla/ops/attnres) support to `fla` ([paper](https://arxiv.org/abs/2603.15031)).
-- [2026-04] 🐍 Add Mamba-3 implementation to `fla` ([paper](https://arxiv.org/abs/2603.15569)).
-- [2026-04] 🧱 Add [MoBA](https://arxiv.org/abs/2502.13189) (Mixture of Block Attention) implementation to `fla`, with [FlashMoBA](https://github.com/mit-han-lab/flash-moba) backend support.
-- [2026-04] 🧱 Add [TileLang](https://github.com/tile-ai/tilelang) backend support for selected kernels.
-- [2026-04] 🎯 Add [GPT-OSS](https://openai.com/index/introducing-gpt-oss/)-style attention sink support to `fla`'s attention kernels.
-- [2026-03] 🚀 Add [Context Parallel](fla/ops/cp/README.md) support for KDA and GDN, enabling efficient distributed training across sequence dimension.
-- [2025-10] 🌘 Add Kimi Delta Attention (KDA) implementation to `fla` ([paper](https://arxiv.org/abs/2510.26692)).
-- [2025-09] 🌲 Add DeltaFormer implementation to `fla` ([paper](https://arxiv.org/abs/2505.19488v1)).
-- [2025-09] 🐻 Thrilled to announce that [GDN](fla/ops/gated_delta_rule) has been integrated into Qwen3-Next. Check out their [blog post](https://qwen.ai/blog?id=4074cca80393150c248e508aa62983f9cb7d27cd&from=research.latest-advancements-list) for more info!
-- [2025-08] 🌲 Add Log-Linear Attention implementation to `fla` ([paper](https://arxiv.org/abs/2506.04761)).
-- [2025-08] 🎓 Add MoM implementation to `fla` ([paper](https://arxiv.org/abs/2502.13685)).
-- [2025-07] 🐳 Add MLA implementation to `fla` ([paper](https://arxiv.org/abs/2405.04434)).
-- [2025-07] 🛣️ Add PaTH Attention implementation to `fla` ([paper](https://arxiv.org/abs/2505.16381)).
-- [2025-06] 🎉 Add MesaNet implementation to `fla` ([paper](https://arxiv.org/abs/2506.05233)).
-- [2025-06] 🐍 Add Comba implementation to `fla` ([paper](https://arxiv.org/abs/2506.02475)).
-
-<details>
-<summary>Older news</summary>
-
-- [2025-05] 🎉 Add Rodimus&ast; implementation to `fla` ([paper](https://arxiv.org/abs/2410.06577)).
-- [2025-04] 🎉 Add DeltaProduct implementation to `fla` ([paper](https://arxiv.org/abs/2502.10297)).
-- [2025-04] 🎉 Add FoX implementation to `fla` ([paper](https://arxiv.org/abs/2503.02130)).
-- [2025-03] ~~We have changed the default `initializer_range` to the magic 🐳 0.006~~ The `initializer_range` was rolled back to the default value of 0.02. For actual training, we recommend trying both.
-- [2025-02] 🐳 Add NSA implementations to `fla`. See kernels [here](fla/ops/nsa).
-- [2025-01] 🔥 We are migrating to `torchtitan`-based training framework. Check out the [flame](https://github.com/fla-org/flame) repo for more details.
-- [2025-01] 🦅 Add RWKV7 implementations (both kernels and models) to `fla`.
-- [2024-12] Add `flash-bidirectional-attention` to `fla-org` ([repo](https://github.com/fla-org/flash-bidirectional-linear-attention)).
-- [2024-12] 🎉 Add Gated DeltaNet implementation to `fla` ([paper](https://arxiv.org/abs/2412.06464)).
-- [2024-12] 🚀 `fla` now officially supports kernels with variable-length inputs.
-- [2024-11] The inputs are now switched from head-first to seq-first format.
-- [2024-11] 💥 `fla` now provides a flexible way for training hybrid models.
-- [2024-10] 🔥 Announcing `flame`, a minimal and scalable framework for training `fla` models. Check out the details [here](https://github.com/fla-org/flame).
-- [2024-09] `fla` now includes a fused linear and cross-entropy layer, significantly reducing memory usage during training.
-- [2024-09] 🎉 Add GSA implementation to `fla` ([paper](https://arxiv.org/abs/2409.07146)).
-- [2024-05] 🎉 Add DeltaNet implementation to `fla` ([paper](https://arxiv.org/abs/2102.11174)).
-- [2024-05] 💥 `fla` v0.1: a variety of subquadratic kernels/layers/models integrated (RetNet/GLA/Mamba/HGRN/HGRN2/RWKV6, etc., see [Models](#models)).
-- [2023-12] 💥 Launch `fla`, offering a collection of implementations for state-of-the-art linear attention models.
-
-</details>
-
-## Models
-
-| Year | Model                | Paper                                                                                                                                         | Code                                                                                            |                                                                                                       |
-| :--- | :------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------: |
-| 2022 | ABC                  | [ABC: Attention with Bounded-memory Control](https://arxiv.org/abs/2110.02488)                                                                |                                                                                                 |         [fla](https://github.com/fla-org/flash-linear-attention/blob/main/fla/layers/abc.py)          |
-| 2023 | RetNet               | [Retentive network: a successor to transformer for large language models](https://arxiv.org/abs/2307.08621)                                   | [official](https://github.com/microsoft/torchscale/tree/main)                                   | [fla](https://github.com/fla-org/flash-linear-attention/blob/main/fla/layers/multiscale_retention.py) |
-| 2023 | HGRN                 | [Hierarchically Gated Recurrent Neural Network for Sequence Modeling](https://openreview.net/forum?id=P1TCHxJwLB)                             | [official](https://github.com/OpenNLPLab/HGRN)                                                  |         [fla](https://github.com/fla-org/flash-linear-attention/blob/main/fla/layers/hgrn.py)         |
-| 2024 | GLA                  | [Gated Linear Attention Transformers with Hardware-Efficient Training](https://arxiv.org/abs/2312.06635)                                      | [official](https://github.com/berlino/gated_linear_attention)                                   |         [fla](https://github.com/fla-org/flash-linear-attention/blob/main/fla/layers/gla.py)          |
-| 2024 | Based                | [Simple linear attention language models balance the recall-throughput tradeoff](https://arxiv.org/abs/2402.18668)                            | [official](https://github.com/HazyResearch/based)                                               |        [fla](https://github.com/fla-org/flash-linear-attention/blob/main/fla/layers/based.py)         |
-| 2024 | Rebased              | [Linear Transformers with Learnable Kernel Functions are Better In-Context Models](https://arxiv.org/abs/2402.10644)                          | [official](https://github.com/corl-team/rebased/)                                               |       [fla](https://github.com/fla-org/flash-linear-attention/blob/main/fla/layers/rebased.py)        |
-| 2024 | DeltaNet             | [Parallelizing Linear Transformers with Delta Rule over Sequence Length](https://arxiv.org/abs/2406.06484)                                    | [official](https://github.com/fla-org/flash-linear-attention/blob/main/fla/layers/delta_net.py) |      [fla](https://github.com/fla-org/flash-linear-attention/blob/main/fla/layers/delta_net.py)       |
-| 2024 | HGRN2                | [HGRN2: Gated Linear RNNs with State Expansion](https://arxiv.org/abs/2404.07904)                                                             | [official](https://github.com/OpenNLPLab/HGRN2)                                                 |        [fla](https://github.com/fla-org/flash-linear-attention/blob/main/fla/layers/hgrn2.py)         |
-| 2024 | RWKV6                | [Eagle and Finch: RWKV with Matrix-Valued States and Dynamic Recurrence](https://arxiv.org/abs/2404.05892)                                    | [official](https://github.com/RWKV/RWKV-LM)                                                     |        [fla](https://github.com/fla-org/flash-linear-attention/blob/main/fla/layers/rwkv6.py)         |
-| 2024 | LightNet             | [You Only Scan Once: Efficient Multi-dimension Sequential Modeling with LightNet](https://arxiv.org/abs/2405.21022)                           | [official](https://github.com/OpenNLPLab/LightNet)                                              |       [fla](https://github.com/fla-org/flash-linear-attention/blob/main/fla/layers/lightnet.py)       |
-| 2024 | Mamba2               | [Transformers are SSMs: Generalized Models and Efficient Algorithms Through Structured State Space Duality](https://arxiv.org/abs/2405.21060) | [official](https://github.com/state-spaces/mamba)                                               |         [fla](https://github.com/fla-org/flash-linear-attention/blob/main/fla/models/mamba2)          |
-| 2024 | GSA                  | [Gated Slot Attention for Efficient Linear-Time Sequence Modeling](https://arxiv.org/abs/2409.07146)                                          | [official](https://github.com/fla-org/flash-linear-attention/tree/main/fla/models/gsa)          |           [fla](https://github.com/fla-org/flash-linear-attention/tree/main/fla/models/gsa)           |
-| 2024 | MLA                  | [DeepSeek-V2: A Strong, Economical, and Efficient Mixture-of-Experts Language Model](https://arxiv.org/abs/2405.04434)                        | [official](https://github.com/deepseek-ai/DeepSeek-V2)                                          |         [fla](https://github.com/fla-org/flash-linear-attention/blob/main/fla/layers/mla.py)          |
-| 2025 | Samba                | [Samba: Simple Hybrid State Space Models for Efficient Unlimited Context Language Modeling](https://arxiv.org/abs/2406.07522)                 | [official](https://github.com/microsoft/Samba)                                                  |          [fla](https://github.com/fla-org/flash-linear-attention/blob/main/fla/models/samba)          |
-| 2025 | Gated DeltaNet       | [Gated Delta Networks: Improving Mamba2 with Delta Rule](https://arxiv.org/abs/2412.06464)                                                    | [official](https://github.com/NVlabs/GatedDeltaNet)                                             |      [fla](https://github.com/fla-org/flash-linear-attention/tree/main/fla/ops/gated_delta_rule)      |
-| 2025 | RWKV7                | [RWKV-7 "Goose" with Expressive Dynamic State Evolution](https://arxiv.org/abs/2503.14456)                                                    | [official](https://github.com/BlinkDL/RWKV-LM/tree/main/RWKV-v7)                                |           [fla](https://github.com/fla-org/flash-linear-attention/tree/main/fla/ops/rwkv7)            |
-| 2025 | NSA                  | [Native Sparse Attention: Hardware-Aligned and Natively Trainable Sparse Attention](https://arxiv.org/abs/2502.11089)                         |                                                                                                 |            [fla](https://github.com/fla-org/flash-linear-attention/tree/main/fla/ops/nsa)             |
-| 2025 | FoX                  | [Forgetting Transformer: Softmax Attention with a Forget Gate](https://arxiv.org/abs/2503.02130)                                              | [official](https://github.com/zhixuan-lin/forgetting-transformer)                               |      [fla](https://github.com/fla-org/flash-linear-attention/tree/main/fla/ops/forgetting_attn)       |
-| 2025 | DeltaProduct         | [DeltaProduct: Improving State-Tracking in Linear RNNs via Householder Products](https://arxiv.org/abs/2502.10297)                            |                                                                                                 |  [fla](https://github.com/fla-org/flash-linear-attention/blob/main/fla/layers/gated_deltaproduct.py)  |
-| 2025 | Rodimus&ast;         | [Rodimus*: Breaking the Accuracy-Efficiency Trade-Off with Efficient Attentions](https://arxiv.org/abs/2410.06577)                            | [official](https://github.com/codefuse-ai/rodimus)                                              |       [fla](https://github.com/fla-org/flash-linear-attention/blob/main/fla/layers/rodimus.py)        |
-| 2025 | MesaNet              | [MesaNet: Sequence Modeling by Locally Optimal Test-Time Training](https://arxiv.org/abs/2506.05233)                                          |                                                                                                 |       [fla](https://github.com/fla-org/flash-linear-attention/blob/main/fla/layers/mesa_net.py)       |
-| 2025 | Comba                | [Comba: Improving Bilinear RNNs with Closed-loop Control](https://arxiv.org/abs/2506.02475)                                                   | [official](https://github.com/AwesomeSeq/Comba-triton)                                          |        [fla](https://github.com/fla-org/flash-linear-attention/blob/main/fla/layers/comba.py)         |
-| 2025 | PaTH                 | [PaTH Attention: Position Encoding via Accumulating Householder Transformations](https://arxiv.org/abs/2505.16381)                            |                                                                                                 |      [fla](https://github.com/fla-org/flash-linear-attention/blob/main/fla/layers/path_attn.py)       |
-| 2025 | MoM                  | [MoM: Linear Sequence Modeling with Mixture-of-Memories](https://arxiv.org/abs/2502.13685)                                                    | [official](https://github.com/OpenSparseLLMs/MoM)                                               |         [fla](https://github.com/fla-org/flash-linear-attention/blob/main/fla/layers/mom.py)          |
-| 2025 | Log-Linear Attention | [Log-Linear Attention](https://arxiv.org/abs/2506.04761)                                                                                      | [official](https://github.com/HanGuo97/log-linear-attention)                                    |      [fla](https://github.com/fla-org/flash-linear-attention/tree/main/fla/ops/log_linear_attn)       |
-| 2025 | DeltaFormer          | [Understanding Transformer from the Perspective of Associative Memory](https://arxiv.org/abs/2505.19488v1)                                    |                                                                                                 |     [fla](https://github.com/fla-org/flash-linear-attention/blob/main/fla/layers/deltaformer.py)      |
-| 2025 | KDA                  | [Kimi Linear: An Expressive, Efficient Attention Architecture](https://arxiv.org/abs/2510.26692)                                              |                                                                                                 |            [fla](https://github.com/fla-org/flash-linear-attention/tree/main/fla/ops/kda)             |
-| 2025 | MoBA                 | [MoBA: Mixture of Block Attention for Long-Context LLMs](https://arxiv.org/abs/2502.13189)                                                    | [official](https://github.com/MoonshotAI/MoBA)                                                  |         [fla](https://github.com/fla-org/flash-linear-attention/blob/main/fla/layers/moba.py)         |
-| 2026 | Mamba-3              | [Mamba-3: Improved Sequence Modeling using State Space Principles](https://arxiv.org/abs/2603.15569)                                          | [official](https://github.com/state-spaces/mamba)                                               |         [fla](https://github.com/fla-org/flash-linear-attention/blob/main/fla/models/mamba3)          |
-
-## Installation
-
-[![nvidia-h100-ci](https://github.com/fla-org/flash-linear-attention/actions/workflows/nvidia-h100.yml/badge.svg?branch=main&event=push)](https://github.com/fla-org/flash-linear-attention/actions/workflows/nvidia-h100.yml)
-
-The following requirements should be satisfied
-- [PyTorch](https://pytorch.org/) >= 2.7.0
-- [Triton](https://github.com/triton-lang/triton) >= 3.3 (or nightly version, see [FAQs](FAQs.md))
-- [einops](https://einops.rocks/)
-- [transformers](https://github.com/huggingface/transformers) >=4.45.0
-- [datasets](https://github.com/huggingface/datasets) >=3.3.0
-
-Starting from v0.3.2, the packages published on PyPI are `fla-core` and `flash-linear-attention`. The former contains all our customized kernels and only depends on PyTorch, Triton, and einops. The latter is an extension package of the former, containing `fla/layers` and `fla/models`, and depends on transformers. We also provide Triton implementations for conv1d operations, so causal-conv1d is not required.
-
-You can install `fla` with pip:
-```sh
-pip install flash-linear-attention
-```
-
-As `fla` is actively developed now, for the latest features and updates, an alternative way is to install the package from source. Note that installing from git uses the default mode, so you need to uninstall both `fla-core` and `flash-linear-attention` first:
-```sh
-# uninstall both packages first to ensure a successful upgrade
-pip uninstall fla-core flash-linear-attention -y && pip install -U git+https://github.com/fla-org/flash-linear-attention
-```
-or manage `fla` with submodules
-```sh
-git submodule add https://github.com/fla-org/flash-linear-attention.git 3rdparty/flash-linear-attention
-ln -s 3rdparty/flash-linear-attention/fla fla
-```
-
-> [!NOTE]
-> For AMD GPUs, make sure to install the [Triton ROCm backend](https://github.com/triton-lang/triton). For Intel GPUs, use the [Triton XPU backend](https://github.com/intel/intel-xpu-backend-for-triton). See [FAQs](FAQs.md) for more details.
-
-If you have installed `triton-nightly` and `torch` pre-release version, please use the following command:
-```sh
-pip install einops ninja datasets transformers numpy
-# uninstall both packages first to ensure a successful upgrade
-pip uninstall fla-core flash-linear-attention -y && pip install -U --no-use-pep517 git+https://github.com/fla-org/flash-linear-attention --no-deps
-```
-
-
-## Usage
-
-### Token Mixing
-
-We provide "token mixing" linear attention layers in `fla.layers` for you to use.
-You can replace the standard multihead attention layer in your model with other linear attention layers.
-Example usage is as follows:
-```py
->>> import torch
->>> from fla.layers import MultiScaleRetention
->>> batch_size, num_heads, seq_len, hidden_size = 32, 4, 2048, 1024
->>> device, dtype = 'cuda:0', torch.bfloat16
->>> retnet = MultiScaleRetention(hidden_size=hidden_size, num_heads=num_heads).to(device=device, dtype=dtype)
->>> x = torch.randn(batch_size, seq_len, hidden_size).to(device=device, dtype=dtype)
->>> y, *_ = retnet(x)
->>> y.shape
-torch.Size([32, 2048, 1024])
-```
-
-We provide the implementations of models that are compatible with 🤗 Transformers library.
-Here's an example of how to initialize a GLA model from the default configs in `fla`:
-
-```py
->>> from fla.models import GLAConfig
->>> from transformers import AutoModelForCausalLM
->>> config = GLAConfig()
->>> model = AutoModelForCausalLM.from_config(config)
-```
-
-<details>
-<summary>Click to expand config and model structure</summary>
-
-```py
->>> config
-GLAConfig {
-  "attn": null,
-  "attn_mode": "chunk",
-  "bos_token_id": 1,
-  "clamp_min": null,
-  "conv_size": 4,
-  "elementwise_affine": true,
-  "eos_token_id": 2,
-  "expand_k": 0.5,
-  "expand_v": 1,
-  "feature_map": null,
-  "fuse_cross_entropy": true,
-  "fuse_norm": true,
-  "fuse_swiglu": true,
-  "hidden_act": "swish",
-  "hidden_ratio": 4,
-  "hidden_size": 2048,
-  "initializer_range": 0.02,
-  "intermediate_size": null,
-  "max_position_embeddings": 2048,
-  "model_type": "gla",
-  "norm_eps": 1e-06,
-  "num_heads": 4,
-  "num_hidden_layers": 24,
-  "num_kv_heads": null,
-  "tie_word_embeddings": false,
-  "transformers_version": "4.50.1",
-  "use_cache": true,
-  "use_gk": true,
-  "use_gv": false,
-  "use_output_gate": true,
-  "use_short_conv": false,
-  "vocab_size": 32000
-}
-
->>> model
-GLAForCausalLM(
-  (model): GLAModel(
-    (embeddings): Embedding(32000, 2048)
-    (layers): ModuleList(
-      (0-23): 24 x GLABlock(
-        (attn_norm): RMSNorm(2048, eps=1e-06)
-        (attn): GatedLinearAttention(
-          (q_proj): Linear(in_features=2048, out_features=1024, bias=False)
-          (k_proj): Linear(in_features=2048, out_features=1024, bias=False)
-          (v_proj): Linear(in_features=2048, out_features=2048, bias=False)
-          (g_proj): Linear(in_features=2048, out_features=2048, bias=False)
-          (gk_proj): Sequential(
-            (0): Linear(in_features=2048, out_features=16, bias=False)
-            (1): Linear(in_features=16, out_features=1024, bias=True)
-          )
-          (o_proj): Linear(in_features=2048, out_features=2048, bias=False)
-          (g_norm_swish_gate): FusedRMSNormGated(512, eps=1e-06, activation=swish)
-        )
-        (mlp_norm): RMSNorm(2048, eps=1e-06)
-        (mlp): GatedMLP(
-          (gate_proj): Linear(in_features=2048, out_features=5632, bias=False)
-          (up_proj): Linear(in_features=2048, out_features=5632, bias=False)
-          (down_proj): Linear(in_features=5632, out_features=2048, bias=False)
-          (swiglu_linear): SwiGLULinear()
-        )
-      )
-    )
-    (norm): RMSNorm(2048, eps=1e-06)
-  )
-  (lm_head): Linear(in_features=2048, out_features=32000, bias=False)
-)
-```
-
-</details>
-
-### Fused Modules
-
-We offer a collection of fused modules in `fla.modules` to facilitate faster training:
-
-* [`Rotary Embedding`](fla/modules/rotary.py): rotary positional embeddings as adopted by the Llama architecture, a.k.a., Transformer++.
-* [`Norm Layers`](fla/modules/layernorm.py):
-  * `RMSNorm`, `LayerNorm` and `GroupNorm`
-  * `RMSNormLinear`, `LayerNormLinear` and `GroupNormLinear` to reduce memory usage of intermediate tensors for improved memory efficiency.
-* [`Norm Layers with Gating`](fla/modules/fused_norm_gate.py): combine norm layers with element-wise sigmoid or swish gating, as used by RetNet/GLA.
-* [`Cross Entropy`](fla/modules/fused_cross_entropy.py): faster Triton implementation of cross entropy loss.
-* [`Linear Cross Entropy`](fla/modules/fused_linear_cross_entropy.py): fused linear layer and cross entropy loss to avoid the materialization of large logits tensors. Also refer to implementations by [mgmalek](https://github.com/mgmalek/efficient_cross_entropy) and [Liger-Kernel](https://github.com/linkedin/Liger-Kernel/blob/main/src/liger_kernel/ops/fused_linear_cross_entropy.py).
-* [`Linear KL Divergence`](fla/modules/fused_kl_div.py): fused linear layer and KL divergence loss in a similar vein as CE loss.
-
-> [!IMPORTANT]
-> You can control using `fuse_linear_cross_entropy` in the model configuration to enable/disable the fused linear cross entropy loss.
->
-> This fused implementation is more memory-efficient but may reduce numerical precision. Due to this trade-off, it is disabled by default.
-> If you enable this feature and encounter training instability (e.g., loss divergence), we recommend disabling it to see if the issue is resolved.
-
-### Generation
-
-Upon successfully pretraining a model, it becomes accessible for generating text using the 🤗 text generation APIs.
-In the following, we give a generation example:
-```py
->>> import fla
->>> from transformers import AutoModelForCausalLM, AutoTokenizer
->>> name = 'fla-hub/gla-1.3B-100B'
->>> tokenizer = AutoTokenizer.from_pretrained(name)
->>> model = AutoModelForCausalLM.from_pretrained(name).cuda()
->>> input_prompt = "Power goes with permanence. Impermanence is impotence. And rotation is castration."
->>> input_ids = tokenizer(input_prompt, return_tensors="pt").input_ids.cuda()
->>> outputs = model.generate(input_ids, max_length=64)
->>> tokenizer.batch_decode(outputs, skip_special_tokens=True)[0]
-```
-
-We also provide a simple script [here](benchmarks/benchmark_generation.py) for benchmarking the generation speed.
-Simply run it by:
-```sh
-$ python -m benchmarks.benchmark_generation \
-  --path 'fla-hub/gla-1.3B-100B' \
-  --repetition_penalty 2. \
-  --prompt="Hello everyone, I'm Songlin Yang"
-
-Prompt:
-Hello everyone, I'm Songlin Yang
-Generated:
-Hello everyone, I'm Songlin Yang.
-I am a 20 year old girl from China who is currently studying in the United States of America for my Master degree and also working as an English teacher at school here on campus since last summer (1st semester). My main goal to be able do well with this course so that we can have
-
-Prompt length: 10, generation length: 64
-Total prompt processing + decoding time: 4593ms
-```
-
-All of the pretrained models currently available can be found in [`fla-hub`](https://huggingface.co/fla-hub).
-```py
->>> from huggingface_hub import list_models
->>> for model in list_models(author='fla-hub'): print(model.id)
-```
-
-### Hybrid Models
-
-`fla` provides a flexible method to incorporate standard attention layers into existing linear attention models.
-This is easily achieved by specifying the `attn` argument in the model configuration.
-
-For example, to create a 2-layer Samba model with one Mamba layer followed by one local attention layer, using a sliding window size of 2048:
-
-```py
->>> from fla.models import SambaConfig
->>> from transformers import AutoModelForCausalLM
->>> config = SambaConfig(num_hidden_layers=2)
->>> config.attn = {
-  'layers': [1],
-  'num_heads': 18,
-  'num_kv_heads': 18,
-  'qkv_bias': False,
-  'rope_theta': 10000.,
-  'window_size': 2048
-}
->>> model = AutoModelForCausalLM.from_config(config)
-```
-
-<details>
-<summary>Click to expand config and model structure</summary>
-
-```py
->>> config
-SambaConfig {
-  "attn": {
-    "layers": [
-      1
-    ],
-    "num_heads": 18,
-    "num_kv_heads": 18,
-    "qkv_bias": false,
-    "rope_theta": 10000.0,
-    "window_size": 2048
-  },
-  "bos_token_id": 1,
-  "conv_kernel": 4,
-  "eos_token_id": 2,
-  "expand": 2,
-  "fuse_cross_entropy": true,
-  "fuse_norm": true,
-  "fuse_swiglu": true,
-  "hidden_act": "swish",
-  "hidden_ratio": 4,
-  "hidden_size": 2304,
-  "initializer_range": 0.02,
-  "intermediate_size": 4608,
-  "max_position_embeddings": 2048,
-  "model_type": "samba",
-  "norm_eps": 1e-05,
-  "num_hidden_layers": 2,
-  "pad_token_id": 0,
-  "rescale_prenorm_residual": false,
-  "residual_in_fp32": false,
-  "state_size": 16,
-  "tie_word_embeddings": false,
-  "time_step_floor": 0.0001,
-  "time_step_init_scheme": "random",
-  "time_step_max": 0.1,
-  "time_step_min": 0.001,
-  "time_step_rank": 144,
-  "time_step_scale": 1.0,
-  "transformers_version": "4.50.1",
-  "use_bias": false,
-  "use_cache": true,
-  "use_conv_bias": true,
-  "vocab_size": 32000
-}
-
->>> model
-SambaForCausalLM(
-  (backbone): SambaModel(
-    (embeddings): Embedding(32000, 2304)
-    (layers): ModuleList(
-      (0): SambaBlock(
-        (mixer_norm): RMSNorm(2304, eps=1e-05)
-        (mixer): Mamba(
-          (conv1d): Conv1d(4608, 4608, kernel_size=(4,), stride=(1,), padding=(3,), groups=4608)
-          (in_proj): Linear(in_features=2304, out_features=9216, bias=False)
-          (x_proj): Linear(in_features=4608, out_features=176, bias=False)
-          (dt_proj): Linear(in_features=144, out_features=4608, bias=True)
-          (out_proj): Linear(in_features=4608, out_features=2304, bias=False)
-        )
-        (mlp_norm): RMSNorm(2304, eps=1e-05)
-        (mlp): GatedMLP(
-          (gate_proj): Linear(in_features=2304, out_features=6144, bias=False)
-          (up_proj): Linear(in_features=2304, out_features=6144, bias=False)
-          (down_proj): Linear(in_features=6144, out_features=2304, bias=False)
-          (swiglu_linear): SwiGLULinear()
-        )
-      )
-      (1): SambaBlock(
-        (mixer_norm): RMSNorm(2304, eps=1e-05)
-        (mixer): Attention(
-          (q_proj): Linear(in_features=2304, out_features=2304, bias=False)
-          (k_proj): Linear(in_features=2304, out_features=2304, bias=False)
-          (v_proj): Linear(in_features=2304, out_features=2304, bias=False)
-          (o_proj): Linear(in_features=2304, out_features=2304, bias=False)
-          (rotary): RotaryEmbedding(dim=128, base=10000.0, interleaved=False, pos_idx_in_fp32=True)
-        )
-        (mlp_norm): RMSNorm(2304, eps=1e-05)
-        (mlp): GatedMLP(
-          (gate_proj): Linear(in_features=2304, out_features=6144, bias=False)
-          (up_proj): Linear(in_features=2304, out_features=6144, bias=False)
-          (down_proj): Linear(in_features=6144, out_features=2304, bias=False)
-          (swiglu_linear): SwiGLULinear()
-        )
-      )
-    )
-    (norm_f): RMSNorm(2304, eps=1e-05)
-  )
-  (lm_head): Linear(in_features=2304, out_features=32000, bias=False)
-)
-```
-
-</details>
-
-During inference, you **DO NOT** need to revise anything for generation!
-The model will produce output as-is, without any need for additional configurations or modifications.
-
-## Training
-
-We provide a minimal framework called [🔥 `flame`](https://github.com/fla-org/flame) built on top of `torchtitan`, for efficient training of `fla` models.
-
-Check out [the GLA example](https://github.com/fla-org/flash-linear-attention/blob/main/examples/training.md) for more details.
-
-## Evaluation
-
-The [lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness) library allows you to easily perform (zero-shot) model evaluations.
-Follow the steps below to use this library:
-
-1. Install `lm_eval` following [their instructions](https://github.com/EleutherAI/lm-evaluation-harness/blob/main/README.md).
-
-2. Run evaluation with:
-```sh
-$ MODEL='fla-hub/gla-1.3B-100B'
-$ python -m evals.harness --model hf \
-    --model_args pretrained=$MODEL,dtype=bfloat16 \
-    --tasks wikitext,lambada_openai,piqa,hellaswag,winogrande,arc_easy,arc_challenge,boolq,sciq,copa,openbookqa \
-    --batch_size 64 \
-    --num_fewshot 0 \
-    --device cuda \
-    --show_config
-```
-
-We've made `fla` compatible with hf-style evaluations, you can call [evals.harness](evals/harness.py) to finish the evaluations.
-Running the command above will provide the task results reported in the GLA paper.
-
-3. Multi-GPU Evaluation with Hugging Face accelerate 🚀
-
-To perform data-parallel evaluation (where each GPU loads a separate full copy of the model), we leverage the accelerate launcher as follows:
-```sh
-$ MODEL='fla-hub/gla-1.3B-100B'
-$ accelerate launch -m evals.harness --model hf  \
-    --model_args pretrained=$MODEL,dtype=bfloat16,trust_remote_code=True  \
-    --tasks wikitext,lambada_openai,piqa,hellaswag,winogrande,arc_easy,arc_challenge,boolq,sciq,copa,openbookqa \
-    --batch_size 64  \
-    --num_fewshot 0  \
-    --device cuda  \
-    --show_config  \
-    --trust_remote_code
-```
-
-4. 📏 RULER Benchmark suite
-
-The RULER benchmarks are commonly used for evaluating model performance on long-context tasks.
-You can evaluate `fla` models on RULER directly using `lm-evaluation-harness`. RULER is only available in a relatively recent version of `lm-evaluation-harness`, so make sure you have the latest version installed.
+## 한눈에 보기
 
 ```
-git clone --depth 1 https://github.com/EleutherAI/lm-evaluation-harness
-cd lm-evaluation-harness
-pip install -e .
+configs/          실행 변수(.env). base.env 가 모든 변수를 선언하고, 나머지는 바꿀 것만 적는다
+scripts/          train.sh · eval.sh · prepare_data.sh · prepare_eval.sh · sbatch_cmd.sh · show_config.sh
+slurm/            *.sbatch — scripts/*.sh 를 감싼다(직접 sbatch 하지 말고 sbatch_cmd.sh 가 만든 명령 사용)
+setup/            install_env.sh · check_env.sh · download_assets.sh · scratch_keepalive.sh · gpu_selftest.py
+mslm/models/      GDN-2(gdn2.py), MC-SSC(mc.py), LM(lm.py), 아이디어 꽂는 곳(registry.py)
+mslm/kernels/     GDN-2 Triton 커널(NVIDIA, 비상업 라이선스), 구간 읽기 커널, CPU 참조 구현
+mslm/data/        FineWeb-Edu 사전 토큰화, 재개 가능한 샘플러
+mslm/eval/        RULER 문항 생성, 공식 생성 채점 + 라우팅 진단, 짝지은 비교
+mslm/train.py     학습 루프
+control_tower.ipynb  관제 노트북(같은 config 를 읽고 쓰기, 코드 보기, sbatch 명령 만들기, smoke)
+third_party/ruler NVIDIA RULER 생성기·채점 함수 사본
+tests/            CPU 테스트(설정 동기화, 노트북, 모델, 평가 지표)
+legacy/           지난 실험(읽기 전용)
 ```
 
+## 무엇을 기준으로 삼았나
 
-Then, install the necessary dependencies for RULER:
-```sh
-pip install lm_eval["ruler"]
-```
-and run evaluation by (e.g., 32k contexts):
-```sh
-$ accelerate launch -m evals.harness \
-    --output_path $OUTPUT \
-    --tasks niah_single_1,niah_single_2,niah_single_3,niah_multikey_1,niah_multikey_2,niah_multikey_3,niah_multiquery,niah_multivalue,ruler_vt,ruler_cwe,ruler_fwe,ruler_qa_hotpot,ruler_qa_squad \
-    --model_args pretrained=$MODEL,dtype=bfloat16,max_length=32768,trust_remote_code=True \
-    --metadata='{"max_seq_lengths":[4096,8192,16384,32768]}' \
-    --batch_size 2 \
-    --show_config  \
-    --trust_remote_code
-```
+MC 학습 코드는 이 저장소 밖 세 곳에 있었다. 이렇게 골랐다.
 
-If a GPU can't load a full copy of the model, please refer to [this link](https://github.com/EleutherAI/lm-evaluation-harness?tab=readme-ov-file#multi-gpu-evaluation-with-hugging-face-accelerate) for FSDP settings.
+| 가져온 것 | 출처 | 이유 |
+|---|---|---|
+| GDN-2 커널 `gdn2_ops` (그대로 복사) | `long-gdn/dsc/lit_gpt/gdn2_ops` | 지금까지 370M 학습이 실제로 이 커널 + fla@4b02d15d 로 돌았다. fla@4b02d15d 에는 GDN-2 가 없고, 이 커널은 그 버전의 fla 내부 함수(`use_exp2` 등)에 묶여 있다 |
+| GDN-2 층 구조·초기화 | `long-gdn/dsc/lit_gpt/gdn2.py`, `model.py`(mamba_init) | 파라미터 이름까지 같게 다시 썼다(나중에 옛 체크포인트를 읽을 여지를 남김). lit_gpt 의 rotary·KV cache·DSC 분기 등 이 연구에 필요 없는 부분은 버렸다 |
+| SSC 수식(meanpool descriptor, `W_u` 라우터, online+top-k 결합 softmax) | `long-gdn/dsc/mc_baseline/mc_ssc.py`, `mc_gdn2/ssc.py` | 논문 식 16–17 을 그대로 따르는, 검증된 구현. 합(sum) 대신 평균(mean)인 이유도 그대로 주석에 남겼다 |
+| 구간 읽기 Triton 커널 (그대로 복사) | `long-gdn/dsc/mc_baseline/cached_memory_read.py` → `mslm/kernels/gather_read.py` | `[B,T,k,H,K,V]` 중간 텐서를 만들지 않는 속도 최적화 커널 |
+| `chained` 연결 방식 | 워크트리 `lmr-mc-routing-tracks/dsc/mc_gdn2/ssc.py` | 메인 dsc 에는 없는 논문 §3.4 의 다른 방식. 등록부의 한 항목으로 넣었다 |
+| 50M 크기 | 같은 워크트리의 `mc_50M` (d=384, 6 head×128, ffn 768, 16층, topk=4) | |
+| `long-gdn/linear-memory-routing` | 가져오지 않음 | 이 저장소의 옛 사본이라 새로 가져올 것이 없었다 |
 
-> [!TIP]
-> If you are using `lm-evaluation-harness` as an external library and can't find (almost) any tasks available, before calling `lm_eval.evaluate()` or `lm_eval.simple_evaluate()`, simply run the following to load the library's stock tasks:
-> ```py
-> >>> from lm_eval.tasks import TaskManager; TaskManager().initialize_tasks()
-> ```
+다른 저장소는 읽기만 했고 수정하지 않았다.
 
-## Benchmarks
+## 크기 프리셋 (`MODEL_SIZE`)
 
-We compare our Triton-based implementations (`chunk_retention`, `chunk_gla`, `chunk_gdn`) with CUDA-based FlashAttention2 across various shape configurations.
-These tests were conducted on a single NVIDIA GB200 GPU (CUDA 12.9, PyTorch 2.9.0).
+| 이름 | 층 | d_model | GDN-2 head × dim | FFN | 파라미터(vanilla / mc) |
+|---|---|---|---|---|---|
+| `50m` | 16 | 384 | 6 × 128 | 768 | 71.9M / 76.7M (임베딩 제외 59.7M / 64.4M) |
+| `370m` | 16 | 1024 | 16 × 128 | 2048 | 380.6M / 414.2M |
+| `tiny` | 2 | 64 | 2 × 32 | 128 | CPU 테스트용 |
 
-```sh
-# you might have to first install `fla` via `pip install -e .` to enable its import
-$ python -m benchmarks.ops.run --op chunk_retention chunk_gla chunk_gdn flash_attn
-=================================================================================
-  Machine: NVIDIA GB200 | CUDA 12.9 | PyTorch 2.9.0+cu129.msh
-=================================================================================
-  fwd        B      T    H    D  op                            main[0a484709](ms)
-          -----------------------------------------------------------------------
-             1   8192   96  128  chunk_retention                            0.787
-                                 chunk_gla                                  1.765
-                                 chunk_gdn                                  1.265
-                                 flash_attn                                 3.753
-          -----------------------------------------------------------------------
-             2  16384   16  128  chunk_retention                            0.792
-                                 chunk_gla                                  1.445
-                                 chunk_gdn                                  1.029
-                                 flash_attn                                 5.035
-          -----------------------------------------------------------------------
-             4   2048   16  128  chunk_retention                            0.559
-                                 chunk_gla                                  0.514
-                                 chunk_gdn                                  0.753
-                                 flash_attn                                 0.346
-          -----------------------------------------------------------------------
-             4   4096   64  128  chunk_retention                            0.997
-                                 chunk_gla                                  2.251
-                                 chunk_gdn                                  1.581
-                                 flash_attn                                 2.560
-          -----------------------------------------------------------------------
-             8   1024    8   64  chunk_retention                            0.425
-                                 chunk_gla                                  0.358
-                                 chunk_gdn                                  0.631
-                                 flash_attn                                 0.157
-          -----------------------------------------------------------------------
-             8   2048   32  256  chunk_retention                            1.174
-                                 chunk_gla                                  2.897
-                                 chunk_gdn                                  1.831
-                                 flash_attn                                 1.408
-=================================================================================
-  fwdbwd     B      T    H    D  op                            main[0a484709](ms)
-          -----------------------------------------------------------------------
-             1   8192   96  128  chunk_retention                            2.618
-                                 chunk_gla                                  7.670
-                                 chunk_gdn                                  4.738
-                                 flash_attn                                15.371
-          -----------------------------------------------------------------------
-             2  16384   16  128  chunk_retention                            2.122
-                                 chunk_gla                                  5.984
-                                 chunk_gdn                                  3.616
-                                 flash_attn                                19.960
-          -----------------------------------------------------------------------
-             4   2048   16  128  chunk_retention                            1.047
-                                 chunk_gla                                  1.434
-                                 chunk_gdn                                  2.085
-                                 flash_attn                                 0.902
-          -----------------------------------------------------------------------
-             4   4096   64  128  chunk_retention                            3.459
-                                 chunk_gla                                 10.216
-                                 chunk_gdn                                  5.964
-                                 flash_attn                                10.815
-          -----------------------------------------------------------------------
-             8   1024    8   64  chunk_retention                            0.898
-                                 chunk_gla                                  1.707
-                                 chunk_gdn                                  1.974
-                                 flash_attn                                 0.477
-          -----------------------------------------------------------------------
-             8   2048   32  256  chunk_retention                           51.103
-                                 chunk_gla                                 13.797
-                                 chunk_gdn                                  8.644
-                                 flash_attn                                 6.748
-=================================================================================
+## 학습 레시피 (기본값, `configs/base.env`)
+
+문맥 `SEQ_LEN=8192`, step 당 `GLOBAL_BATCH_TOKENS=524288`(0.5M), AdamW(β 0.9/0.95, wd 0.1, 1차원 파라미터·`A_log`·`dt_bias` 제외),
+LR `4e-4`, cosine(끝 `LR×0.1`), warmup 1%, grad clip 1.0, bf16 autocast.
+누적 횟수는 `GLOBAL_BATCH_TOKENS / (SEQ_LEN × MICRO_BATCH × GPU 수)` 로 자동 계산된다.
+데이터는 FineWeb-Edu(`sample-10BT` 기본), 토크나이저는 TinyLlama v1.1.
+
+## 평가 원칙
+
+- **공식 생성 채점만**: RULER `call_api.py` 처럼 `input + answer_prefix` 를 넣고 greedy 생성(최대 128 토큰, EOS 에서 멈춤) →
+  RULER postprocess → `string_match_all`. teacher-forced 채점은 하지 않는다.
+- **같은 토크나이저**: 평가 문항도 `TOKENIZER` 로 길이를 맞춰 만들고, 체크포인트에 저장된 토크나이저와 다르면 멈춘다.
+- **데이터 분리**: 학습은 FineWeb-Edu `.bin`, 평가는 Paul Graham essay·노이즈 haystack 으로 만든 `jsonl`. 폴더도 다르다.
+- **대조군·시드·짝 비교**: vanilla config 를 같이 돌리고, 시드 0·1·2 로 3번씩. 평가 문항은 `EVAL_DATA_SEED` 로 고정되어
+  모든 모델이 같은 문항을 푼다. `items.jsonl` 로 문항 단위 짝 비교(`python -m mslm.eval.compare`).
+- **라우팅 진단**(MC): 마지막 프롬프트 토큰에서 층마다 정답 구간(바늘 값이 든 구간)을 골랐는지(hit), 정답 구간 순위,
+  그리고 문항마다 초기하분포로 계산한 무작위 기준선 `1 − C(N−G,k)/C(N,k)` 를 같이 남긴다.
+- **oracle 라우팅**(`EVAL_ROUTE=oracle`): 정답 구간을 top-k 에 강제로 넣는다. 평가 전용. 라우팅이 병목인지 가늠하는 상한.
+- **MQAR 은 쓰지 않는다.**
+
+---
+
+## KISTI 한강에서 처음부터 끝까지
+
+> 확인한 문서: <https://docs-ksc.gitbook.io/hangang-user-guide> (2026-10 기준).
+> 아직 직접 확인하지 못한 값은 아래 [확인 필요](#kisti-에서-확인이-필요한-것) 에 모아 두었다.
+
+### 0. 알아 둘 규칙
+
+- 로그인: `ssh <ID>@hangang.ksc.re.kr` (OTP 6자리 → 비밀번호). 파일 전송·큰 다운로드는 데이터무버 `hangang-dm.ksc.re.kr`(sftp).
+- GPU 노드: GH200 4개/노드, **aarch64(ARM)**. 큐 `normal`(베타), 최대 24시간, 사용자당 동시 5개.
+- sbatch 에 `--comment="field=<분야>;appl=<프로그램>"` 가 **필수**. 허용값은 로그인 노드에서 `showappl`. 기본값은 `field=nlp;appl=pytorch`(`SB_COMMENT`).
+- **작업은 `/scratch/$USER` 아래에서만 제출된다.** `sbatch_cmd.sh` 가 만든 명령이 알아서 `cd $SB_SUBMIT_DIR` 한다.
+- 저장소 위치: 코드·conda env 는 홈(`/home01/$USER`, 128GB, 백업 있음), 데이터·체크포인트·HF 캐시는 `/scratch/$USER/mslm`
+  (80TB 그룹, 백업 없음, **15일 동안 접근 안 한 파일 자동 삭제**).
+- 계산 노드는 인터넷이 안 된다고 가정한다. 다운로드는 로그인/데이터무버 노드에서, 계산 노드에서는 HF offline 모드.
+
+### 1. 코드 받기 (로그인 노드)
+
+```bash
+cd ~ && git clone https://github.com/Smaller25/linear-memory-routing.git && cd linear-memory-routing
 ```
 
-
-## Citation
-If you find this repository helpful, please cite our work:
-```bib
-@software{yang2024fla,
-  title  = {FLA: A Triton-Based Library for Hardware-Efficient Implementations of Linear Attention Mechanism},
-  author = {Yang, Songlin and Zhang, Yu},
-  url    = {https://github.com/fla-org/flash-linear-attention},
-  month  = jan,
-  year   = {2024}
-}
-
-@misc{chen2026attnres,
-  title         = {Attention Residuals},
-  author        = {Chen, Guangyu  and Zhang, Yu  and Su, Jianlin  and Xu, Weixin  and Pan, Siyuan  and Wang, Yaoyu  and Wang, Yucheng  and Chen, Guanduo  and Yin, Bohong  and Chen, Yutian  and Yan, Junjie  and Wei, Ming  and Zhang, Y.  and Meng, Fanqing  and Hong, Chao  and Xie, Xiaotong  and Liu, Shaowei  and Lu, Enzhe  and Tai, Yunpeng  and Chen, Yanru  and Men, Xin  and Guo, Haiqing  and Charles, Y.  and Lu, Haoyu  and Sui, Lin  and Zhu, Jinguo  and Zhou, Zaida  and He, Weiran  and Huang, Weixiao  and Xu, Xinran  and Wang, Yuzhi  and Lai, Guokun  and Du, Yulun  and Wu, Yuxin  and Yang, Zhilin  and Zhou, Xinyu},
-  year          = {2026},
-  archiveprefix = {arXiv},
-  eprint        = {2603.15031},
-  primaryclass  = {cs.CL}
-}
-
-@misc{zhang2025kda,
-  title         = {Kimi Linear: An Expressive, Efficient Attention Architecture},
-  author        = {Zhang, Yu  and Lin, Zongyu  and Yao, Xingcheng  and Hu, Jiaxi  and Meng, Fanqing  and Liu, Chengyin  and Men, Xin  and Yang, Songlin  and Li, Zhiyuan  and Li, Wentao  and Lu, Enzhe  and Liu, Weizhou  and Chen, Yanru  and Xu, Weixin  and Yu, Longhui  and Wang, Yejie  and Fan, Yu  and Zhong, Longguang  and Yuan, Enming  and Zhang, Dehao  and Zhang, Yizhi  and T. Liu, Y.  and Wang, Haiming  and Fang, Shengjun  and He, Weiran  and Liu, Shaowei  and Li, Yiwei  and Su, Jianlin  and Qiu, Jiezhong  and Pang, Bo  and Yan, Junjie  and Jiang, Zhejun  and Huang, Weixiao  and Yin, Bohong  and You, Jiacheng  and Wei, Chu  and Wang, Zhengtao  and Hong, Chao  and Chen, Yutian  and Chen, Guanduo  and Wang, Yucheng  and Zheng, Huabin  and Wang, Feng  and Liu, Yibo  and Dong, Mengnan  and Zhang, Zheng  and Pan, Siyuan  and Wu, Wenhao  and Wu, Yuhao  and Guan, Longyu  and Tao, Jiawen  and Fu, Guohong  and Xu, Xinran  and Wang, Yuzhi  and Lai, Guokun  and Wu, Yuxin  and Zhou, Xinyu  and Yang, Zhilin  and Du, Yulun},
-  year          = {2025},
-  eprint        = {2510.26692},
-  archivePrefix = {arXiv},
-  primaryClass  = {cs.CL}
-}
-
-@inproceedings{yang2025path,
-  title     = {PaTH Attention: Position Encoding via Accumulating Householder Transformations},
-  author    = {Yang, Songlin  and Shen, Yikang and Wen, Kaiyue and Tan, Shawn  and Mishra, Mayank  and Ren, Liliang  and Panda, Rameswar  and Kim, Yoon},
-  booktitle = {Proceedings of NeurIPS},
-  year      = {2025}
-}
-
-@inproceedings{yang2024gdn,
-  title     = {Gated Delta Networks: Improving Mamba2 with Delta Rule},
-  author    = {Yang, Songlin  and Kautz, Jan  and Hatamizadeh, Ali},
-  booktitle = {Proceedings of ICLR},
-  year      = {2025}
-}
-
-@inproceedings{yang2024deltanet,
-  title     = {Parallelizing Linear Transformers with the Delta Rule over Sequence Length},
-  author    = {Yang, Songlin and Wang, Bailin and Zhang, Yu and Shen, Yikang and Kim, Yoon},
-  booktitle = {Proceedings of NeurIPS},
-  year      = {2024}
-}
-
-@inproceedings{zhang2024gsa,
-  title     = {Gated Slot Attention for Efficient Linear-Time Sequence Modeling},
-  author    = {Zhang, Yu and Yang, Songlin and Zhu, Ruijie and Zhang, Yue and Cui, Leyang and Wang, Yiqiao and Wang, Bolun and Shi, Freda and Wang, Bailin and Bi, Wei and Zhou, Peng and Fu, Guohong},
-  booktitle = {Proceedings of NeurIPS},
-  year      = {2024}
-}
-
-@inproceedings{qin2024hgrn2,
-  title     = {HGRN2: Gated Linear RNNs with State Expansion},
-  author    = {Qin, Zhen and Yang, Songlin and Sun, Weixuan and Shen, Xuyang and Li, Dong and Sun, Weigao and Zhong, Yiran},
-  booktitle = {Proceedings of COLM},
-  year      = {2024}
-}
-
-@inproceedings{yang2024gla,
-  title     = {Gated Linear Attention Transformers with Hardware-Efficient Training},
-  author    = {Yang, Songlin and Wang, Bailin and Shen, Yikang and Panda, Rameswar and Kim, Yoon},
-  booktitle = {Proceedings of ICML},
-  year      = {2024}
-}
+```bash
+git checkout sh/ms-pretrain-base
 ```
 
-## Star History
+### 2. env 설치 (로그인 노드 또는 데이터무버, 인터넷 필요)
 
-[![Stargazers repo roster for @fla-org/flash-linear-attention](https://bytecrank.com/nastyox/reporoster/php/stargazersSVG.php?user=fla-org&repo=flash-linear-attention)](https://github.com/fla-org/flash-linear-attention/stargazers)
+```bash
+module load miniforge/26.1.1-3
+```
 
-[![Star History Chart](https://api.star-history.com/svg?repos=fla-org/flash-linear-attention&type=Date)](https://star-history.com/#fla-org/flash-linear-attention&Date)
+```bash
+bash setup/install_env.sh
+```
 
-## Acknowledgements
+`sh_mslm` env 에 python 3.11, torch 2.9.1+cu128, triton 3.5.1, fla@4b02d15d 가 깔린다.
+mamba-ssm / causal-conv1d 는 필요 없다. fla 를 다시 깔 때는 스크립트가 `site-packages/fla` 를 먼저 지운다.
 
-We extend our gratitude to [Bitdeer](https://www.bitdeer.com/) and [Moonshot AI](https://www.moonshot.ai/) for their support in maintaining and powering our project infrastructure.
+작업 스크립트는 `configs/base.env` 의 `MODULES="miniforge/26.1.1-3"`, `CONDA_ENV=sh_mslm` 으로 env 를 스스로 켠다.
+
+### 3. 데이터 반입 (인터넷 되는 노드)
+
+토크나이저, FineWeb-Edu parquet, nltk punkt(RULER 용)를 `/scratch/$USER/mslm/hf_cache` 에 받는다. sample-10BT 는 약 28GB.
+
+```bash
+CONFIG=configs/mc_50m.env bash setup/download_assets.sh
+```
+
+데이터무버(`hangang-dm`)에 conda 가 없으면, 로그인 노드에서 실행하거나 연구실 서버에서 받은 `hf_cache` 를 sftp 로 올린다.
+
+### 4. 접속 확인과 GPU 시험
+
+```bash
+CONFIG=configs/smoke_kisti.env bash setup/check_env.sh
+```
+
+GPU 시험(커널 정확도·구간 읽기·MC fwd/bwd)은 GPU 노드에서:
+
+```bash
+salloc --partition=normal --comment="field=nlp;appl=pytorch" --nodes=1 --gpus-per-node=1 --time=00:30:00
+```
+
+```bash
+CONFIG=configs/smoke_kisti.env bash setup/check_env.sh
+```
+
+### 5. 사전 토큰화와 평가 문항 만들기 (GPU 노드 작업으로)
+
+GPU 노드는 aarch64 라 env 가 그대로 돈다(x86 CPU 큐 `normal_cpu` 에서는 이 env 가 안 돈다).
+아래 명령은 **화면에 sbatch 명령을 출력만** 한다. 내용을 확인하고 복사해 실행한다.
+
+```bash
+CONFIG=configs/mc_50m.env SB_TIME=06:00:00 bash scripts/sbatch_cmd.sh prepare_data
+```
+
+```bash
+CONFIG=configs/mc_50m.env SB_TIME=01:00:00 bash scripts/sbatch_cmd.sh prepare_eval
+```
+
+### 6. 50M smoke (20 step, 저장·재개·평가 한 바퀴)
+
+```bash
+CONFIG=configs/smoke_kisti.env bash scripts/sbatch_cmd.sh train
+```
+
+끝나면 같은 명령을 한 번 더 내고 `MAX_STEPS=30` 을 주면 step 20 에서 이어서 학습하는지 볼 수 있다.
+
+```bash
+CONFIG=configs/smoke_kisti.env MAX_STEPS=30 bash scripts/sbatch_cmd.sh train
+```
+
+```bash
+CONFIG=configs/smoke_kisti.env bash scripts/sbatch_cmd.sh eval
+```
+
+로그: `/scratch/$USER/mslm/runs/smoke_mc_50m/train.jsonl`, 평가: `.../eval/step_XXXXXXX/summary.json`.
+
+### 7. 본학습 (vanilla 대조군 + MC, 3시드)
+
+```bash
+for seed in 0 1 2; do CONFIG=configs/vanilla_50m.env SEED=$seed bash scripts/sbatch_cmd.sh train; done
+```
+
+```bash
+for seed in 0 1 2; do CONFIG=configs/mc_50m.env SEED=$seed bash scripts/sbatch_cmd.sh train; done
+```
+
+24시간을 넘는 학습은 같은 명령을 다시 내면 마지막 체크포인트에서 이어 간다(`RESUME=auto`).
+370M 은 `configs/mc_370m.env`, `configs/vanilla_370m.env`(2노드). 다중 노드는 아직 확인하지 못했다(아래).
+
+### 8. 평가와 비교
+
+평가는 GPU 1장이면 된다.
+
+```bash
+for seed in 0 1 2; do CONFIG=configs/mc_50m.env SEED=$seed SB_GPU_OPT=--gpus-per-node=1 SB_EXCLUSIVE=0 bash scripts/sbatch_cmd.sh eval; done
+```
+
+vanilla 와 MC(learned)를 문항 단위로 짝지어 비교(시드 평균):
+
+```bash
+python -m mslm.eval.compare --a /scratch/$USER/mslm/runs/vanilla_50m_ctx8192_s{0,1,2}/eval/step_0019074 --b /scratch/$USER/mslm/runs/mc_50m_ctx8192_s{0,1,2}/eval/step_0019074 --route-a none --route-b learned
+```
+
+(`step_…` 는 실제 마지막 체크포인트 이름으로 바꾼다.)
+
+### 9. /scratch 15일 삭제 대비
+
+- 접근 시각 갱신: `CONFIG=configs/mc_50m.env bash setup/scratch_keepalive.sh`
+- 홈으로 마지막 체크포인트 백업: `BACKUP_ROOT` 를 `/home01/$USER/mslm_backup` 등으로 정하면 학습이 저장할 때마다 마지막 1개를 복사한다.
+  수동으로는 `BACKUP=1` 을 붙여 keepalive 스크립트를 실행한다. 홈 용량(128GB)에 주의.
+- 연구실 서버로 가져오기: `sftp <ID>@hangang-dm.ksc.re.kr` 후 `get -r /scratch/<ID>/mslm/runs/<run>/ckpt`.
+- 삭제 대상은 이름 앞에 `ToBeDelete_` 가 붙는다(20–30일 뒤 일괄 삭제). keepalive 스크립트가 보이면 경고한다.
+
+---
+
+## 변수 바꾸는 법
+
+- 영구: `configs/<이름>.env` 에서 `KEY=value  # 설명` 줄을 고친다(노트북 `tower.set_var` 도 같은 파일을 고친다).
+- 이번 한 번: 명령 앞에 붙인다. `CONFIG=configs/mc_50m.env SEED=1 MAX_TOKENS=1e9 bash scripts/train.sh`
+- 우선순위: 명령 앞 변수 > config 파일 > `base.env`. `base.env` 순서대로 계산되므로 `SCRATCH_ROOT` 를 바꾸면
+  `DATA_ROOT`·`RUNS_ROOT` 등도 따라 바뀐다.
+- 최종 값 확인: `CONFIG=configs/mc_50m.env SEED=1 bash scripts/show_config.sh`
+- 새 변수를 만들 때는 반드시 `base.env` 에 한 줄 주석과 함께 선언한다(테스트가 검사).
+
+## 아이디어를 꽂는 법
+
+MC 층은 다섯 부품으로 조립된다. `mslm/models/registry.py` 에 함수/클래스를 `@register(kind, name)` 으로 등록하고
+config 변수를 그 이름으로 바꾸면 끝이다. 다른 코드는 손대지 않는다.
+
+| 부품 | 변수 | 기본값 | 예: 후보 아이디어 |
+|---|---|---|---|
+| descriptor (구간 요약) | `MC_DESCRIPTOR` | `meanpool` | max-sim, span 요약 |
+| router (점수) | `MC_ROUTER` | `dot` | 라우팅 공유, bilinear |
+| gate (섞기) | `MC_GATE` | `softmax` | 게이트 분리 |
+| connect (구간 연결) | `MC_CONNECT` | `independent` | `chained`(이미 있음), 구간 길이는 `MC_CHUNK`(예: 64) |
+| aux_loss (라우터 보조 손실) | `MC_AUX_LOSS`, `MC_AUX_WEIGHT` | `none` | 라우팅 CE(`gold_ce` 예시 있음: `batch_meta` 에 정답 구간이 있을 때) |
+
+노트북의 "아이디어별 구현 코드" 셀이 지금 config 가 쓰는 부품의 소스를 그대로 보여 준다.
+
+## 관제 노트북
+
+`control_tower.ipynb` — 저장소 루트에서 연다. config 표 보기·고치기, 부품 소스 보기, sbatch 명령 미리 보기, CPU smoke,
+(GPU 노드에서) 단일 GPU smoke, 학습 로그·평가 요약 보기. **제출은 하지 않는다.**
+노트북은 `tools/build_notebook.py` 로 만들며, `tests/test_notebook.py` 가 노트북과 셸이 같은 명령을 만드는지 검사한다.
+
+## 테스트
+
+```bash
+CUDA_VISIBLE_DEVICES= python -m pytest -q tests
+```
+
+## KISTI 에서 확인이 필요한 것
+
+- `TODO(확인 필요)` 배정받은 큐가 `normal` 인지(베타 기간 큐 이름은 바뀔 수 있다고 문서에 적혀 있음), `--account` 같은 과금 옵션이 필요한지.
+- `SB_COMMENT` 의 `field=nlp;appl=pytorch` 가 `showappl` 목록에 맞는지(다중 GPU 면 `appl=pytorch-ddp` 일 수도).
+- 계산 노드 인터넷 여부(문서에 명시 없음). 막혀 있다고 가정했다.
+- 비독점 1-GPU 할당(`--gpus-per-node=1` 에 `--exclusive` 없이)이 허용되는지. 안 되면 smoke·평가도 4 GPU 노드를 통째로 쓴다.
+- pip torch 2.9.1+cu128 aarch64 wheel 이 GH200 드라이버에서 실제로 도는지(wheel 존재만 확인). 안 되면 `TORCH_CUDA=cu129`, 그다음
+  KISTI 컨테이너(`/apps/common/kisti-container/images/pytorch-25.03-py3-aarch64.sif`) 안에서 fla@4b02d15d 만 설치하는 방법.
+- 다중 노드 학습: pip torch 에 들어 있는 NCCL 이 Slingshot(aws-ofi-nccl 플러그인)과 맞는지. KISTI 안내대로 단일 노드는
+  `NCCL_NET_PLUGIN=none`, 다중 노드는 `NCCL_PROTO=^LL128` 을 `slurm/train.sbatch` 에 넣어 두었다. 다중 노드 전에 2노드 짧은 시험 필수.
+- 홈 경로·용량: 문서마다 `/home01` 128GB(유저) / 64GB(그룹)로 다르다. `lfs quota -h /home01` 로 확인.
+- 데이터무버에서 conda/huggingface_hub 를 쓸 수 있는지.
+
+## 라이선스
+
+- `mslm/kernels/gdn2_ops/`: NVIDIA Source Code License-NC(비상업 연구용). 같은 폴더의 `LICENSE` 참고.
+- `third_party/ruler/`: Apache-2.0 (NVIDIA RULER).
+- 그 밖의 코드: 저장소 `LICENSE`(MIT).

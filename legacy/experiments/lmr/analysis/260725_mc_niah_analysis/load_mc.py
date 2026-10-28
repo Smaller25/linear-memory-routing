@@ -1,0 +1,62 @@
+"""Pinned long-gdn worktree에서 MC/vanilla GDN2 370M litgpt 모델 로드."""
+import os, sys
+import torch
+
+WORKTREE = os.environ.get("MC_LONGGDN_WORKTREE", "/data2/sohyung/worktrees/long-gdn-e71713e")
+CHUNK, TOPK = 256, 2
+CKPTS = {
+    "mc-30B": ("LLM-OS-Models2/mc-gdn2-370m-fineweb-edu-30b-v2-meanpool",
+               "checkpoint-30B-model-ckpt.pth", "mc_370M"),
+    "mc-5B": ("LLM-OS-Models2/mc-gdn2-370m-fineweb-edu-30b-v2-meanpool",
+              "checkpoint-5B-model-ckpt.pth", "mc_370M"),
+    "vanilla-5B": ("LLM-OS-Models2/gdn2-370m-fineweb-edu-5b-vanilla",
+                   "checkpoint-5B-model-ckpt.pth", "gdn2_370M"),
+}
+
+
+def bootstrap():
+    for p in (WORKTREE, os.path.join(WORKTREE, "dsc")):
+        if p not in sys.path:
+            sys.path.insert(0, p)
+
+
+def _resolve_ckpt_path(repo, fname):
+    """Local ckpt dir (MC_CKPT_DIR) takes priority; fall back to hf_hub_download.
+
+    Layout expected under MC_CKPT_DIR: <repo with '/' -> '_'>/<fname>
+    (matches lmr/analysis/260725_mc_niah_analysis/vessl/bootstrap.sh and
+    vessl/t0_local.sh, and the ckpts/ layout already populated on VESSL).
+    """
+    ckpt_dir = os.environ.get("MC_CKPT_DIR")
+    if ckpt_dir:
+        local_path = os.path.join(ckpt_dir, repo.replace("/", "_"), fname)
+        if os.path.isfile(local_path):
+            return local_path
+    from huggingface_hub import hf_hub_download
+    return hf_hub_download(repo, fname)
+
+
+def load_model(kind, device="cuda", dtype=torch.bfloat16):
+    bootstrap()
+    from lit_gpt.config import Config
+    from lit_gpt.model import GPT
+    repo, fname, cfg_name = CKPTS[kind]
+    path = _resolve_ckpt_path(repo, fname)
+    model = GPT(Config.from_name(cfg_name))
+    sd = torch.load(path, map_location="cpu", weights_only=False)["model"]
+    model.load_state_dict(sd, strict=True)
+    return model.to(device=device, dtype=dtype).eval()
+
+
+def load_tokenizer():
+    from transformers import AutoTokenizer
+    return AutoTokenizer.from_pretrained("TinyLlama/TinyLlama_v1.1")
+
+
+def mc_layers(model):
+    """[(layer_idx, MemoryCachingGDN2Layer)] — vanilla 모델이면 빈 리스트."""
+    out = []
+    for i, blk in enumerate(model.transformer.h):
+        if type(blk.attn).__name__ == "MemoryCachingGDN2Layer":
+            out.append((i, blk.attn))
+    return out

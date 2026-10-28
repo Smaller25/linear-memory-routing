@@ -1,0 +1,11 @@
+{
+  "run_name": "g1b_46m_fixed_16k",
+  "size": "46m", "dynmc": true, "seg_mode": "fixed", "fixed_seg_len": 256, "cache_budget": 32,
+  "merge_docs_per_row": true,
+  "ctx": 16384, "rows_per_micro": 2, "grad_accum": 8,
+  "lr": 4e-4, "weight_decay": 0.01, "warmup_steps": 200, "grad_clip": 1.0,
+  "total_tokens": 500000000, "ckpt_interval_tokens": 250000000,
+  "data_dir": "/data2/sohyung/dynmc/tokenized", "data_prefix": "fineweb-", "uniform_plan_tokens": 600000000,
+  "out_dir": "/data2/sohyung/dynmc/runs/g1b_fixed", "seed": 1234,
+  "peak_flops": 250e12
+}

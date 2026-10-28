@@ -1,45 +1,23 @@
-# test file
-test.py
+# python
+__pycache__/
+*.egg-info/
+.ipynb_checkpoints/
+.pytest_cache/
 
-# data files
-data
-
-# bash scripts
-*.sh
-
-# docs
-docs/_build
-
-# intermediate files
-build
-dist
-*.egg-info
-dist-packages/*
-
-# experimental results
-exp
-results
-wandb
-*.csv
-*.png
-*.html
-
-# log and config files
-log.*
-*.log
-*.cfg
-*.ini
-
-# pycache
-__pycache__
-
-# saved model
-*.pkl
+# run outputs (live in SCRATCH_ROOT, never in the repo)
+runs/
+ckpt/
+logs/
+slurm_logs/
 *.pt
+*.bin
+wandb/
 
-
-# vscode
-.vscode
-
-# macOS
+# local
+.vscode/
 .DS_Store
+_workspace
+.claude/
+
+# vendored RULER auxiliary data artifact (downloaded by a RULER task generator)
+third_party/ruler/gen/synthetic/json/squad.json

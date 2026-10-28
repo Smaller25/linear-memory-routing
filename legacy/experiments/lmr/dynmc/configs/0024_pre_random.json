@@ -1,0 +1,9 @@
+{
+  "run_name": "0024pre_46m_random",
+  "size": "46m", "dynmc": true, "seg_mode": "random", "cache_budget": 32,
+  "ctx": 4096, "rows_per_micro": 16, "grad_accum": 4,
+  "lr": 4e-4, "weight_decay": 0.01, "warmup_steps": 200, "grad_clip": 1.0,
+  "total_tokens": 500000000, "ckpt_interval_tokens": 250000000,
+  "data_dir": "/data/dynmc/tokenized", "data_prefix": "fineweb-", "uniform_plan_tokens": 600000000,
+  "out_dir": "/data/dynmc/runs/0024_pre_random", "seed": 1234
+}
