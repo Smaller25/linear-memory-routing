@@ -1,0 +1,36 @@
+# conda env 정의(aarch64 GH200 / x86_64 공통). fla 만 빠져 있다 — 아래 둘 중 하나로 설치:
+#   bash setup/install_env.sh                                   # 권장: 이 파일로 env 를 만들고 fla 까지 깐 뒤 확인
+#   conda env create -f setup/environment.yml && conda activate sh_mslm && \
+#     pip install --no-deps "git+https://github.com/fla-org/flash-linear-attention@4b02d15d6a68700181b180235be62a9fb95d2a38"
+# fla 를 이 파일에 넣지 않는 이유: 의존성까지 깔면 PyPI fla-core 가 git 커밋 코드를 덮어써 GDN-2 커널이 use_exp2 오류로 죽는다.
+# 버전은 연구실 서버(greenbeard)에서 smoke 가 통과한 env 그대로 고정했다.
+name: sh_mslm
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - git
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cu128
+      - torch==2.9.1+cu128
+      - triton==3.5.1
+      - transformers==4.57.6
+      - tokenizers==0.22.2
+      - sentencepiece==0.2.2
+      - einops==0.8.2
+      - numpy==2.3.5
+      - pyyaml==6.0.3
+      - tqdm==4.70.1
+      - datasets==5.0.1
+      - pyarrow==26.0.0
+      - huggingface_hub==0.36.2
+      - nltk==3.10.4
+      - wonderwords==3.0.1
+      - tenacity==9.2.1
+      - pandas==3.1.0
+      - pytest==9.1.1
+      - jupyterlab==4.6.4
+      - ipykernel==7.4.0
+      - nbformat==5.11.1
+      - nbclient==0.11.0

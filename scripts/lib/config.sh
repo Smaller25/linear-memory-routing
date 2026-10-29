@@ -91,7 +91,7 @@ mslm_quote() {
   else printf "'%s'" "${1//\'/\'\\\'\'}"; fi
 }
 
-# The full sbatch command for JOB (train | eval | prepare_data | prepare_eval),
+# The full sbatch command for JOB (train | eval | prepare_data | prepare_eval | selftest),
 # built only from the resolved config. Printed, never submitted here.
 mslm_sbatch_cmd() {
   local job="$1" k cfg_abs env_part="" opts
