@@ -179,7 +179,7 @@ cd /scratch/$USER && salloc --partition=natStr --nodes=1 --gres=gpu:1 --time=00:
 평가는 GPU 1장이면 된다.
 
 ```bash
-for seed in 0 1 2; do CONFIG=configs/mc_50m.env SEED=$seed SB_GPU_OPT=--gres=gpu:1 SB_EXCLUSIVE=0 bash scripts/sbatch_cmd.sh eval; done
+for seed in 0 1 2; do CONFIG=configs/mc_50m.env SEED=$seed SB_GPU_OPT=--gres=gpu:1 SB_EXCLUSIVE=0 SB_CPUS_PER_TASK= bash scripts/sbatch_cmd.sh eval; done
 ```
 
 vanilla 와 MC(learned)를 문항 단위로 짝지어 비교(시드 평균):
