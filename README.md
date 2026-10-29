@@ -15,9 +15,9 @@ MC 는 `MC_CHUNK`(기본 256) 토큰마다 GDN-2 state 를 하나씩 저장해 �
 
 ```
 configs/          실행 변수(.env). base.env 가 모든 변수를 선언하고, 나머지는 바꿀 것만 적는다
-scripts/          train.sh · eval.sh · prepare_data.sh · prepare_eval.sh · sbatch_cmd.sh · show_config.sh
+scripts/          submit_pipeline.sh(전체 연쇄 제출) · status.sh(진행 확인) · train.sh · eval.sh · smoke.sh · prepare_*.sh · sbatch_cmd.sh · show_config.sh
 slurm/            *.sbatch — scripts/*.sh 를 감싼다(직접 sbatch 하지 말고 sbatch_cmd.sh 가 만든 명령 사용)
-setup/            install_env.sh · check_env.sh · download_assets.sh · scratch_keepalive.sh · gpu_selftest.py
+setup/            kisti_bootstrap.sh(처음 한 번) · environment.yml(conda env 정의) · install_env.sh · check_env.sh · download_assets.sh · scratch_keepalive.sh
 mslm/models/      GDN-2(gdn2.py), MC-SSC(mc.py), LM(lm.py), 아이디어 꽂는 곳(registry.py)
 mslm/kernels/     GDN-2 Triton 커널(NVIDIA, 비상업 라이선스), 구간 읽기 커널, CPU 참조 구현
 mslm/data/        FineWeb-Edu 사전 토큰화, 재개 가능한 샘플러
@@ -93,100 +93,88 @@ LR `4e-4`, cosine(끝 `LR×0.1`), warmup 1%, grad clip 1.0, bf16 autocast.
   (80TB 그룹, 백업 없음, **15일 동안 접근 안 한 파일 자동 삭제**).
 - 계산 노드는 인터넷이 안 된다고 가정한다. 다운로드는 로그인/데이터무버 노드에서, 계산 노드에서는 HF offline 모드.
 
-### 1. 코드 받기 (로그인 노드)
+### 1. 접속 (매번)
 
 ```bash
-cd ~ && git clone https://github.com/Smaller25/linear-memory-routing.git && cd linear-memory-routing
-```
-
-env 를 깔기 전에 `uname -m` 이 `aarch64` 인지 본다. `x86_64` 면 그 노드에서 깐 env 는 GPU 노드에서 돌지 않는다.
-
-### 2. env 설치 (로그인 노드 또는 데이터무버, 인터넷 필요)
-
-```bash
-module load miniforge/26.1.1-3
+ssh hangang
 ```
 
 ```bash
-bash setup/install_env.sh
+ssh glogin03
 ```
-
-`sh_mslm` env 에 python 3.11, torch 2.9.1+cu128, triton 3.5.1, fla@4b02d15d 가 깔린다.
-mamba-ssm / causal-conv1d 는 필요 없다. fla 를 다시 깔 때는 스크립트가 `site-packages/fla` 를 먼저 지운다.
-
-작업 스크립트는 `configs/base.env` 의 `MODULES="miniforge/26.1.1-3"`, `CONDA_ENV=sh_mslm` 으로 env 를 스스로 켠다.
-
-### 3. 데이터 반입 (인터넷 되는 노드)
-
-토크나이저, FineWeb-Edu parquet, nltk punkt(RULER 용)를 `/scratch/$USER/mslm/hf_cache` 에 받는다. sample-10BT 는 약 28GB.
 
 ```bash
-CONFIG=configs/mc_50m.env bash setup/download_assets.sh
+module load tmux && tmux new -s work
 ```
 
-데이터무버(`hangang-dm`)에 conda 가 없으면, 로그인 노드에서 실행하거나 연구실 서버에서 받은 `hf_cache` 를 sftp 로 올린다.
+다음부터는 `tmux attach -t work` 로 다시 붙는다.
 
-### 4. 접속 확인과 GPU 시험
+### 2. 처음 한 번: 코드 받기 + 부트스트랩 (로그인 노드, 인터넷 필요)
 
 ```bash
-CONFIG=configs/smoke_kisti.env bash setup/check_env.sh
+cd ~ && git clone https://github.com/Smaller25/linear-memory-routing.git && cd linear-memory-routing && bash setup/kisti_bootstrap.sh
 ```
 
-GPU 시험(커널 정확도·구간 읽기·MC fwd/bwd)은 GPU 노드에서:
+`setup/kisti_bootstrap.sh` 가 순서대로 한다. 끝난 단계는 건너뛰므로 끊기면 같은 명령을 다시 치면 된다.
+
+| 단계 | 하는 일 |
+|---|---|
+| 1 | `uname -m` 이 `aarch64` 인지(아니면 멈춤: 그 노드에서 깐 env 는 GPU 노드에서 안 돈다) |
+| 2 | `showappl` 에 `SB_COMMENT`(`field=nlp;appl=pytorch`) 값이 있는지(없으면 경고) |
+| 3 | conda env `sh_mslm` 설치(`setup/install_env.sh`). 이미 있고 torch·fla 커밋이 맞으면 건너뜀 |
+| 4 | 토크나이저·FineWeb-Edu sample-10BT parquet(약 28GB)·nltk 를 `/scratch/$USER/mslm/hf_cache` 로 받기 |
+| 5 | CPU 점검(`setup/check_env.sh`) |
+
+conda env 는 `setup/environment.yml` 하나에 정의돼 있다(python 3.11, torch 2.9.1+cu128, triton 3.5.1 등 버전 고정,
+aarch64 wheel 존재 확인함). fla 만 `--no-deps` 로 따로 깐다(의존성까지 깔면 PyPI fla-core 가 커밋 코드를 덮어쓴다).
+손으로 만들 때:
+
+```bash
+conda env create -f setup/environment.yml && conda activate sh_mslm && pip install --no-deps "git+https://github.com/fla-org/flash-linear-attention@4b02d15d6a68700181b180235be62a9fb95d2a38"
+```
+
+### 3. 제출: 준비 → smoke → 본학습
+
+```bash
+cd ~/linear-memory-routing && MAIN=1 bash scripts/submit_pipeline.sh
+```
+
+```
+prepare_data (사전 토큰화) ──→ smoke (작업 1개: GPU 점검 → 20 step → 재개해서 30 step → 평가) ──→ 본학습 vanilla/MC × 시드 0,1,2
+prepare_eval (본평가 문항, 독립)
+```
+
+- 앞 작업이 실패하면 뒤 작업은 같이 취소된다(`--kill-on-invalid-dep`). smoke 가 통과해야 본학습이 시작된다.
+- **같은 명령을 다시 치면 이어서 진행한다.** 끝난 단계(학습 데이터 `meta.json`, 평가 문항, smoke 의 `SMOKE_OK`, 끝난 run)와
+  큐에 이미 있는 작업은 건너뛰고, 시간 초과로 끊긴 run 은 다시 내서 마지막 체크포인트부터 잇는다.
+- 사용자당 제출 수 한도에 걸리면 거기서 멈추고 남은 것을 알려 준다. 앞 작업이 끝난 뒤 같은 명령을 다시 친다.
+- 무엇을 낼지 먼저 보려면 `DRY_RUN=1` 을 붙인다. smoke 만 하려면 `MAIN=1` 을 뺀다.
+- 낸 작업 목록은 `/scratch/$USER/mslm/jobs/pipeline_<시각>.txt`, 로그는 `/scratch/$USER/mslm/slurm_logs/`.
+
+### 4. 진행 확인
+
+```bash
+bash scripts/status.sh
+```
+
+내 작업 큐, run 별 마지막 step·loss·val loss·평가 여부, 데이터 준비 상태, 최근 에러 로그를 한 화면에 보여 준다.
+
+### 5. 한 단계씩 직접 낼 때
+
+`scripts/sbatch_cmd.sh <job>` 은 config 로 sbatch 명령을 만들어 **출력만** 한다. `| bash` 를 붙이면 바로 제출된다.
+job 은 `prepare_data`, `prepare_eval`, `selftest`, `smoke`, `train`, `eval`.
+
+```bash
+CONFIG=configs/mc_50m.env SEED=1 bash scripts/sbatch_cmd.sh train
+```
+
+GPU 노드를 직접 잡아 점검할 때는 `/scratch` 에서 salloc 한다.
 
 ```bash
 cd /scratch/$USER && salloc --partition=natStr --nodes=1 --gres=gpu:1 --time=00:30:00 --comment="field=nlp;appl=pytorch"
 ```
 
-```bash
-cd ~/linear-memory-routing && CONFIG=configs/smoke_kisti.env bash setup/check_env.sh
-```
-
-### 5. 사전 토큰화와 평가 문항 만들기 (GPU 노드 작업으로)
-
-GPU 노드는 aarch64 라 env 가 그대로 돈다(x86 CPU 큐 `normal_cpu` 에서는 이 env 가 안 돈다).
-아래 명령은 **화면에 sbatch 명령을 출력만** 한다. 내용을 확인하고 복사해 실행한다.
-
-```bash
-CONFIG=configs/mc_50m.env SB_TIME=06:00:00 bash scripts/sbatch_cmd.sh prepare_data
-```
-
-```bash
-CONFIG=configs/mc_50m.env SB_TIME=01:00:00 bash scripts/sbatch_cmd.sh prepare_eval
-```
-
-### 6. 50M smoke (20 step, 저장·재개·평가 한 바퀴)
-
-```bash
-CONFIG=configs/smoke_kisti.env bash scripts/sbatch_cmd.sh train
-```
-
-끝나면 같은 명령을 한 번 더 내고 `MAX_STEPS=30` 을 주면 step 20 에서 이어서 학습하는지 볼 수 있다.
-
-```bash
-CONFIG=configs/smoke_kisti.env MAX_STEPS=30 bash scripts/sbatch_cmd.sh train
-```
-
-```bash
-CONFIG=configs/smoke_kisti.env bash scripts/sbatch_cmd.sh eval
-```
-
-로그: `/scratch/$USER/mslm/runs/smoke_mc_50m/train.jsonl`, 평가: `.../eval/step_XXXXXXX/summary.json`.
-
-### 7. 본학습 (vanilla 대조군 + MC, 3시드)
-
-```bash
-for seed in 0 1 2; do CONFIG=configs/vanilla_50m.env SEED=$seed bash scripts/sbatch_cmd.sh train; done
-```
-
-```bash
-for seed in 0 1 2; do CONFIG=configs/mc_50m.env SEED=$seed bash scripts/sbatch_cmd.sh train; done
-```
-
-24시간을 넘는 학습은 같은 명령을 다시 내면 마지막 체크포인트에서 이어 간다(`RESUME=auto`).
-370M 은 `configs/mc_370m.env`, `configs/vanilla_370m.env`(2노드). 다중 노드는 아직 확인하지 못했다(아래).
-
-### 8. 평가와 비교
+### 6. 평가와 비교
 
 평가는 GPU 1장이면 된다.
 
@@ -202,7 +190,7 @@ python -m mslm.eval.compare --a /scratch/$USER/mslm/runs/vanilla_50m_ctx8192_s{0
 
 (`step_…` 는 실제 마지막 체크포인트 이름으로 바꾼다.)
 
-### 9. /scratch 15일 삭제 대비
+### 7. /scratch 15일 삭제 대비
 
 - 접근 시각 갱신: `CONFIG=configs/mc_50m.env bash setup/scratch_keepalive.sh`
 - 홈으로 마지막 체크포인트 백업: `BACKUP_ROOT` 를 `/home01/$USER/mslm_backup` 등으로 정하면 학습이 저장할 때마다 마지막 1개를 복사한다.
@@ -253,6 +241,7 @@ CUDA_VISIBLE_DEVICES= python -m pytest -q tests
 - `TODO(확인 필요)` `natStr` 큐의 최대 시간(`SB_TIME=24:00:00` 이 거부되면 줄인다), `--account` 같은 과금 옵션이 필요한지.
 - `SB_COMMENT` 의 `field=nlp;appl=pytorch` 가 `showappl` 목록에 맞는지(다중 GPU 면 `appl=pytorch-ddp` 일 수도).
 - 계산 노드 인터넷 여부(문서에 명시 없음). 막혀 있다고 가정했다.
+- 사용자당 제출·실행 작업 수 한도. 한도에 걸려도 `submit_pipeline.sh` 를 다시 치면 남은 것을 낸다.
 - 비독점 1-GPU 할당(`--gres=gpu:1` 에 `--exclusive` 없이)이 허용되는지. 안 되면 smoke·평가도 4 GPU 노드를 통째로 쓴다.
 - pip torch 2.9.1+cu128 aarch64 wheel 이 GH200 드라이버에서 실제로 도는지(wheel 존재만 확인). 안 되면 `TORCH_CUDA=cu129`, 그다음
   KISTI 컨테이너(`/apps/common/kisti-container/images/pytorch-25.03-py3-aarch64.sif`) 안에서 fla@4b02d15d 만 설치하는 방법.
