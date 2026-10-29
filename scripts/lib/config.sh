@@ -98,7 +98,8 @@ mslm_sbatch_cmd() {
   cfg_abs="$(cd "$(dirname "$CONFIG")" && pwd)/$(basename "$CONFIG")"
   for k in $MSLM_OVERRIDES; do env_part+=" $k=$(mslm_quote "${!k}")"; done
   opts="--job-name=$(mslm_quote "${SB_JOB_NAME}-${job}") --partition=$(mslm_quote "$SB_PARTITION")"
-  opts+=" --nodes=$SB_NODES --ntasks-per-node=1 $SB_GPU_OPT --cpus-per-task=$SB_CPUS_PER_TASK"
+  opts+=" --nodes=$SB_NODES --ntasks-per-node=1 $SB_GPU_OPT"
+  [[ -n "$SB_CPUS_PER_TASK" ]] && opts+=" --cpus-per-task=$SB_CPUS_PER_TASK"
   opts+=" --time=$SB_TIME"
   [[ -n "$SB_COMMENT" ]] && opts+=" --comment=$(mslm_quote "$SB_COMMENT")"
   [[ "$SB_EXCLUSIVE" == "1" ]] && opts+=" --exclusive"

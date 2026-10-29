@@ -84,8 +84,10 @@ def sbatch_command(config, job: str = "train", overrides: dict[str, str] | None 
     keys = envfile.declared_keys()
     env_part = "".join(f" {k}={q(str(overrides[k]))}" for k in keys if overrides and k in overrides)
     opts = (f"--job-name={q(v['SB_JOB_NAME'] + '-' + job)} --partition={q(v['SB_PARTITION'])}"
-            f" --nodes={v['SB_NODES']} --ntasks-per-node=1 {v['SB_GPU_OPT']} --cpus-per-task={v['SB_CPUS_PER_TASK']}"
-            f" --time={v['SB_TIME']}")
+            f" --nodes={v['SB_NODES']} --ntasks-per-node=1 {v['SB_GPU_OPT']}")
+    if v["SB_CPUS_PER_TASK"]:
+        opts += f" --cpus-per-task={v['SB_CPUS_PER_TASK']}"
+    opts += f" --time={v['SB_TIME']}"
     if v["SB_COMMENT"]:
         opts += f" --comment={q(v['SB_COMMENT'])}"
     if v["SB_EXCLUSIVE"] == "1":
