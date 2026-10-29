@@ -45,7 +45,15 @@ def record_to_metrics(rec: dict) -> dict:
         out["tokens"] = rec.get("tokens")
         return out
     if "val_loss" in rec:
-        return {"val/loss": rec["val_loss"], "tokens": rec.get("tokens")}
+        out = {"val/loss": rec["val_loss"], "tokens": rec.get("tokens")}
+        for k, v in rec.items():                     # routing hit rates (mslm/routing_monitor.py)
+            if k in ("step", "tokens", "val_loss"):
+                continue
+            if isinstance(v, (int, float)) and not isinstance(v, bool):
+                out[f"val/{k}"] = v
+            elif isinstance(v, list) and k.endswith("_by_layer"):
+                out.update({f"val/{k[:-len('_by_layer')]}/L{i:02d}": x for i, x in enumerate(v)})
+        return out
     return {}
 
 

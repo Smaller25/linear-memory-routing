@@ -78,3 +78,13 @@ def test_tail_waits_for_complete_lines(tmp_path):
     with open(p, "a") as f:
         f.write('ss": 3.0}\n')
     assert tail.read() == [{"step": 2, "loss": 3.0}]
+
+
+def test_val_routing_metrics_are_uploaded():
+    from mslm.wandb_sync import record_to_metrics
+    rec = {"step": 500, "tokens": 9, "val_loss": 3.2, "copy_hit": 0.4, "copy_random_hit": 0.1,
+           "copy_hit_by_layer": [0.3, 0.5], "copy_positions": 120, "ruler_hit": 0.2, "ruler_hit_by_layer": [0.1, 0.3]}
+    m = record_to_metrics(rec)
+    assert m["val/loss"] == 3.2 and m["val/copy_hit"] == 0.4 and m["val/copy_positions"] == 120
+    assert m["val/copy_hit/L00"] == 0.3 and m["val/copy_hit/L01"] == 0.5 and m["val/ruler_hit/L01"] == 0.3
+    assert record_to_metrics({"step": 1, "tokens": 1, "val_loss": 2.0}) == {"val/loss": 2.0, "tokens": 1}
