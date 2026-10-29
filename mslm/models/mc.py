@@ -59,7 +59,12 @@ class MCMixer(nn.Module):
         self.cfg = mc
         self.descriptor = registry.get("descriptor", mc.descriptor)
         self.router = registry.get("router", mc.router)(d_model, n_head, head_dim, mc)
-        self.gate = registry.get("gate", mc.gate)
+        gate = registry.get("gate", mc.gate)
+        self.gate_is_module = isinstance(gate, type)
+        self.gate = gate(d_model, n_head, head_dim, mc) if self.gate_is_module else gate
+        if self.gate_is_module and mc.aux_loss == "none":
+            raise ValueError(f"MC_GATE={mc.gate} decouples the router from the LM loss; "
+                             f"set MC_AUX_LOSS so the router is trained at all")
         self.connect = registry.get("connect", mc.connect)
         # Set by LM.forward for one call:
         self.oracle_segments: torch.Tensor | None = None   # [B,G] gold segment ids, -1 padded
@@ -93,7 +98,10 @@ class MCMixer(nn.Module):
             idx = torch.zeros(*scores.shape[:2], 0, dtype=torch.long, device=x.device)
             sel = scores.new_zeros(*scores.shape[:2], 0)
             valid = torch.zeros_like(sel, dtype=torch.bool)
-        weights = self.gate(online_score, sel, valid)                      # [B,T,1+R]
+        if self.gate_is_module:
+            weights = self.gate(x, seg_desc, online_desc, idx, valid)      # [B,T,1+R]
+        else:
+            weights = self.gate(online_score, sel, valid)                  # [B,T,1+R]
         out = weights[..., :1].to(online.dtype).unsqueeze(-1) * online
         if R > 0:
             cached = read_memories(q, mems, idx.masked_fill(~valid, 0),

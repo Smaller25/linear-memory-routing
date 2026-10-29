@@ -22,7 +22,9 @@ import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 from mslm.data.loader import TokenWindows, sample_ids
+from mslm.data.span_copy import batch_copy_gold
 from mslm.models import LM, ModelConfig
+from mslm.routing_monitor import RulerMonitor, copy_hit_counts
 from mslm.settings import Settings
 
 
@@ -149,19 +151,47 @@ def main():
              "params": model.num_params(), "params_no_embed": model.num_params(True),
              "resumed_from": resume, "device": str(device)})
 
+    # span-copy routing labels: fed to the aux loss when it is span_copy_ce, and
+    # always used on val for MC models to log the copy hit rate.
+    is_mc = cfg.arch == "mc"
+    use_copy = is_mc and cfg.mc.aux_loss == "span_copy_ce"
+
+    def copy_labels(x, y):
+        return batch_copy_gold(x, y, cfg.mc.chunk, s.int("COPY_NGRAM"), s.int("COPY_MIN_GAP"), s.int("COPY_MAX_GOLD"))
+
+    monitor = None
+    if is_mc and master and s.str("ROUTE_MONITOR_FILE"):
+        monitor = RulerMonitor(s.str("ROUTE_MONITOR_FILE"), s.int("ROUTE_MONITOR_ITEMS"), s.str("TOKENIZER"),
+                               s.int("EVAL_DATA_SEED"), cfg.mc.chunk)
+
     @torch.no_grad()
-    def val_loss():
+    def validate():
         model.eval()
-        losses = []
+        losses, hits = [], None
         for i in range(s.int("VAL_BATCHES")):
             x, y = val_data.batch(range((i * world + rank) * mb, (i * world + rank + 1) * mb))
+            if is_mc:
+                model.set_routing(capture=True)
             with amp:
                 losses.append(model(x.to(device), y.to(device))["lm_loss"].float())
+            if is_mc:
+                h = copy_hit_counts(model.routing_records(), copy_labels(x, y), cfg.mc.chunk)
+                hits = h if hits is None else hits + h
+                model.set_routing()
         model.train()
         v = torch.stack(losses).mean()
         if ddp:
             dist.all_reduce(v, op=dist.ReduceOp.AVG)
-        return v.item()
+            if hits is not None:
+                dist.all_reduce(hits)
+        rec = {"val_loss": round(v.item(), 5)}
+        if hits is not None:
+            n = hits[:, 2].clamp(min=1)
+            rec.update(copy_hit=round((hits[:, 0].sum() / n.sum()).item(), 4),
+                       copy_random_hit=round((hits[:, 1].sum() / n.sum()).item(), 4),
+                       copy_hit_by_layer=[round(x, 3) for x in (hits[:, 0] / n).tolist()],
+                       copy_positions=int(hits[0, 2].item()))
+        return rec
 
     model.train()
     t_last, tok_last = time.time(), state["tokens"]
@@ -174,10 +204,11 @@ def main():
         aux_sum = torch.zeros((), device=device)
         for micro in range(accum):
             x, y = train_data.batch(sample_ids(step, micro, accum, mb, rank, world))
+            meta = {"copy_gold": copy_labels(x, y).to(device, non_blocking=True)} if use_copy else None
             sync = (not ddp) or micro == accum - 1
             ctx = dmodel.no_sync() if (ddp and not sync) else torch.enable_grad()
             with ctx, amp:
-                out = dmodel(x.to(device, non_blocking=True), y.to(device, non_blocking=True))
+                out = dmodel(x.to(device, non_blocking=True), y.to(device, non_blocking=True), batch_meta=meta)
                 (out["loss"] / accum).backward()
             loss_sum += out["lm_loss"].detach() / accum
             aux_sum += out["aux_loss"].detach() / accum
@@ -200,7 +231,10 @@ def main():
             log(rec)
             t_last, tok_last = now, state["tokens"]
         if s.int("VAL_EVERY") > 0 and (state["step"] % s.int("VAL_EVERY") == 0 or state["step"] == stop_step):
-            log({"step": state["step"], "tokens": state["tokens"], "val_loss": round(val_loss(), 5)})
+            vrec = validate()
+            if monitor is not None:
+                vrec.update(monitor(model, device, amp))
+            log({"step": state["step"], "tokens": state["tokens"], **vrec})
         if master and (state["step"] % s.int("SAVE_EVERY") == 0 or state["step"] == stop_step):
             name = save_ckpt(ckpt_dir(run_dir), state["step"], model, opt, state, s.int("KEEP_CKPTS"),
                              s.str("BACKUP_ROOT") or None, s.run_name())
