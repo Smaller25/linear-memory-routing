@@ -3,7 +3,7 @@
 #   bash setup/check_env.sh                                  # 현재 env
 #   CONFIG=configs/smoke_kisti.env bash setup/check_env.sh   # config 의 CONDA_ENV/경로까지 확인
 # KISTI 에서 GPU 검사:  salloc 으로 GPU 노드를 잡은 뒤 실행, 예)
-#   salloc --partition=normal --comment="field=nlp;appl=pytorch" --nodes=1 --gpus-per-node=1 --time=00:30:00
+#   cd /scratch/$USER && salloc --partition=natStr --nodes=1 --gres=gpu:1 --time=00:30:00 --comment="field=nlp;appl=pytorch"
 set -uo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$REPO/scripts/lib/config.sh"

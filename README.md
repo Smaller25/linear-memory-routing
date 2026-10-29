@@ -82,8 +82,11 @@ LR `4e-4`, cosine(끝 `LR×0.1`), warmup 1%, grad clip 1.0, bf16 autocast.
 
 ### 0. 알아 둘 규칙
 
-- 로그인: `ssh <ID>@hangang.ksc.re.kr` (OTP 6자리 → 비밀번호). 파일 전송·큰 다운로드는 데이터무버 `hangang-dm.ksc.re.kr`(sftp).
-- GPU 노드: GH200 4개/노드, **aarch64(ARM)**. 큐 `normal`(베타), 최대 24시간, 사용자당 동시 5개.
+- 로그인: `ssh <ID>@hangang.ksc.re.kr` (OTP 6자리 → 비밀번호). 다른 로그인 노드로 붙으면 `ssh glogin03` 으로 옮긴다.
+  파일 전송·큰 다운로드는 데이터무버 `hangang-dm.ksc.re.kr`(sftp).
+- 끊겨도 작업이 살아 있도록 tmux 안에서 일한다: `module load tmux` → `tmux new -s work`(다음부터 `tmux attach -t work`,
+  빠져나오기 `Ctrl-b d`). 셸 자동 종료(`TMOUT`)는 `~/.bashrc` 에 `unset TMOUT` 을 넣어 끈다.
+- GPU 노드: GH200 4개/노드, **aarch64(ARM)**. 배정 큐 `natStr`, GPU 요청은 `--gres=gpu:N`.
 - sbatch 에 `--comment="field=<분야>;appl=<프로그램>"` 가 **필수**. 허용값은 로그인 노드에서 `showappl`. 기본값은 `field=nlp;appl=pytorch`(`SB_COMMENT`).
 - **작업은 `/scratch/$USER` 아래에서만 제출된다.** `sbatch_cmd.sh` 가 만든 명령이 알아서 `cd $SB_SUBMIT_DIR` 한다.
 - 저장소 위치: 코드·conda env 는 홈(`/home01/$USER`, 128GB, 백업 있음), 데이터·체크포인트·HF 캐시는 `/scratch/$USER/mslm`
@@ -96,9 +99,7 @@ LR `4e-4`, cosine(끝 `LR×0.1`), warmup 1%, grad clip 1.0, bf16 autocast.
 cd ~ && git clone https://github.com/Smaller25/linear-memory-routing.git && cd linear-memory-routing
 ```
 
-```bash
-git checkout sh/ms-pretrain-base
-```
+env 를 깔기 전에 `uname -m` 이 `aarch64` 인지 본다. `x86_64` 면 그 노드에서 깐 env 는 GPU 노드에서 돌지 않는다.
 
 ### 2. env 설치 (로그인 노드 또는 데이터무버, 인터넷 필요)
 
@@ -134,11 +135,11 @@ CONFIG=configs/smoke_kisti.env bash setup/check_env.sh
 GPU 시험(커널 정확도·구간 읽기·MC fwd/bwd)은 GPU 노드에서:
 
 ```bash
-salloc --partition=normal --comment="field=nlp;appl=pytorch" --nodes=1 --gpus-per-node=1 --time=00:30:00
+cd /scratch/$USER && salloc --partition=natStr --nodes=1 --gres=gpu:1 --time=00:30:00 --comment="field=nlp;appl=pytorch"
 ```
 
 ```bash
-CONFIG=configs/smoke_kisti.env bash setup/check_env.sh
+cd ~/linear-memory-routing && CONFIG=configs/smoke_kisti.env bash setup/check_env.sh
 ```
 
 ### 5. 사전 토큰화와 평가 문항 만들기 (GPU 노드 작업으로)
@@ -190,7 +191,7 @@ for seed in 0 1 2; do CONFIG=configs/mc_50m.env SEED=$seed bash scripts/sbatch_c
 평가는 GPU 1장이면 된다.
 
 ```bash
-for seed in 0 1 2; do CONFIG=configs/mc_50m.env SEED=$seed SB_GPU_OPT=--gpus-per-node=1 SB_EXCLUSIVE=0 bash scripts/sbatch_cmd.sh eval; done
+for seed in 0 1 2; do CONFIG=configs/mc_50m.env SEED=$seed SB_GPU_OPT=--gres=gpu:1 SB_EXCLUSIVE=0 bash scripts/sbatch_cmd.sh eval; done
 ```
 
 vanilla 와 MC(learned)를 문항 단위로 짝지어 비교(시드 평균):
@@ -249,10 +250,10 @@ CUDA_VISIBLE_DEVICES= python -m pytest -q tests
 
 ## KISTI 에서 확인이 필요한 것
 
-- `TODO(확인 필요)` 배정받은 큐가 `normal` 인지(베타 기간 큐 이름은 바뀔 수 있다고 문서에 적혀 있음), `--account` 같은 과금 옵션이 필요한지.
+- `TODO(확인 필요)` `natStr` 큐의 최대 시간(`SB_TIME=24:00:00` 이 거부되면 줄인다), `--account` 같은 과금 옵션이 필요한지.
 - `SB_COMMENT` 의 `field=nlp;appl=pytorch` 가 `showappl` 목록에 맞는지(다중 GPU 면 `appl=pytorch-ddp` 일 수도).
 - 계산 노드 인터넷 여부(문서에 명시 없음). 막혀 있다고 가정했다.
-- 비독점 1-GPU 할당(`--gpus-per-node=1` 에 `--exclusive` 없이)이 허용되는지. 안 되면 smoke·평가도 4 GPU 노드를 통째로 쓴다.
+- 비독점 1-GPU 할당(`--gres=gpu:1` 에 `--exclusive` 없이)이 허용되는지. 안 되면 smoke·평가도 4 GPU 노드를 통째로 쓴다.
 - pip torch 2.9.1+cu128 aarch64 wheel 이 GH200 드라이버에서 실제로 도는지(wheel 존재만 확인). 안 되면 `TORCH_CUDA=cu129`, 그다음
   KISTI 컨테이너(`/apps/common/kisti-container/images/pytorch-25.03-py3-aarch64.sif`) 안에서 fla@4b02d15d 만 설치하는 방법.
 - 다중 노드 학습: pip torch 에 들어 있는 NCCL 이 Slingshot(aws-ofi-nccl 플러그인)과 맞는지. KISTI 안내대로 단일 노드는
