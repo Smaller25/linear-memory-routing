@@ -224,11 +224,45 @@ config 변수를 그 이름으로 바꾸면 끝이다. 다른 코드는 손대�
 
 | 부품 | 변수 | 기본값 | 예: 후보 아이디어 |
 |---|---|---|---|
-| descriptor (구간 요약) | `MC_DESCRIPTOR` | `meanpool` | max-sim, span 요약 |
-| router (점수) | `MC_ROUTER` | `dot` | 라우팅 공유, bilinear |
-| gate (섞기) | `MC_GATE` | `softmax` | 게이트 분리 |
+| descriptor (구간 요약) | `MC_DESCRIPTOR` | `meanpool` | `subblock8`(32토큰 하위 블록 8개, 있음), span 요약 |
+| router (점수) | `MC_ROUTER` | `dot` | `maxsim`(하위 블록 최댓값, 있음), 라우팅 공유, bilinear |
+| gate (섞기) | `MC_GATE` | `softmax` | `sep_softmax`(고르는 점수와 섞는 비중 분리, 있음) |
 | connect (구간 연결) | `MC_CONNECT` | `independent` | `chained`(이미 있음), 구간 길이는 `MC_CHUNK`(예: 64) |
-| aux_loss (라우터 보조 손실) | `MC_AUX_LOSS`, `MC_AUX_WEIGHT` | `none` | 라우팅 CE(`gold_ce` 예시 있음: `batch_meta` 에 정답 구간이 있을 때) |
+| aux_loss (라우터 보조 손실) | `MC_AUX_LOSS`, `MC_AUX_WEIGHT` | `none` | `span_copy_ce`(있음, 아래), `gold_ce`(정답 구간이 `batch_meta` 에 있을 때) |
+
+### 라우팅 CE 실험 (설정 3~5)
+
+라우터를 LM 손실이 아니라 직접 가르친다. 일반 텍스트에서 앞에 나온 토큰열(`COPY_NGRAM`개)이 다시 나오고 그다음 토큰까지
+같으면, 앞 출현이 든 구간을 그 위치의 정답 구간으로 삼는다(`mslm/data/span_copy.py`). 바로 앞 구간은 뺀다(`COPY_MIN_GAP=2`).
+CE 는 top-k 이전의 **자격 있는 구간 전부**에 걸리므로 고르지 않은 구간의 점수에도 기울기가 간다.
+
+| config | 설정 | 바뀌는 것 |
+|---|---|---|
+| `vanilla_*` | 1 | 기준선 |
+| `mc_*` | 2 | MC 원본 |
+| `mc_ce_*` | 3 | + `MC_AUX_LOSS=span_copy_ce` |
+| `mc_ce_sepgate_*` | 4 | + `MC_GATE=sep_softmax` (라우터는 CE 로만, 게이트는 LM 손실로만 배운다) |
+| `mc_ce_sepgate_maxsim_*` | 5 | + `MC_DESCRIPTOR=subblock8`, `MC_ROUTER=maxsim` |
+
+`RUN_TAG` 가 run 폴더를 나눈다(예: `mc_ce_sepgate_50m_ctx8192_s0`). 제출은 [§5](#5-한-단계씩-직접-낼-때) 처럼 config 만 바꿔서 낸다.
+
+**학습 중 적중률.** MC 모델은 `VAL_EVERY` 마다 `train.jsonl` 의 val 줄에 다음을 남긴다.
+- `copy_hit`, `copy_random_hit`, `copy_hit_by_layer`: val 텍스트의 span 복사 위치에서 top-k 에 정답 구간이 있었던 비율과 무작위 기준선
+- `ruler_hit`, `ruler_random_hit`, `ruler_hit_by_layer`: `ROUTE_MONITOR_FILE` 을 주면, 그 RULER 문항의 마지막 프롬프트 토큰에서 같은 값(생성 없음)
+
+모니터 문항은 최종 평가와 **다른 시드**로 만든다(같으면 학습이 시작되지 않는다).
+
+```bash
+CONFIG=configs/mc_ce_50m.env EVAL_DATA_DIR=/scratch/$USER/mslm/data/route_monitor EVAL_DATA_SEED=7 EVAL_TASKS=niah_multikey_1 EVAL_LENGTHS=8192 EVAL_NUM_SAMPLES=64 bash scripts/prepare_eval.sh
+```
+
+그다음 학습 제출 때 `ROUTE_MONITOR_FILE=/scratch/$USER/mslm/data/route_monitor/TinyLlama__TinyLlama_v1.1/8192/niah_multikey_1/validation.jsonl` 을 덮어쓰기로 준다.
+
+**라벨 밀도 확인**(학습 전, CPU 몇 초):
+
+```bash
+CONFIG=configs/mc_ce_50m.env python -m mslm.data.span_copy --stats --windows 2000
+```
 
 노트북의 "아이디어별 구현 코드" 셀이 지금 config 가 쓰는 부품의 소스를 그대로 보여 준다.
 

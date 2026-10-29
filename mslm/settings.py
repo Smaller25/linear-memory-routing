@@ -43,8 +43,9 @@ class Settings:
         return [x.strip() for x in self.values[key].split(",") if x.strip()]
 
     def run_name(self) -> str:
+        tag = self.values.get("RUN_TAG", "")
         return self.values["RUN_NAME"] or (
-            f"{self.values['MODEL_ARCH']}_{self.values['MODEL_SIZE']}"
+            f"{self.values['MODEL_ARCH']}{'_' + tag if tag else ''}_{self.values['MODEL_SIZE']}"
             f"_ctx{self.int('SEQ_LEN')}_s{self.int('SEED')}")
 
     def run_dir(self) -> str:
