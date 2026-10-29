@@ -15,7 +15,7 @@ MC 는 `MC_CHUNK`(기본 256) 토큰마다 GDN-2 state 를 하나씩 저장해 �
 
 ```
 configs/          실행 변수(.env). base.env 가 모든 변수를 선언하고, 나머지는 바꿀 것만 적는다
-scripts/          submit_pipeline.sh(전체 연쇄 제출) · status.sh(진행 확인) · train.sh · eval.sh · smoke.sh · prepare_*.sh · sbatch_cmd.sh · show_config.sh
+scripts/          submit_pipeline.sh(전체 연쇄 제출) · status.sh(진행 확인) · wandb_sync.sh(wandb 업로드) · train.sh · eval.sh · smoke.sh · prepare_*.sh · sbatch_cmd.sh · show_config.sh
 slurm/            *.sbatch — scripts/*.sh 를 감싼다(직접 sbatch 하지 말고 sbatch_cmd.sh 가 만든 명령 사용)
 setup/            kisti_bootstrap.sh(처음 한 번) · environment.yml(conda env 정의) · install_env.sh · check_env.sh · download_assets.sh · scratch_keepalive.sh
 mslm/models/      GDN-2(gdn2.py), MC-SSC(mc.py), LM(lm.py), 아이디어 꽂는 곳(registry.py)
@@ -158,6 +158,14 @@ bash scripts/status.sh
 ```
 
 내 작업 큐, run 별 마지막 step·loss·val loss·평가 여부, 데이터 준비 상태, 최근 에러 로그를 한 화면에 보여 준다.
+
+**wandb.** 학습 작업은 `train.jsonl` 을 옆 프로세스(`mslm/wandb_sync.py`)로 wandb 프로젝트 `WANDB_PROJECT`(기본 `linear-memory-routing`)에 올린다. wandb run 이름 = run 폴더 이름이고, 재개해도 같은 run 에 이어 붙는다. 업로드가 실패해도 학습은 계속되며 기록은 `<run>/wandb_sync.log`. 처음 한 번 로그인 노드에서:
+
+```bash
+conda activate sh_mslm && pip install wandb==0.31.0 && wandb login   # 키는 ~/.netrc 에 저장된다. config·스크립트에 쓰지 않는다
+```
+
+이 기능 전에 시작한 run, 또는 계산 노드에서 인터넷이 안 될 때는 로그인 노드 tmux 에서 `FOLLOW=1 bash scripts/wandb_sync.sh`(끝날 때까지 따라가며 올림). 끄려면 `WANDB_PROJECT=""`.
 
 ### 5. 한 단계씩 직접 낼 때
 

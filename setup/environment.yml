@@ -30,6 +30,7 @@ dependencies:
       - tenacity==9.2.1
       - pandas==3.1.0
       - pytest==9.1.1
+      - wandb==0.31.0
       - jupyterlab==4.6.4
       - ipykernel==7.4.0
       - nbformat==5.11.1
