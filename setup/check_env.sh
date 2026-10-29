@@ -51,7 +51,10 @@ r = tower.smoke('configs/mc_50m.env', {'MODEL_SIZE':'tiny','MC_CHUNK':'16','VOCA
 print('  ', r); assert r['reload_loss_equal'] and r['oracle_picks_gold']
 " && ok "CPU smoke" || echo "  [FAIL] CPU smoke"
 
-if python -c "import torch,sys; sys.exit(0 if torch.cuda.is_available() else 1)"; then
+# 로그인 노드에도 GPU 가 보이지만 계산용으로 막혀 있어(busy/unavailable) SLURM 작업 안에서만 시험한다
+if [[ -z "${SLURM_JOB_ID:-}" ]]; then
+  echo "== GPU 시험 건너뜀: SLURM 작업 밖(로그인 노드). GPU 시험은 salloc/sbatch 안에서 다시 실행"
+elif python -c "import torch,sys; sys.exit(0 if torch.cuda.is_available() else 1)"; then
   echo "== GPU 시험"
   nvidia-smi -L
   python "$REPO/setup/gpu_selftest.py" && ok "GPU kernels" || echo "  [FAIL] GPU kernels"
