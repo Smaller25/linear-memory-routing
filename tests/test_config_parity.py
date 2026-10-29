@@ -36,7 +36,7 @@ def test_resolve_matches_shell(config, ov):
 
 @pytest.mark.parametrize("config", CONFIGS)
 @pytest.mark.parametrize("ov", OVERRIDE_SETS)
-@pytest.mark.parametrize("job", ["train", "eval"])
+@pytest.mark.parametrize("job", ["train", "eval", "smoke", "selftest"])
 def test_sbatch_command_matches_shell(config, ov, job, monkeypatch):
     sh = bash(f"mslm_load_config {config} && mslm_sbatch_cmd {job}", ov).strip()
     for k in ("USER", "HOME"):
