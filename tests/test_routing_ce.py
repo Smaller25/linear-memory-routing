@@ -166,3 +166,46 @@ def test_copy_hit_counts():
     m.set_routing()
     assert h.shape == (2, 3) and (h[:, 2] == 1).all()
     assert h[0, 1].item() == pytest.approx(1 - math.comb(5, 2) / math.comb(6, 2))
+
+
+def test_share_from_layer0_reuses_its_choice():
+    torch.manual_seed(0)
+    cfg = tiny(share_from=0, topk=1)
+    cfg.n_layer = 3
+    m = LM(cfg).eval()
+    x = torch.randint(0, 97, (2, 96))
+    m.set_routing(capture=True)
+    with torch.no_grad():
+        m(x)
+    r0, r1, r2 = m.routing_records()
+    assert torch.equal(r1.indices, r0.indices) and torch.equal(r2.indices, r0.indices)
+    # the gate of an upper layer still weighs the shared segments by its own router
+    assert not torch.allclose(r1.weights, r0.weights)
+    m.set_routing()
+    assert all(mx.share is None for mx in LM(tiny(topk=1)).mc_layers())
+
+
+def test_share_from_off_by_default_and_oracle_overrides():
+    torch.manual_seed(0)
+    cfg = tiny(share_from=0, topk=1)
+    m = LM(cfg).eval()
+    x = torch.randint(0, 97, (1, 96))
+    m.set_routing(capture=True, oracle_segments=torch.tensor([[3, -1]]))
+    with torch.no_grad():
+        m(x)
+    for r in m.routing_records():                             # every layer forced onto the gold segment
+        assert (r.indices[0, 64:, 0] == 3).all()
+    m.set_routing()
+    with pytest.raises(ValueError, match="MC_SHARE_FROM"):
+        LM(tiny(share_from=5))
+
+
+def test_share_with_sep_gate_trains_every_router():
+    torch.manual_seed(0)
+    m = LM(tiny(share_from=0, aux_loss="span_copy_ce", aux_weight=1.0, gate="sep_softmax",
+                descriptor="subblock8", router="maxsim"))
+    x, gold = _span_batch()
+    m(x, x, batch_meta={"copy_gold": gold})["loss"].backward()
+    for blk in m.blocks:                                      # no unused parameters (DDP)
+        for p in blk.mixer.parameters():
+            assert p.grad is not None
