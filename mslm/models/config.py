@@ -25,6 +25,7 @@ class MCConfig:
     aux_loss: str = "none"
     aux_weight: float = 0.0
     read_kernel: str = "auto"
+    share_from: int = -1             # >=0: MC layers above this one reuse its top-k choice
 
 
 @dataclass
@@ -74,7 +75,7 @@ class ModelConfig:
                 descriptor=s.str("MC_DESCRIPTOR"), router=s.str("MC_ROUTER"),
                 gate=s.str("MC_GATE"), connect=s.str("MC_CONNECT"),
                 aux_loss=s.str("MC_AUX_LOSS"), aux_weight=s.float("MC_AUX_WEIGHT"),
-                read_kernel=s.str("MC_READ_KERNEL"),
+                read_kernel=s.str("MC_READ_KERNEL"), share_from=s.int("MC_SHARE_FROM"),
             ),
             **p,
         )

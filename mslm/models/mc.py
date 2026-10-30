@@ -66,6 +66,11 @@ class MCMixer(nn.Module):
             raise ValueError(f"MC_GATE={mc.gate} decouples the router from the LM loss; "
                              f"set MC_AUX_LOSS so the router is trained at all")
         self.connect = registry.get("connect", mc.connect)
+        # Cross-layer routing sharing (MC_SHARE_FROM): set by LM. The source layer
+        # stores its top-k in ``share``; layers above it read that instead of
+        # their own top-k (their router still scores the chosen segments for the gate).
+        self.layer_id = 0
+        self.share: dict | None = None
         # Set by LM.forward for one call:
         self.oracle_segments: torch.Tensor | None = None   # [B,G] gold segment ids, -1 padded
         self.capture = False
@@ -87,11 +92,17 @@ class MCMixer(nn.Module):
         scores = scores.masked_fill(~eligible.unsqueeze(0), -torch.inf)
 
         R = min(topk, N)
+        src = self.cfg.share_from
         if R > 0:
-            select = scores
-            if self.oracle_segments is not None:
-                select = scores + self._oracle_bias(scores, eligible)
-            _, idx = torch.topk(select, k=R, dim=-1)
+            if self.share is not None and self.layer_id > src and self.oracle_segments is None:
+                idx = self.share["idx"]
+            else:
+                select = scores
+                if self.oracle_segments is not None:
+                    select = scores + self._oracle_bias(scores, eligible)
+                _, idx = torch.topk(select, k=R, dim=-1)
+                if self.share is not None and self.layer_id == src:
+                    self.share["idx"] = idx.detach()
             sel = scores.gather(-1, idx)
             valid = torch.isfinite(sel)
         else:

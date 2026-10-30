@@ -68,6 +68,12 @@ class LM(nn.Module):
         self.blocks = nn.ModuleList(Block(cfg) for _ in range(cfg.n_layer))
         self.norm_f = RMSNorm(cfg.d_model, cfg.norm_eps)
         self.lm_head = nn.Linear(cfg.d_model, cfg.vocab_size, bias=False)
+        if cfg.arch == "mc" and cfg.mc.share_from >= 0:
+            if cfg.mc.share_from >= cfg.n_layer:
+                raise ValueError(f"MC_SHARE_FROM={cfg.mc.share_from} but the model has {cfg.n_layer} layers")
+            share: dict = {}
+            for i, m in enumerate(self.mc_layers()):
+                m.layer_id, m.share = i, share
         self._init_weights()
 
     def _init_weights(self):
