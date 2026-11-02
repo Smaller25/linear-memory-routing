@@ -225,7 +225,7 @@ config 변수를 그 이름으로 바꾸면 끝이다. 다른 코드는 손대�
 | 부품 | 변수 | 기본값 | 예: 후보 아이디어 |
 |---|---|---|---|
 | descriptor (구간 요약) | `MC_DESCRIPTOR` | `meanpool` | `subblock8`(32토큰 하위 블록 8개, 있음), span 요약 |
-| router (점수) | `MC_ROUTER` | `dot` | `maxsim`(하위 블록 최댓값, 있음), 라우팅 공유, bilinear |
+| router (점수) | `MC_ROUTER` | `dot` | `maxsim`(하위 블록 최댓값, 있음), bilinear. 층 간 라우팅 공유는 `MC_SHARE_FROM`(있음) |
 | gate (섞기) | `MC_GATE` | `softmax` | `sep_softmax`(고르는 점수와 섞는 비중 분리, 있음) |
 | connect (구간 연결) | `MC_CONNECT` | `independent` | `chained`(이미 있음), 구간 길이는 `MC_CHUNK`(예: 64) |
 | aux_loss (라우터 보조 손실) | `MC_AUX_LOSS`, `MC_AUX_WEIGHT` | `none` | `span_copy_ce`(있음, 아래), `gold_ce`(정답 구간이 `batch_meta` 에 있을 때) |
@@ -265,6 +265,30 @@ CONFIG=configs/mc_ce_50m.env python -m mslm.data.span_copy --stats --windows 200
 ```
 
 노트북의 "아이디어별 구현 코드" 셀이 지금 config 가 쓰는 부품의 소스를 그대로 보여 준다.
+
+### 아이디어별 학습 + 평가 한 번에 (`scripts/run_idea.sh`)
+
+아이디어 이름만 주면 학습 작업과, 학습이 끝난 뒤 도는 평가 작업(1노드)을 함께 낸다. 끝난 학습은 건너뛴다.
+
+```bash
+bash scripts/run_idea.sh list                                   # 아이디어 목록
+DRY_RUN=1 bash scripts/run_idea.sh ce                           # 낼 명령만 보기
+SIZE=370m bash scripts/run_idea.sh vanilla mc ce sepgate maxsim share
+MAX_STEPS=5700 RUN_TAG=ce_w003 MC_AUX_WEIGHT=0.03 bash scripts/run_idea.sh ce   # 1단계 CE 가중치 스윕 한 칸
+```
+
+위 표의 설정 1~5 외에 다음이 있다.
+
+| 이름 | config | 바뀌는 것 |
+|---|---|---|
+| `share` | `mc_ce_sepgate_maxsim_share_*` | 설정 5 + `MC_SHARE_FROM=0`: 0층이 고른 구간을 위층 전부가 읽는다 |
+| `maxsim_share_nolabel` | `mc_maxsim_share_*` | MC 원본 + max-sim + 층 공유, CE 없음 |
+| `chained` | `mc_chained_*` | MC 원본 + `MC_CONNECT=chained` |
+| `chunk64` | `mc_chunk64_*` | MC 원본 + `MC_CHUNK=64` |
+| `dense_chained` | `mc_dense_chained_*` | 설정 6: chained + `MC_TOPK=1024`(과거 구간 전부 섞기) |
+
+370M 은 학습 작업을 3번 이어서 낸다(`TRAIN_PARTS`; 24시간 작업마다 체크포인트에서 이어 간다). chained 는 구간을 순서대로 돌려서
+느리므로 처음 작업의 `tok_per_s` 를 보고 `TRAIN_PARTS` 를 늘린다. 동적 구간 경계(아이디어 f)는 구현돼 있지 않다.
 
 ## 관제 노트북
 
