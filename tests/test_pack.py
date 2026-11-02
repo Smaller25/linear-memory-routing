@@ -37,6 +37,12 @@ def test_dry_run_lists_runs_and_one_job(tmp_path):
     assert "MC_AUX_WEIGHT" not in cmd  # per-run override stays in the plan file
 
 
+def test_after_adds_dependency(tmp_path):
+    out = pack(tmp_path, "s1", "ce", AFTER="123", SB_TIME="02:00:00").stdout
+    assert "--dependency=afterany:123" in out and "--time=02:00:00" in out
+    assert "--dependency" not in pack(tmp_path, "s1", "ce").stdout
+
+
 def test_rejects_same_folder_and_too_many_runs(tmp_path):
     r = pack(tmp_path, "s1", "ce", "ce", check=False)
     assert r.returncode != 0 and "같은 run 폴더" in r.stderr
