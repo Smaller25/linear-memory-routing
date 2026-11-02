@@ -10,6 +10,7 @@
 # 인자: 묶음 이름, 그다음 run 마다 <아이디어>[:KEY=val,KEY=val]. 앞에 붙인 config 변수는 모든 run 에 적용된다.
 # 같은 명령을 다시 내면 끝난 run 은 빼고, 끊긴 run 은 마지막 체크포인트부터 잇는다(RESUME=auto).
 # run 별 로그: SB_SUBMIT_DIR/packs/<run>_<jobid>.log. 바꿀 수 있는 값: SIZE=50m  SEED=0  DRY_RUN=1
+#   AFTER=<jobid>  그 작업이 끝난 뒤(성공·실패·시간 초과 무관) 시작. 24시간에 못 끝나는 run 을 미리 이어 걸 때
 set -uo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO"
@@ -23,6 +24,7 @@ PACK="$1"; shift
 [[ $# -gt 0 ]] || { echo "run 이 없습니다: bash scripts/run_pack.sh $PACK <아이디어>[:KEY=val,...] ..." >&2; exit 1; }
 SIZE="${SIZE:-50m}"
 DRY_RUN="${DRY_RUN:-0}"
+AFTER="${AFTER:-}"
 
 # cfg_get CONFIG KEY [VAR=val ...] : resolved config value (same rules as every script)
 cfg_get() {
@@ -77,7 +79,7 @@ ngpu="$(cfg_get "$FIRST_CFG" NGPU_PER_NODE)"
 submit_dir="$(cfg_get "$FIRST_CFG" SB_SUBMIT_DIR)"
 plan="$submit_dir/packs/${PACK}_$(date +%Y%m%d_%H%M%S).tsv"
 # 작업 이름 mslm-pack-<이름>. 작업 안에서는 slurm/pack.sbatch → scripts/pack_train.sh 가 plan 의 줄마다 GPU 하나씩 쓴다
-cmd="$(SB_JOB_NAME="mslm-pack-$PACK" SB_EXTRA="--parsable" CONFIG="$FIRST_CFG" bash "$REPO/scripts/sbatch_cmd.sh" pack \
+cmd="$(SB_JOB_NAME="mslm-pack-$PACK" SB_EXTRA="--parsable${AFTER:+ --dependency=afterany:$AFTER}" CONFIG="$FIRST_CFG" bash "$REPO/scripts/sbatch_cmd.sh" pack \
        | sed "s/--job-name=mslm-pack-$PACK-pack/--job-name=mslm-pack-$PACK/")" || exit 1
 if [[ "$DRY_RUN" == 1 ]]; then
   echo "[dry] pack $PACK -> $plan"; printf '      %s\n' "${PLAN[@]}"; echo "      PACK_FILE=$plan $cmd"
