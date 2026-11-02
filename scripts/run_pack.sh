@@ -52,7 +52,7 @@ sys.exit(0 if total is not None and end == total else 1)
 EOF
 }
 
-LINES=() DIRS=() FIRST_CFG=""
+PLAN=() DIRS=() FIRST_CFG=""
 for spec in "$@"; do
   idea="${spec%%:*}"; kv=""
   [[ "$spec" == *:* ]] && kv="${spec#*:}"; kv="${kv//,/ }"
@@ -66,13 +66,13 @@ for spec in "$@"; do
   DIRS+=("$dir")
   name="$(basename "$dir")"
   if run_finished "$dir"; then echo "[run_pack] 학습 끝남  $name"; continue; fi
-  LINES+=("$name"$'\t'"$REPO/$cfg"$'\t'"$kv")
+  PLAN+=("$name"$'\t'"$REPO/$cfg"$'\t'"$kv")
   echo "[run_pack] $name  ($idea: ${DESC[$idea]})${kv:+  [$kv]}"
   [[ -z "$FIRST_CFG" ]] && FIRST_CFG="$cfg"
 done
-[[ ${#LINES[@]} -gt 0 ]] || { echo "[run_pack] 낼 run 이 없습니다(모두 끝남)"; exit 0; }
+[[ ${#PLAN[@]} -gt 0 ]] || { echo "[run_pack] 낼 run 이 없습니다(모두 끝남)"; exit 0; }
 ngpu="$(cfg_get "$FIRST_CFG" NGPU_PER_NODE)"
-[[ ${#LINES[@]} -le "$ngpu" ]] || { echo "run ${#LINES[@]}개 > 노드당 GPU $ngpu개. 묶음을 나누세요" >&2; exit 1; }
+[[ ${#PLAN[@]} -le "$ngpu" ]] || { echo "run ${#PLAN[@]}개 > 노드당 GPU $ngpu개. 묶음을 나누세요" >&2; exit 1; }
 
 submit_dir="$(cfg_get "$FIRST_CFG" SB_SUBMIT_DIR)"
 plan="$submit_dir/packs/${PACK}_$(date +%Y%m%d_%H%M%S).tsv"
@@ -80,11 +80,11 @@ plan="$submit_dir/packs/${PACK}_$(date +%Y%m%d_%H%M%S).tsv"
 cmd="$(SB_JOB_NAME="mslm-pack-$PACK" SB_EXTRA="--parsable" CONFIG="$FIRST_CFG" bash "$REPO/scripts/sbatch_cmd.sh" pack \
        | sed "s/--job-name=mslm-pack-$PACK-pack/--job-name=mslm-pack-$PACK/")" || exit 1
 if [[ "$DRY_RUN" == 1 ]]; then
-  echo "[dry] pack $PACK -> $plan"; printf '      %s\n' "${LINES[@]}"; echo "      PACK_FILE=$plan $cmd"
+  echo "[dry] pack $PACK -> $plan"; printf '      %s\n' "${PLAN[@]}"; echo "      PACK_FILE=$plan $cmd"
   exit 0
 fi
 mkdir -p "$(dirname "$plan")"
-printf '%s\n' "${LINES[@]}" > "$plan"
+printf '%s\n' "${PLAN[@]}" > "$plan"
 out="$(PACK_FILE="$plan" bash -c "$cmd" 2>&1)" || { echo "[run_pack] 제출 실패" >&2; echo "$out" >&2; exit 1; }
-echo "[run_pack] 제출 ${out%%;*}  pack $PACK (${#LINES[@]} run)  plan=$plan"
+echo "[run_pack] 제출 ${out%%;*}  pack $PACK (${#PLAN[@]} run)  plan=$plan"
 echo "[run_pack] 진행 확인: bash $REPO/scripts/status.sh   run 별 로그: $submit_dir/packs/<run>_${out%%;*}.log"

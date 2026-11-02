@@ -17,7 +17,8 @@ def env_for(tmp_path, **extra):
         (stub / name).write_text("#!/bin/sh\nexit 0\n")
         (stub / name).chmod(0o755)
     return {"PATH": f"{stub}:{os.environ['PATH']}", "USER": "u", "HOME": str(tmp_path),
-            "SCRATCH_ROOT": str(tmp_path / "scratch"), "DRY_RUN": "1", **extra}
+            "SCRATCH_ROOT": str(tmp_path / "scratch"), "DRY_RUN": "1",
+            "LINES": "50", "COLUMNS": "200", **extra}  # login shells export these
 
 
 def pack(tmp_path, *args, check=True, **extra):
