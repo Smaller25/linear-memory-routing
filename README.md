@@ -290,6 +290,20 @@ MAX_STEPS=5700 RUN_TAG=ce_w003 MC_AUX_WEIGHT=0.03 bash scripts/run_idea.sh ce   
 370M 은 학습 작업을 3번 이어서 낸다(`TRAIN_PARTS`; 24시간 작업마다 체크포인트에서 이어 간다). chained 는 구간을 순서대로 돌려서
 느리므로 처음 작업의 `tok_per_s` 를 보고 `TRAIN_PARTS` 를 늘린다. 동적 구간 경계(아이디어 f)는 구현돼 있지 않다.
 
+### 50M 여러 개를 작업 하나로 (`scripts/run_pack.sh`)
+
+계정당 작업 수(대기 포함)가 빠듯하면 GPU 1장짜리 run 을 노드 GPU 수(4)만큼 묶어 작업 한 칸으로 낸다. step 당 토큰 수와 데이터
+순서는 GPU 수와 무관해서(누적 횟수만 늘어난다) 4 GPU 로 돌린 run 과 같은 학습이다. 50M MC 는 GPU 1장에 3B 토큰이 약 20시간.
+
+```bash
+R=/scratch/$USER/mslm/data/route_monitor/TinyLlama__TinyLlama_v1.1/8192/niah_multikey_1/validation.jsonl
+DRY_RUN=1 MAX_STEPS=5700 ROUTE_MONITOR_FILE=$R bash scripts/run_pack.sh stage1a \
+  mc:RUN_TAG=mon ce:RUN_TAG=ce_w003,MC_AUX_WEIGHT=0.03 ce:RUN_TAG=ce_w01,MC_AUX_WEIGHT=0.1 ce:RUN_TAG=ce_w03,MC_AUX_WEIGHT=0.3
+```
+
+run 마다 `<아이디어>[:KEY=val,...]`, 앞에 붙인 변수는 모든 run 에 적용된다. 시간 초과 등으로 끊기면 같은 명령을 다시 내면 된다
+(끝난 run 은 빠지고 나머지는 체크포인트에서 잇는다). run 별 로그는 `$SCRATCH_ROOT/jobs/packs/<run>_<jobid>.log`. 평가는 따로 낸다.
+
 ## 관제 노트북
 
 `control_tower.ipynb` — 저장소 루트에서 연다. config 표 보기·고치기, 부품 소스 보기, sbatch 명령 미리 보기, CPU smoke,
