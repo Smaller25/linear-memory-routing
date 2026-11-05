@@ -86,7 +86,12 @@ class MCMixer(nn.Module):
         online, online_desc = online[:, :T], online_desc[:, :T]
         N = mems.shape[1]
 
-        scores, online_score = self.router(x, seg_desc, online_desc)      # [B,T,N], [B,T]
+        if getattr(self.router, "own_keys", False):                       # router-only keys, same pooling
+            (rk,), _ = _pad_to_multiple([self.router.keys(x)], C)
+            r_seg, r_online = self.descriptor(rk, C)
+            scores, online_score = self.router(x, r_seg, r_online[:, :T])
+        else:
+            scores, online_score = self.router(x, seg_desc, online_desc)  # [B,T,N], [B,T]
         seg_of_token = torch.arange(T, device=x.device) // C
         eligible = torch.arange(N, device=x.device)[None, :] < seg_of_token[:, None]
         scores = scores.masked_fill(~eligible.unsqueeze(0), -torch.inf)

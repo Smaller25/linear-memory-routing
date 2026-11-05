@@ -22,6 +22,10 @@ Nothing else has to change.
 A descriptor may also return ``seg`` as [B,N,m,H,K] (m sub-blocks per segment);
 it must then be paired with a router that reduces over m (e.g. ``maxsim``).
 
+A router with ``own_keys = True`` (e.g. ``detached_cos``) also has ``keys(x)``
+-> [B,T,H,K]; the descriptor then pools those keys for it instead of the
+backbone's (the gate still gets the backbone descriptors).
+
 ``keys`` given to descriptors are already L2-normalised (the GDN-2 kernel
 normalises them before the memory update, so routing sees the same keys).
 ``RoutingRecord`` (mslm/models/mc.py) carries scores, chosen indices, gate
@@ -31,6 +35,7 @@ training/eval loop knows (e.g. ``gold_segments`` for RULER items).
 
 from __future__ import annotations
 
+import math
 from typing import Callable
 
 import torch
@@ -211,6 +216,49 @@ class MaxSimRouter(DotRouter):
         scores = torch.einsum("bthk,bnmhk->btnm", u, seg.float()).amax(dim=-1)
         online_score = torch.einsum("bthk,bthk->bt", u, online.float())
         return scores, online_score
+
+
+@register("router", "detached_cos")
+class DetachedCosRouter(nn.Module):
+    """Router with its own projections of the DETACHED hidden state (DeepSeek-V3.2
+    lightning-indexer style): r_t^i = gamma * mean_h cos(W_q x_t, c_i^h), where c_i is the
+    descriptor (meanpool / subblock8) of normalize(W_k x) instead of the backbone keys.
+    No gradient leaves the router, so an aux loss moves only W_q, W_k and gamma, and
+    the backbone learns from the LM loss alone (use it with MC_GATE=sep_softmax, so
+    the LM loss does not train the router either). gamma is a learnable inverse
+    temperature, init 14 and capped at 100, and W_k starts equal to W_q (Weighted
+    State Souping, arXiv:2610.25621): scores stay in [-gamma, gamma] however many
+    segments there are. With a sub-block descriptor the segment score is the max
+    over its sub-blocks."""
+
+    own_keys = True        # MCMixer pools router.keys(x) with the descriptor and passes that in
+
+    def __init__(self, d_model: int, n_head: int, head_dim: int, mc_cfg=None):
+        super().__init__()
+        self.n_head, self.head_dim = n_head, head_dim
+        self.wq = nn.Linear(d_model, n_head * head_dim, bias=False)
+        self.wk = nn.Linear(d_model, n_head * head_dim, bias=False)
+        with torch.no_grad():
+            self.wk.weight.copy_(self.wq.weight)
+        self.log_gamma = nn.Parameter(torch.tensor(math.log(14.0)))
+
+    def _proj(self, w, x):
+        B, T, _ = x.shape
+        return F.normalize(w(x.detach()).view(B, T, self.n_head, self.head_dim).float(), dim=-1)
+
+    def keys(self, x):
+        return self._proj(self.wk, x)
+
+    def forward(self, x, seg, online):
+        u = self._proj(self.wq, x)
+        seg, online = F.normalize(seg.float(), dim=-1), F.normalize(online.float(), dim=-1)
+        if seg.dim() == 5:
+            scores = torch.einsum("bthk,bnmhk->btnm", u, seg).amax(dim=-1)
+        else:
+            scores = torch.einsum("bthk,bnhk->btn", u, seg)
+        online_score = torch.einsum("bthk,bthk->bt", u, online)
+        gamma = self.log_gamma.exp().clamp(max=100.0) / self.n_head      # mean over heads
+        return gamma * scores, gamma * online_score
 
 
 @register("gate", "sep_softmax")

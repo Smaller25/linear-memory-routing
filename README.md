@@ -243,6 +243,8 @@ CE 는 top-k 이전의 **자격 있는 구간 전부**에 걸리므로 고르지
 | `mc_ce_*` | 3 | + `MC_AUX_LOSS=span_copy_ce` |
 | `mc_ce_sepgate_*` | 4 | + `MC_GATE=sep_softmax` (라우터는 CE 로만, 게이트는 LM 손실로만 배운다) |
 | `mc_ce_sepgate_maxsim_*` | 5 | + `MC_DESCRIPTOR=subblock8`, `MC_ROUTER=maxsim` |
+| `mc_ce_detach_*` | 4' | 설정 4 + `MC_ROUTER=detached_cos`: 라우터가 detach 한 hidden 에 전용 W_q/W_k 를 써서 CE 가 backbone 에 닿지 않는다. 점수는 cosine x 학습 온도(14에서 시작, 최대 100). `MC_AUX_WEIGHT=1.0` |
+| `mc_ce_detach_maxsim_*` | 5' | 위 + `MC_DESCRIPTOR=subblock8`(하위 블록 최댓값) |
 
 `RUN_TAG` 가 run 폴더를 나눈다(예: `mc_ce_sepgate_50m_ctx8192_s0`). 제출은 [§5](#5-한-단계씩-직접-낼-때) 처럼 config 만 바꿔서 낸다.
 
