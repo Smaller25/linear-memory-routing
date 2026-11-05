@@ -209,3 +209,40 @@ def test_share_with_sep_gate_trains_every_router():
     for blk in m.blocks:                                      # no unused parameters (DDP)
         for p in blk.mixer.parameters():
             assert p.grad is not None
+
+
+@pytest.mark.parametrize("descriptor", ["meanpool", "subblock8"])
+def test_detached_router_keeps_ce_out_of_the_backbone(descriptor):
+    torch.manual_seed(0)
+    m = LM(tiny(aux_loss="span_copy_ce", aux_weight=1.0, gate="sep_softmax", router="detached_cos",
+                descriptor=descriptor))
+    x, gold = _span_batch()
+    out = m(x, x, batch_meta={"copy_gold": gold})
+    routers = [blk.mixer.router for blk in m.blocks]
+    out["aux_loss"].backward(retain_graph=True)
+    for r in routers:                                         # CE trains every router ...
+        assert r.wq.weight.grad.abs().sum() > 0 and r.wk.weight.grad.abs().sum() > 0
+        assert r.log_gamma.grad is not None
+    router_params = {id(p) for r in routers for p in r.parameters()}
+    for p in m.parameters():                                  # ... and nothing else, in any layer
+        if id(p) not in router_params:
+            assert p.grad is None or p.grad.abs().sum() == 0
+    m.zero_grad(set_to_none=True)
+    out["lm_loss"].backward()
+    for r in routers:                                         # and the LM loss never reaches a router
+        assert all(p.grad is None or p.grad.abs().sum() == 0 for p in r.parameters())
+    assert m.blocks[0].mixer.gate.proj.weight.grad.abs().sum() > 0
+
+
+def test_detached_router_scores_are_bounded_cosines():
+    torch.manual_seed(0)
+    m = LM(tiny(aux_loss="span_copy_ce", aux_weight=1.0, gate="sep_softmax", router="detached_cos")).eval()
+    r = m.blocks[0].mixer.router
+    assert torch.equal(r.wq.weight, r.wk.weight) and r.log_gamma.exp().item() == pytest.approx(14.0)
+    m.set_routing(capture=True)
+    with torch.no_grad():
+        m(torch.randint(0, 97, (1, 70)))                     # not a multiple of the chunk
+    rec = m.routing_records()[0]
+    s = rec.scores[torch.isfinite(rec.scores)]
+    assert rec.scores.shape == (1, 70, 5) and s.abs().max() <= 14.0 + 1e-4
+    m.set_routing()
