@@ -88,3 +88,21 @@ def test_val_routing_metrics_are_uploaded():
     assert m["val/loss"] == 3.2 and m["val/copy_hit"] == 0.4 and m["val/copy_positions"] == 120
     assert m["val/copy_hit/L00"] == 0.3 and m["val/copy_hit/L01"] == 0.5 and m["val/ruler_hit/L01"] == 0.3
     assert record_to_metrics({"step": 1, "tokens": 1, "val_loss": 2.0}) == {"val/loss": 2.0, "tokens": 1}
+
+
+def test_eval_summary_goes_to_run_summary(tmp_path, monkeypatch):
+    calls = fake_wandb(monkeypatch)
+    d = write_run(tmp_path, LINES)
+    (d / "eval" / "step_0005700").mkdir(parents=True)
+    (d / "eval" / "step_0005700" / "summary.json").write_text(json.dumps({"results": [
+        {"route": "learned", "length": 8192, "task": "niah_multikey_1", "n": 100, "string_match_all": 12.0,
+         "routing_hit": 0.3, "random_hit": 0.14, "mean_gold_rank": 5.1},
+        {"route": "oracle", "length": 8192, "task": "niah_multikey_1", "n": 100, "string_match_all": 40.0}]}))
+    run_cls = FakeRun
+    monkeypatch.setattr(run_cls, "summary", {}, raising=False)
+    wandb_sync.sync(str(d))
+    s = calls["run"].summary
+    assert s["eval/step_0005700/learned/niah_multikey_1/8192/string_match_all"] == 12.0
+    assert s["eval/step_0005700/learned/niah_multikey_1/8192/routing_hit"] == 0.3
+    assert s["eval/step_0005700/oracle/niah_multikey_1/8192/string_match_all"] == 40.0
+    assert len(s) == 5

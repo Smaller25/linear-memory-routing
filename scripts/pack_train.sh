@@ -4,7 +4,7 @@
 set -uo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 : "${PACK_FILE:?PACK_FILE 이 없습니다. scripts/run_pack.sh 로 제출하세요}"
-TRAIN="${PACK_TRAIN:-bash $REPO/scripts/train.sh}"   # 테스트에서만 바꾼다
+TRAIN="${PACK_TRAIN:-bash $REPO/scripts/train.sh}"   # PACK_JOB=eval 이면 scripts/eval.sh (테스트에서는 stub)
 LOG_DIR="$(dirname "$PACK_FILE")"
 
 mapfile -t RUNS < <(grep -v '^[[:space:]]*\(#\|$\)' "$PACK_FILE")
