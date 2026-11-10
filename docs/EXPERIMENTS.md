@@ -45,7 +45,7 @@
 | E6 | 11-02~03 | Stage 1a: span-copy CE 가중치 | KISTI | 최고 w0.1 hit 21.3%(무작위 +7.6pp), val loss +0.044, 기준 미달 |
 | E7 | 11-05~06 | Stage 1c: detach router | KISTI | 통과. maxsim hit 36.6%(무작위 +23pp), val loss mon과 같음(2.947) |
 | E8 | 11-10~ | Stage 2 round 1: router descriptor 6종 + seed 1 재현 | KISTI | 학습 중 |
-| E9 | 11-10~ | Q2 gate 분리 기여 + seed 2 재현 | KISTI | 제출 |
+| E9 | 11-10~ | Q2 gate 분리 기여 + seed 2 재현 | KISTI | 학습 중 |
 
 ---
 
@@ -1100,7 +1100,7 @@ detach_maxsim_w03 0.27 0.13 0.19 0.29 0.25 0.27 0.33 0.46 0.33 0.56 0.35 0.25 0.
 | `mc_detach_maxsim_w03_50m_ctx8192_s2` | E7 detach_maxsim_w03, seed 2 |
 | `mc_detach_w03_50m_ctx8192_s2` | E7 detach_w03, seed 2 |
 
-- job: 1251866 `mslm-pack-stage2c`(24h), 11-10 17:31 KST 제출.
+- job: 1251866 `mslm-pack-stage2c`(node1766, 24h), 11-10 17:31 KST 제출, 약 21:10 학습 시작. run당 48~49k tok/s.
 
 **결과 (raw)**
 - 아직 없음.
