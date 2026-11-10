@@ -24,7 +24,7 @@
 
 | 순위 | ID | 내용 | module | 조건 | run (pack 명세) | 판정 규칙 | 상태 |
 |---|---|---|---|---|---|---|---|
-| 1 | Q1 (E8) | descriptor 6종 + seed 1 재현 2개 | ④ | — | stage2a: `detach:RUN_TAG=detach_w03,MC_AUX_WEIGHT=0.3,SEED=1` `detach_maxsim:RUN_TAG=detach_maxsim_w03,MC_AUX_WEIGHT=0.3,SEED=1` `detach_desc:RUN_TAG=desc_sb16,MC_ROUTER_DESCRIPTOR=subblock16` `detach_desc:RUN_TAG=desc_sb32,MC_ROUTER_DESCRIPTOR=subblock32` / stage2b: `detach_desc:RUN_TAG=desc_{boundary,centered,mma,keyconv},MC_ROUTER_DESCRIPTOR=<같은 이름>` | noise = seed 0·1 차이의 절댓값 평균(meanpool, subblock8). subblock8 seed 평균 + max(noise, 3pp) 를 넘는 후보를 상위 2개까지 Q3 로. 없으면 best_desc=subblock8 | 제출 (job 1249901, 1249902) |
+| 1 | Q1 (E8) | descriptor 6종 + seed 1 재현 2개 | ④ | — | stage2a: `detach:RUN_TAG=detach_w03,MC_AUX_WEIGHT=0.3,SEED=1` `detach_maxsim:RUN_TAG=detach_maxsim_w03,MC_AUX_WEIGHT=0.3,SEED=1` `detach_desc:RUN_TAG=desc_sb16,MC_ROUTER_DESCRIPTOR=subblock16` `detach_desc:RUN_TAG=desc_sb32,MC_ROUTER_DESCRIPTOR=subblock32` / stage2b: `detach_desc:RUN_TAG=desc_{boundary,centered,mma,keyconv},MC_ROUTER_DESCRIPTOR=<같은 이름>` | noise = seed 0·1 차이의 절댓값 평균(meanpool, subblock8). subblock8 seed 평균 + max(noise, 3pp) 를 넘는 후보를 상위 2개까지 Q3 로. 없으면 best_desc=subblock8 | 학습중 (job 1249901 node1764, 1249902 node1722, 11-10 약 15:00 시작, 약 47k tok/s → 11-11 08시쯤 끝) |
 | 2 | Q2 | gate 분리 기여 분리(E7 주의점) | ⑨ | Q1 제출 후 칸이 비면 | `detach_maxsim:RUN_TAG=detach_maxsim_softgate,MC_AUX_WEIGHT=0.3,MC_GATE=softmax` (router 점수를 gate로 재사용, backbone은 계속 detach) | val loss와 ruler_hit를 E7 detach_maxsim_w03과 비교. 기록만 하고 다음 항목은 막지 않는다 | 대기 |
 | 3 | Q3 | round 2: 상위 후보 seed 반복 + string_match | ④ | Q1 완료 | Q1 상위 ≤2개 × seed 0·1·2 중 없는 것, subblock8 seed 2. 학습 끝난 run마다 평가: `EVAL_TASKS=niah_single_2,niah_multikey_1,niah_multikey_2,niah_multivalue EVAL_LENGTHS=8192 EVAL_NUM_SAMPLES=100`(`scripts/eval.sh`, `slurm/eval.sbatch`). 같은 평가를 E6 mon, E7 4개 run에도 | seed 3개 평균 ruler_hit와 learned string_match 평균이 가장 높은 것을 best_desc 로. 차이가 seed 표준편차보다 작으면 단순한 쪽(subblock 계열 → 적은 파라미터) | 대기 |
 | 4 | Q4 | chunk 크기 | ① | Q3 완료 | `detach_desc:RUN_TAG=desc_best_c64,MC_ROUTER_DESCRIPTOR=best_desc,MC_CHUNK=64` `…_c128,MC_CHUNK=128` (subblock 계열이면 chunk가 m으로 나뉘는지 확인) | ruler_hit가 best_desc(256)보다 3pp 이상 높고 tok/s 저하 ≤30% 면 채택 후보. 결과는 Q9 설정에 반영 | 대기 |
@@ -37,3 +37,4 @@
 ## 변경 기록
 
 - 2026-11-10: 처음 작성. focus module ④ 확정(사용자), E8 제출 후.
+- 2026-11-10: Q1 두 pack 모두 학습 시작.

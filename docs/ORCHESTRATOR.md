@@ -20,7 +20,7 @@
 - 제출·`squeue`: t512a03 pane (`tmux -S /tmp/hangang-tmux/sock`, target `sohyung`). Steering_vector_operator 세션과
   함께 쓰므로 마지막 줄이 빈 프롬프트일 때만 입력하고, `clear`·Ctrl-c는 쓰지 않는다. 명령은
   `( unset CONDA_ENVS_PATH; cd ~/linear-memory-routing && … ); echo @@ORC<n>` 형태로 보내고 marker까지 잘라 읽는다.
-- 읽기 전용 확인(로그, `harvest.py`): t512a02 pane (`tmux -S /tmp/hangang-t512a02/sock`, target `sohyung`).
+- 읽기 전용 확인(로그 tail): t512a02 pane. `harvest.py`는 t512a03 홈에 있어 t512a02에서 읽을 수 없으니 t512a03 pane에서 실행한다. t512a02 (`tmux -S /tmp/hangang-t512a02/sock`, target `sohyung`).
   t512a03의 작업은 squeue에서 보이지 않는다.
 - run 폴더: `/scratch/t512a03/mslm/runs/`. 모니터 문항: `ROUTE_MONITOR_FILE=/scratch/t512a03/mslm/data/route_monitor/TinyLlama__TinyLlama_v1.1/8192/niah_multikey_1/validation.jsonl`.
 - pane에 "Hangang login ... is down"이 보이면 아무것도 하지 않고 사용자에게 알린다(OTP 재로그인 필요).
@@ -29,7 +29,7 @@
 
 1. **상태 읽기.** t512a03에서 `squeue -u t512a03 -o '%.10i %.14j %.9T %.10M %.6D %R'`.
    우리 작업(`mslm-*`)과 다른 분 작업 수를 센다. QUEUE.md에서 상태가 `제출`/`학습중`/`평가중`인 항목의 run을
-   `python3 ~/linear-memory-routing/scripts/harvest.py /scratch/t512a03/mslm/runs '<패턴>'`으로 읽는다.
+   t512a03 pane에서 `python3 ~/linear-memory-routing/scripts/harvest.py /scratch/t512a03/mslm/runs '<패턴>'`으로 읽는다.
 2. **끝난 것 처리.**
    - 작업이 사라졌는데 run이 `end`가 아니면: 24시간 초과면 같은 `run_pack.sh` 명령을 다시 낸다(체크포인트에서 이어짐).
      그 밖의 실패는 run별 로그(`/scratch/t512a03/mslm/jobs/packs/<run>_<jobid>.log`)를 읽고, 원인이 코드면 고치고,
