@@ -19,6 +19,7 @@ class MCConfig:
     chunk: int = 256
     topk: int = 4
     descriptor: str = "meanpool"
+    router_descriptor: str = ""      # descriptor for a router's own keys only ("" = descriptor)
     router: str = "dot"
     gate: str = "softmax"
     connect: str = "independent"
@@ -72,7 +73,8 @@ class ModelConfig:
             gdn_backend=s.str("GDN_BACKEND"), act_ckpt=s.bool("ACT_CKPT"),
             mc=MCConfig(
                 chunk=s.int("MC_CHUNK"), topk=s.int("MC_TOPK"),
-                descriptor=s.str("MC_DESCRIPTOR"), router=s.str("MC_ROUTER"),
+                descriptor=s.str("MC_DESCRIPTOR"), router_descriptor=s.str("MC_ROUTER_DESCRIPTOR"),
+                router=s.str("MC_ROUTER"),
                 gate=s.str("MC_GATE"), connect=s.str("MC_CONNECT"),
                 aux_loss=s.str("MC_AUX_LOSS"), aux_weight=s.float("MC_AUX_WEIGHT"),
                 read_kernel=s.str("MC_READ_KERNEL"), share_from=s.int("MC_SHARE_FROM"),

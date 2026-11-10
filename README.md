@@ -224,7 +224,7 @@ config 변수를 그 이름으로 바꾸면 끝이다. 다른 코드는 손대�
 
 | 부품 | 변수 | 기본값 | 예: 후보 아이디어 |
 |---|---|---|---|
-| descriptor (구간 요약) | `MC_DESCRIPTOR` | `meanpool` | `subblock8`(32토큰 하위 블록 8개, 있음), span 요약 |
+| descriptor (구간 요약) | `MC_DESCRIPTOR` | `meanpool` | `subblock8/16/32`(하위 블록, 있음), `boundary`, `centered`, `mma`, `keyconv`(있음). 전용 key 를 쓰는 라우터는 `MC_ROUTER_DESCRIPTOR` 로 따로 고른다 |
 | router (점수) | `MC_ROUTER` | `dot` | `maxsim`(하위 블록 최댓값, 있음), bilinear. 층 간 라우팅 공유는 `MC_SHARE_FROM`(있음) |
 | gate (섞기) | `MC_GATE` | `softmax` | `sep_softmax`(고르는 점수와 섞는 비중 분리, 있음) |
 | connect (구간 연결) | `MC_CONNECT` | `independent` | `chained`(이미 있음), 구간 길이는 `MC_CHUNK`(예: 64) |
@@ -245,6 +245,7 @@ CE 는 top-k 이전의 **자격 있는 구간 전부**에 걸리므로 고르지
 | `mc_ce_sepgate_maxsim_*` | 5 | + `MC_DESCRIPTOR=subblock8`, `MC_ROUTER=maxsim` |
 | `mc_ce_detach_*` | 4' | 설정 4 + `MC_ROUTER=detached_cos`: 라우터가 detach 한 hidden 에 전용 W_q/W_k 를 써서 CE 가 backbone 에 닿지 않는다. 점수는 cosine x 학습 온도(14에서 시작, 최대 100). `MC_AUX_WEIGHT=1.0` |
 | `mc_ce_detach_maxsim_*` | 5' | 위 + `MC_DESCRIPTOR=subblock8`(하위 블록 최댓값) |
+| `mc_ce_detach_desc_*` | Stage 2 | 4' 틀(CE 0.3) + `MC_ROUTER_DESCRIPTOR`: 라우터 key 요약만 바꾼다(게이트는 meanpool). `subblock8` 이면 5' 와 같은 모델 |
 
 `RUN_TAG` 가 run 폴더를 나눈다(예: `mc_ce_sepgate_50m_ctx8192_s0`). 제출은 [§5](#5-한-단계씩-직접-낼-때) 처럼 config 만 바꿔서 낸다.
 

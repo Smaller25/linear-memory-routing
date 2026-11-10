@@ -8,6 +8,8 @@ Nothing else has to change.
 | kind        | variable        | signature                                                        |
 |-------------|-----------------|------------------------------------------------------------------|
 | descriptor  | MC_DESCRIPTOR   | fn(keys[B,T,H,K], chunk) -> (seg[B,N,H,K], online[B,T,H,K])      |
+|             |                 | or nn.Module(n_head, head_dim, mc_cfg); forward(keys, chunk)     |
+|             |                 |   (learned; e.g. ``mma``, ``keyconv``)                           |
 | router      | MC_ROUTER       | nn.Module(d_model, n_head, head_dim, mc_cfg);                    |
 |             |                 |   forward(x[B,T,D], seg, online) -> (scores[B,T,N], online[B,T]) |
 | gate        | MC_GATE         | fn(online_score[B,T], sel_scores[B,T,R], valid[B,T,R])           |
@@ -24,7 +26,8 @@ it must then be paired with a router that reduces over m (e.g. ``maxsim``).
 
 A router with ``own_keys = True`` (e.g. ``detached_cos``) also has ``keys(x)``
 -> [B,T,H,K]; the descriptor then pools those keys for it instead of the
-backbone's (the gate still gets the backbone descriptors).
+backbone's (the gate still gets the backbone descriptors). ``MC_ROUTER_DESCRIPTOR``
+picks a different descriptor for those router keys only (empty = MC_DESCRIPTOR).
 
 ``keys`` given to descriptors are already L2-normalised (the GDN-2 kernel
 normalises them before the memory update, so routing sees the same keys).
@@ -188,20 +191,92 @@ def span_copy_ce(rec, batch):
     return -torch.logsumexp(lp, dim=-1).mean()                   # any gold counts
 
 
-@register("descriptor", "subblock8")
-def subblock8_descriptor(keys: torch.Tensor, chunk: int):
-    """Mean of normalised keys over 8 equal sub-blocks of each segment
-    (seg [B,N,8,H,K]); the online descriptor is the meanpool one. A needle that
-    is 2% of a 256-token segment is 1/32 of the segment mean but 1/4 of a
-    32-token sub-block mean."""
-    m = 8
-    if chunk % m:
-        raise ValueError(f"subblock8 needs MC_CHUNK divisible by {m}, got {chunk}")
+def _subblock(m: int):
+    def subblock_descriptor(keys: torch.Tensor, chunk: int):
+        if chunk % m:
+            raise ValueError(f"subblock{m} needs MC_CHUNK divisible by {m}, got {chunk}")
+        B, T, H, K = keys.shape
+        N = T // chunk
+        seg = keys.float().view(B, N, m, chunk // m, H, K).mean(dim=3)
+        _, online = meanpool_descriptor(keys, chunk)
+        return seg, online
+    subblock_descriptor.__doc__ = (
+        f"""Mean of normalised keys over {m} equal sub-blocks of each segment
+    (seg [B,N,{m},H,K]); the online descriptor is the meanpool one. A needle that
+    is 2% of a 256-token segment is 1/32 of the segment mean but a larger share
+    of a {{chunk}}/{m}-token sub-block mean.""")
+    return subblock_descriptor
+
+
+for _m in (8, 16, 32):
+    register("descriptor", f"subblock{_m}")(_subblock(_m))
+
+
+@register("descriptor", "boundary")
+def boundary_descriptor(keys: torch.Tensor, chunk: int):
+    """Key of the last token of each segment (the boundary-token summary of G11);
+    the online descriptor is the current token's own key."""
     B, T, H, K = keys.shape
     N = T // chunk
-    seg = keys.float().view(B, N, m, chunk // m, H, K).mean(dim=3)
-    _, online = meanpool_descriptor(keys, chunk)
-    return seg, online
+    return keys.float().view(B, N, chunk, H, K)[:, :, -1], keys.float()
+
+
+@register("descriptor", "centered")
+def centered_descriptor(keys: torch.Tensor, chunk: int):
+    """meanpool minus the mean of all EARLIER segment means (segment 0 unchanged).
+    Removes the component every segment shares (E0: descriptor Gram off-diagonals
+    0.958-0.9998, layer-mid position R^2 0.985). Only past segments enter, so it stays
+    causal. The online descriptor is the meanpool one."""
+    seg, online = meanpool_descriptor(keys, chunk)
+    N = seg.shape[1]
+    csum = seg.cumsum(dim=1)
+    prev = torch.cat([torch.zeros_like(seg[:, :1]), csum[:, :-1]], dim=1)
+    count = torch.arange(N, device=seg.device, dtype=seg.dtype).clamp(min=1).view(1, N, 1, 1)
+    return seg - prev / count, online
+
+
+@register("descriptor", "mma")
+class MaxMinAvgDescriptor(nn.Module):
+    """Linear(concat[max, min, mean] of the segment's keys) per head (SeerAttention
+    pooling). Initialised to pick the mean, so it starts as meanpool. The online
+    descriptor is the meanpool one."""
+
+    def __init__(self, n_head: int, head_dim: int, mc_cfg=None):
+        super().__init__()
+        self.proj = nn.Linear(3 * head_dim, head_dim, bias=False)
+        with torch.no_grad():
+            self.proj.weight.zero_()
+            self.proj.weight[:, 2 * head_dim:].copy_(torch.eye(head_dim))
+
+    def forward(self, keys: torch.Tensor, chunk: int):
+        B, T, H, K = keys.shape
+        kc = keys.float().view(B, T // chunk, chunk, H, K)
+        feats = torch.cat([kc.amax(dim=2), kc.amin(dim=2), kc.mean(dim=2)], dim=-1)
+        _, online = meanpool_descriptor(keys, chunk)
+        return self.proj(feats), online
+
+
+@register("descriptor", "keyconv")
+class KeyConvDescriptor(nn.Module):
+    """Causal depthwise conv (width 4) over the keys, re-normalised, then meanpool
+    (FlashMoBA: gathers a needle's signal from neighbouring tokens before pooling).
+    Initialised to the identity, so it starts as meanpool."""
+
+    width = 4
+
+    def __init__(self, n_head: int, head_dim: int, mc_cfg=None):
+        super().__init__()
+        c = n_head * head_dim
+        self.conv = nn.Conv1d(c, c, self.width, groups=c, bias=False)
+        with torch.no_grad():
+            self.conv.weight.zero_()
+            self.conv.weight[:, 0, -1] = 1.0
+
+    def forward(self, keys: torch.Tensor, chunk: int):
+        B, T, H, K = keys.shape
+        h = keys.float().reshape(B, T, H * K).transpose(1, 2)
+        h = self.conv(F.pad(h, (self.width - 1, 0))).transpose(1, 2).view(B, T, H, K)
+        return meanpool_descriptor(F.normalize(h, dim=-1), chunk)
 
 
 @register("router", "maxsim")
