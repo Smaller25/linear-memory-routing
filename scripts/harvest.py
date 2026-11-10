@@ -43,7 +43,10 @@ def wandb_state(d):
         txt = open(os.path.join(d, "wandb_sync.log")).read()
     except FileNotFoundError:
         return "no-log"
-    return "synced" if "Synced" in txt else ("error" if "rror" in txt else "uploading")
+    if "Synced" in txt:
+        return "synced"
+    # "Transient error ... retrying" lines are wandb's own retries, not failures
+    return "error" if ("Traceback" in txt or "wandb: ERROR" in txt) else "uploading"
 
 
 def evals(d):
