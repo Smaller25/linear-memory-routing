@@ -44,6 +44,7 @@
 | E5 | 11-02 | 라우팅 모니터 문항 | KISTI | 64문항, 무작위 hit 13.68% |
 | E6 | 11-02~03 | Stage 1a: span-copy CE 가중치 | KISTI | 최고 w0.1 hit 21.3%(무작위 +7.6pp), val loss +0.044, 기준 미달 |
 | E7 | 11-05~06 | Stage 1c: detach router | KISTI | 통과. maxsim hit 36.6%(무작위 +23pp), val loss mon과 같음(2.947) |
+| E8 | 11-10~ | Stage 2 round 1: router descriptor 6종 + seed 1 재현 | KISTI | 제출(대기 중) |
 
 ---
 
@@ -1034,6 +1035,50 @@ detach_maxsim_w03 0.27 0.13 0.19 0.29 0.25 0.27 0.33 0.46 0.33 0.56 0.35 0.25 0.
 - 로그: `/scratch/t512a03/mslm/slurm_logs/mslm-pack-stage1c_1217603.out`(1차는 `_1217399.out`)
 - wandb: `ks000225/linear-memory-routing`, runs `mc_detach_*`
 - 코드: PR #14(`detached_cos` router, ideas `detach` / `detach_maxsim`)
+
+---
+
+### E8. Stage 2 round 1: router descriptor 비교 (2026-11-10 제출, 진행 중)
+
+**목적**
+- focus module을 ④ descriptor로 확정했다(사용자 "④로 확정", 11-10). 근거는 다음 두 가지다.
+  - E7: 같은 detach 조건에서 meanpool → subblock8 max로 바꾸면 NIAH hit +7~11pp.
+  - 0025 bilinear probe(370M frozen): probe hit는 높지만 query를 섞어도 거의 같다(real − shuffled-q 0~0.09). descriptor에 query에 따른 구분 정보가 적다.
+- E7 틀(detach router, sep_softmax, CE 0.3)을 고정하고 router가 쓰는 descriptor만 바꿔, 어떤 요약이 NIAH hit를 가장 많이 올리는지 본다.
+- seed 1 재현 2개로 seed noise 크기를 잰다.
+- 판정: ruler_hit 최근 3회 평균. subblock8(E7 36.3%)보다 seed noise 이상 높으면 round 2(seed 0·1·2 + string_match)로 올린다.
+
+**세팅**
+- 코드: PR #17
+  - `MC_ROUTER_DESCRIPTOR`: 전용 key를 쓰는 라우터의 descriptor만 따로 고른다. 게이트용 backbone descriptor는 `MC_DESCRIPTOR=meanpool` 그대로다.
+  - `MC_ROUTER_DESCRIPTOR=subblock8`은 E7 detach_maxsim과 같은 모델이다(테스트로 확인).
+  - 학습형 descriptor(mma, keyconv)는 meanpool과 같게 초기화하고, CE gradient만 받는다.
+- config: `configs/mc_ce_detach_desc_50m.env`(idea `detach_desc`). 공통: 50M, ctx 8192, MAX_STEPS 5700, MICRO_BATCH 4, ROUTE_MONITOR_FILE은 E5.
+
+| pack | run | descriptor | 겨냥하는 실패 |
+|---|---|---|---|
+| stage2a | `mc_detach_w03_50m_ctx8192_s1` | meanpool (E7 detach_w03, seed 1) | 재현 |
+| stage2a | `mc_detach_maxsim_w03_50m_ctx8192_s1` | subblock8 (E7 maxsim_w03, seed 1) | 재현 |
+| stage2a | `mc_desc_sb16_50m_ctx8192_s0` | subblock16 (16토큰 단위) | 희석 |
+| stage2a | `mc_desc_sb32_50m_ctx8192_s0` | subblock32 (8토큰 단위) | 희석 |
+| stage2b | `mc_desc_boundary_50m_ctx8192_s0` | segment 마지막 토큰 key (G11) | 정보를 한 점에 모음 |
+| stage2b | `mc_desc_centered_50m_ctx8192_s0` | meanpool − 이전 segment 평균 | 공통/위치 성분(Gram 0.958~0.9998) |
+| stage2b | `mc_desc_mma_50m_ctx8192_s0` | max/min/avg → linear (SeerAttention) | 희석 |
+| stage2b | `mc_desc_keyconv_50m_ctx8192_s0` | causal depthwise conv(4) 후 meanpool (FlashMoBA) | 주변 신호 모으기 |
+
+- job: 1249901 `mslm-pack-stage2a`, 1249902 `mslm-pack-stage2b`(각 24h). 11-10 14:09 KST 제출, 계정 5칸이 차서 tail 작업은 내지 않았다. 제출 직후 둘 다 PENDING(Priority).
+
+**결과 (raw)**
+- 아직 없음.
+
+**결과 (해석)**
+- 아직 없음.
+
+**경로**
+- run: `/scratch/t512a03/mslm/runs/<run>/`
+- pack 계획 파일: `/scratch/t512a03/mslm/jobs/packs/stage2a_20261110_140922.tsv`, `stage2b_20261110_140923.tsv`
+- 로그: `/scratch/t512a03/mslm/slurm_logs/mslm-pack-stage2{a,b}_<jobid>.out`, run별 `/scratch/t512a03/mslm/jobs/packs/<run>_<jobid>.log`
+- 코드: PR #17
 
 ---
 
