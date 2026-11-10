@@ -28,7 +28,7 @@ def pack(tmp_path, *args, check=True, **extra):
 
 def test_dry_run_lists_runs_and_one_job(tmp_path):
     out = pack(tmp_path, "s1", "mc:RUN_TAG=mon", "ce:RUN_TAG=ce_w003,MC_AUX_WEIGHT=0.03", MAX_STEPS="5700").stdout
-    lines = out.split("[dry] pack s1")[1].splitlines()
+    lines = out.split("[dry] pack s1 (train)")[1].splitlines()
     runs = [ln.strip().split("\t") for ln in lines[1:3]]
     assert [r[0] for r in runs] == ["mc_mon_50m_ctx8192_s0", "mc_ce_w003_50m_ctx8192_s0"]
     assert runs[0][1].endswith("configs/mc_50m.env") and runs[1][2] == "RUN_TAG=ce_w003 MC_AUX_WEIGHT=0.03"
@@ -75,3 +75,14 @@ def test_pack_train_gives_each_run_its_gpu(tmp_path, visible, expect):
     assert r.returncode == 1 and "실패  b (exit 3" in r.stdout and "끝남  a" in r.stdout
     assert (tmp_path / "a_local.log").read_text().split() == [expect[0], "1", "/c/a.env", "0.3"]
     assert (tmp_path / "b_local.log").read_text().split() == [expect[1], "1", "/c/b.env", "none"]
+
+
+def test_eval_pack_needs_finished_runs(tmp_path):
+    r = pack(tmp_path, "e1", "mc:RUN_TAG=mon", check=False, PACK_JOB="eval")
+    assert r.returncode != 0 and "학습이 안 끝나" in r.stderr
+    done = tmp_path / "scratch" / "runs" / "mc_mon_50m_ctx8192_s0"
+    done.mkdir(parents=True)
+    (done / "train.jsonl").write_text('{"event": "start", "total_steps": 9, "stop_step": 5}\n'
+                                      '{"event": "end", "step": 5}\n')
+    out = pack(tmp_path, "e1", "mc:RUN_TAG=mon", PACK_JOB="eval", SB_TIME="06:00:00").stdout
+    assert "[dry] pack e1 (eval)" in out and "mc_mon_50m_ctx8192_s0" in out and "--time=06:00:00" in out

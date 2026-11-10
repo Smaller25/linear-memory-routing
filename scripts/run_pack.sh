@@ -11,6 +11,7 @@
 # 같은 명령을 다시 내면 끝난 run 은 빼고, 끊긴 run 은 마지막 체크포인트부터 잇는다(RESUME=auto).
 # run 별 로그: SB_SUBMIT_DIR/packs/<run>_<jobid>.log. 바꿀 수 있는 값: SIZE=50m  SEED=0  DRY_RUN=1
 #   AFTER=<jobid>  그 작업이 끝난 뒤(성공·실패·시간 초과 무관) 시작. 24시간에 못 끝나는 run 을 미리 이어 걸 때
+#   PACK_JOB=eval  학습 대신 평가(scripts/eval.sh)를 run 마다 GPU 하나씩. 학습이 끝난 run 만 넣는다. 결과는 wandb 요약에도
 set -uo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO"
@@ -25,6 +26,8 @@ PACK="$1"; shift
 SIZE="${SIZE:-50m}"
 DRY_RUN="${DRY_RUN:-0}"
 AFTER="${AFTER:-}"
+PACK_JOB="${PACK_JOB:-train}"
+[[ "$PACK_JOB" == train || "$PACK_JOB" == eval ]] || { echo "PACK_JOB=$PACK_JOB (train | eval)" >&2; exit 1; }
 
 # cfg_get CONFIG KEY [VAR=val ...] : resolved config value (same rules as every script)
 cfg_get() {
@@ -67,7 +70,9 @@ for spec in "$@"; do
   for d in "${DIRS[@]}"; do [[ "$d" == "$dir" ]] && { echo "같은 run 폴더가 두 번: $dir (RUN_TAG 로 나누세요)" >&2; exit 1; }; done
   DIRS+=("$dir")
   name="$(basename "$dir")"
-  if run_finished "$dir"; then echo "[run_pack] 학습 끝남  $name"; continue; fi
+  if [[ "$PACK_JOB" == eval ]]; then
+    run_finished "$dir" || { echo "[run_pack] 학습이 안 끝나 평가 못 함  $name" >&2; exit 1; }
+  elif run_finished "$dir"; then echo "[run_pack] 학습 끝남  $name"; continue; fi
   PLAN+=("$name"$'\t'"$REPO/$cfg"$'\t'"$kv")
   echo "[run_pack] $name  ($idea: ${DESC[$idea]})${kv:+  [$kv]}"
   [[ -z "$FIRST_CFG" ]] && FIRST_CFG="$cfg"
@@ -82,11 +87,12 @@ plan="$submit_dir/packs/${PACK}_$(date +%Y%m%d_%H%M%S).tsv"
 cmd="$(SB_JOB_NAME="mslm-pack-$PACK" SB_EXTRA="--parsable${AFTER:+ --dependency=afterany:$AFTER}" CONFIG="$FIRST_CFG" bash "$REPO/scripts/sbatch_cmd.sh" pack \
        | sed "s/--job-name=mslm-pack-$PACK-pack/--job-name=mslm-pack-$PACK/")" || exit 1
 if [[ "$DRY_RUN" == 1 ]]; then
-  echo "[dry] pack $PACK -> $plan"; printf '      %s\n' "${PLAN[@]}"; echo "      PACK_FILE=$plan $cmd"
+  echo "[dry] pack $PACK ($PACK_JOB) -> $plan"; printf '      %s\n' "${PLAN[@]}"; echo "      PACK_FILE=$plan $cmd"
   exit 0
 fi
 mkdir -p "$(dirname "$plan")"
 printf '%s\n' "${PLAN[@]}" > "$plan"
-out="$(PACK_FILE="$plan" bash -c "$cmd" 2>&1)" || { echo "[run_pack] 제출 실패" >&2; echo "$out" >&2; exit 1; }
+trainer=""; [[ "$PACK_JOB" == eval ]] && trainer="bash $REPO/scripts/eval.sh"
+out="$(PACK_FILE="$plan" PACK_TRAIN="$trainer" bash -c "$cmd" 2>&1)" || { echo "[run_pack] 제출 실패" >&2; echo "$out" >&2; exit 1; }
 echo "[run_pack] 제출 ${out%%;*}  pack $PACK (${#PLAN[@]} run)  plan=$plan"
 echo "[run_pack] 진행 확인: bash $REPO/scripts/status.sh   run 별 로그: $submit_dir/packs/<run>_${out%%;*}.log"

@@ -307,6 +307,16 @@ DRY_RUN=1 MAX_STEPS=5700 ROUTE_MONITOR_FILE=$R bash scripts/run_pack.sh stage1a 
 run 마다 `<아이디어>[:KEY=val,...]`, 앞에 붙인 변수는 모든 run 에 적용된다. 시간 초과 등으로 끊기면 같은 명령을 다시 내면 된다
 (끝난 run 은 빠지고 나머지는 체크포인트에서 잇는다). run 별 로그는 `$SCRATCH_ROOT/jobs/packs/<run>_<jobid>.log`. 평가는 따로 낸다.
 
+학습이 끝난 run 들의 평가도 같은 방식으로 묶는다: `PACK_JOB=eval SB_TIME=06:00:00 bash scripts/run_pack.sh <이름> <같은 spec> …`
+(run 마다 GPU 하나로 `scripts/eval.sh`, 결과는 `<run>/eval/` 과 wandb 요약). 결과 요약은
+`python3 scripts/harvest.py $SCRATCH_ROOT/runs '<패턴>'`(최근 3회 평균 hit, wandb 업로드 여부).
+
+### 실험 큐와 자동 진행
+
+할 실험은 [docs/QUEUE.md](docs/QUEUE.md)에 우선순위와 판정 규칙으로 적어 두고, Claude Code 세션이
+[docs/ORCHESTRATOR.md](docs/ORCHESTRATOR.md) 절차를 `/loop` 로 반복해 칸이 비면 다음 항목을 내고, 끝난 결과는
+[docs/EXPERIMENTS.md](docs/EXPERIMENTS.md)에 기록한다.
+
 ## 관제 노트북
 
 `control_tower.ipynb` — 저장소 루트에서 연다. config 표 보기·고치기, 부품 소스 보기, sbatch 명령 미리 보기, CPU smoke,

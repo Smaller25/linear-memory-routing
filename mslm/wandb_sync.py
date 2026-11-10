@@ -7,6 +7,9 @@ run's step) are skipped, so running it again or from two places does not duplica
     python -m mslm.wandb_sync RUN_DIR [RUN_DIR ...]   # upload what is there now, then exit
     python -m mslm.wandb_sync --follow RUN_DIR        # keep uploading until the "end" event or SIGTERM
 
+Evaluation results (``RUN_DIR/eval/<ckpt>/summary.json`` from mslm/eval/run_eval.py) go into the
+run summary as ``eval/<ckpt>/<route>/<task>/<length>/<metric>``; scripts/eval.sh syncs after each eval.
+
 Project/entity come from WANDB_PROJECT / WANDB_ENTITY. The API key comes from `wandb login`
 (~/.netrc) or WANDB_API_KEY in the environment; it is never read from or written to a config file.
 """
@@ -57,6 +60,25 @@ def record_to_metrics(rec: dict) -> dict:
     return {}
 
 
+EVAL_KEYS = ("string_match_all", "routing_hit", "random_hit", "mean_gold_rank")
+
+
+def eval_metrics(run_dir: str) -> dict:
+    """RUN_DIR/eval/*/summary.json -> flat wandb summary keys."""
+    out = {}
+    eval_root = os.path.join(run_dir, "eval")
+    for ck in sorted(os.listdir(eval_root)) if os.path.isdir(eval_root) else []:
+        try:
+            with open(os.path.join(eval_root, ck, "summary.json")) as f:
+                results = json.load(f).get("results", [])
+        except (FileNotFoundError, ValueError):
+            continue
+        for r in results:
+            base = f"eval/{ck}/{r['route']}/{r['task']}/{r['length']}"
+            out.update({f"{base}/{k}": r[k] for k in EVAL_KEYS if k in r})
+    return out
+
+
 class JsonlTail:
     """Yields complete new lines of a growing file (a half-written last line waits for the next read)."""
 
@@ -101,7 +123,7 @@ def sync(run_dir: str, follow: bool = False, poll: float = 30.0) -> None:
                      entity=os.environ.get("WANDB_ENTITY") or None, id=name, name=name, resume="allow",
                      config=read_config(run_dir), dir=run_dir)
     first = run.step  # resumed run: wandb already holds every step below this
-    ended, n = False, 0
+    ended, n, ev = False, 0, {}
     try:
         while True:
             for rec in tail.read():
@@ -118,8 +140,12 @@ def sync(run_dir: str, follow: bool = False, poll: float = 30.0) -> None:
             if not follow or ended or stop["flag"]:
                 break
             time.sleep(poll)
+        ev = eval_metrics(run_dir)
+        if ev:
+            run.summary.update(ev)
     finally:
-        print(f"[wandb_sync] {name}: {n} records (from step {first}){' end' if ended else ''}", flush=True)
+        print(f"[wandb_sync] {name}: {n} records (from step {first}){' end' if ended else ''}"
+              f"{f', {len(ev)} eval values' if ev else ''}", flush=True)
         run.finish()
 
 

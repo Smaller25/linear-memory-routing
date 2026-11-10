@@ -12,4 +12,10 @@ mslm_offline
 export NLTK_DATA="$HF_CACHE_DIR/nltk_data"
 
 python -m mslm.eval.ruler_prepare
-exec python -m mslm.eval.run_eval
+python -m mslm.eval.run_eval
+# 평가 결과(summary.json)를 그 run 의 wandb 요약에 올린다. 실패해도 평가 결과 파일은 남는다.
+if [[ -n "${WANDB_PROJECT:-}" && -z "${EVAL_OUT:-}" ]]; then
+  run_dir="$(python -c 'from mslm.settings import Settings; print(Settings.from_env().run_dir())')"
+  python -m mslm.wandb_sync "$run_dir" >> "$run_dir/wandb_sync.log" 2>&1 \
+    || echo "[eval] wandb 업로드 실패($run_dir/wandb_sync.log). 결과 파일은 그대로 있음"
+fi
