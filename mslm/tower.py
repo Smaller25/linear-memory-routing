@@ -104,7 +104,8 @@ def sbatch_command(config, job: str = "train", overrides: dict[str, str] | None 
 def parts(config, overrides=None) -> dict[str, str]:
     """Which registered part each MC plug point uses under this config."""
     v = resolve(config, overrides)
-    return {"descriptor": v["MC_DESCRIPTOR"], "router": v["MC_ROUTER"], "gate": v["MC_GATE"],
+    return {"descriptor": v["MC_DESCRIPTOR"], "router_descriptor": v["MC_ROUTER_DESCRIPTOR"] or v["MC_DESCRIPTOR"],
+            "router": v["MC_ROUTER"], "gate": v["MC_GATE"],
             "connect": v["MC_CONNECT"], "aux_loss": v["MC_AUX_LOSS"]}
 
 
@@ -115,7 +116,7 @@ def available_parts() -> dict[str, list[str]]:
 
 def source_of(kind: str, name: str) -> str:
     from mslm.models import registry
-    obj = registry.get(kind, name)
+    obj = registry.get("descriptor" if kind == "router_descriptor" else kind, name)
     return f"# {inspect.getsourcefile(obj)}:{inspect.getsourcelines(obj)[1]}\n" + inspect.getsource(obj)
 
 

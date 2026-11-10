@@ -52,13 +52,23 @@ def read_memories(q, memories, indices, weights, *, kernel: str):
     return gather_read._ssc_gather_read_torch(q, memories, indices, weights, scale, True)
 
 
+def _descriptor(name, n_head, head_dim, mc):
+    d = registry.get("descriptor", name)
+    return d(n_head, head_dim, mc) if isinstance(d, type) else d
+
+
 class MCMixer(nn.Module):
     def __init__(self, d_model: int, n_head: int, head_dim: int, mc: MCConfig, **gdn_kw):
         super().__init__()
         self.base = GDN2Mixer(d_model, n_head, head_dim, **gdn_kw)
         self.cfg = mc
-        self.descriptor = registry.get("descriptor", mc.descriptor)
+        self.descriptor = _descriptor(mc.descriptor, n_head, head_dim, mc)
         self.router = registry.get("router", mc.router)(d_model, n_head, head_dim, mc)
+        if getattr(self.router, "own_keys", False):
+            self.router_descriptor = _descriptor(mc.router_descriptor or mc.descriptor, n_head, head_dim, mc)
+        elif mc.router_descriptor:
+            raise ValueError(f"MC_ROUTER_DESCRIPTOR={mc.router_descriptor} needs a router with its own keys "
+                             f"(e.g. detached_cos), not MC_ROUTER={mc.router}")
         gate = registry.get("gate", mc.gate)
         self.gate_is_module = isinstance(gate, type)
         self.gate = gate(d_model, n_head, head_dim, mc) if self.gate_is_module else gate
@@ -88,7 +98,7 @@ class MCMixer(nn.Module):
 
         if getattr(self.router, "own_keys", False):                       # router-only keys, same pooling
             (rk,), _ = _pad_to_multiple([self.router.keys(x)], C)
-            r_seg, r_online = self.descriptor(rk, C)
+            r_seg, r_online = self.router_descriptor(rk, C)
             scores, online_score = self.router(x, r_seg, r_online[:, :T])
         else:
             scores, online_score = self.router(x, seg_desc, online_desc)  # [B,T,N], [B,T]

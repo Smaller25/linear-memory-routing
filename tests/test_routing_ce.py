@@ -71,11 +71,11 @@ def test_random_hit_matches_hypergeom():
     assert got == pytest.approx(want, abs=1e-6)
 
 
-def _span_batch():
+def _span_batch(chunk=16):
     x, y = planted(T=128, src=10, dst=100)
     x = torch.tensor(x % 97).unsqueeze(0)                    # vocab 97 (labels computed before the modulo)
     return x, batch_copy_gold(torch.tensor(planted()[0]).unsqueeze(0), torch.tensor(planted()[1]).unsqueeze(0),
-                              16, 4, 2, 4)
+                              chunk, 4, 2, 4)
 
 
 def test_ce_reaches_unselected_segments():
@@ -246,3 +246,91 @@ def test_detached_router_scores_are_bounded_cosines():
     s = rec.scores[torch.isfinite(rec.scores)]
     assert rec.scores.shape == (1, 70, 5) and s.abs().max() <= 14.0 + 1e-4
     m.set_routing()
+
+
+ROUTER_DESCRIPTORS = ["subblock16", "subblock32", "boundary", "centered", "mma", "keyconv"]
+
+
+def detached(rdesc, chunk=32, **mc):
+    return tiny(chunk=chunk, aux_loss="span_copy_ce", aux_weight=1.0, gate="sep_softmax", router="detached_cos",
+                router_descriptor=rdesc, **mc)
+
+
+@pytest.mark.parametrize("rdesc", ROUTER_DESCRIPTORS)
+def test_router_descriptor_keeps_ce_out_of_the_backbone(rdesc):
+    torch.manual_seed(0)
+    m = LM(detached(rdesc))
+    x, gold = _span_batch(chunk=32)
+    out = m(x, x, batch_meta={"copy_gold": gold})
+    assert torch.isfinite(out["aux_loss"]) and out["aux_loss"] > 0
+    mixers = [blk.mixer for blk in m.blocks]
+    router_side = {id(p) for mx in mixers for mod in (mx.router, mx.router_descriptor)
+                   if isinstance(mod, torch.nn.Module) for p in mod.parameters()}
+    out["aux_loss"].backward(retain_graph=True)
+    for mx in mixers:                                         # CE trains the router and its descriptor ...
+        assert mx.router.wq.weight.grad.abs().sum() > 0
+        if isinstance(mx.router_descriptor, torch.nn.Module):
+            assert all(p.grad is not None and p.grad.abs().sum() > 0 for p in mx.router_descriptor.parameters())
+    for p in m.parameters():                                  # ... and nothing else
+        if id(p) not in router_side:
+            assert p.grad is None or p.grad.abs().sum() == 0
+    m.zero_grad(set_to_none=True)
+    out["lm_loss"].backward()
+    for p in m.parameters():                                  # the LM loss never reaches the router side
+        if id(p) in router_side:
+            assert p.grad is None or p.grad.abs().sum() == 0
+
+
+@pytest.mark.parametrize("rdesc", ROUTER_DESCRIPTORS)
+def test_router_descriptor_is_causal(rdesc):
+    """Changing tokens from position p on must not change any router score before p."""
+    torch.manual_seed(0)
+    m = LM(detached(rdesc)).eval()
+    x = torch.randint(0, 97, (1, 128))
+    y = x.clone()
+    y[0, 80:] = torch.randint(0, 97, (48,))
+    m.set_routing(capture=True)
+    with torch.no_grad():
+        m(x)
+        a = [r.scores[0, :80] for r in m.routing_records()]
+        m(y)
+        b = [r.scores[0, :80] for r in m.routing_records()]
+    m.set_routing()
+    for sa, sb in zip(a, b):
+        assert torch.equal(torch.isinf(sa), torch.isinf(sb))
+        fin = torch.isfinite(sa)
+        assert torch.allclose(sa[fin], sb[fin], atol=1e-5)
+
+
+@pytest.mark.parametrize("rdesc", ["mma", "keyconv"])
+def test_learned_router_descriptors_start_as_meanpool(rdesc):
+    torch.manual_seed(0)
+    a = LM(detached(rdesc)).eval()
+    b = LM(detached("meanpool")).eval()
+    missing, unexpected = a.load_state_dict(b.state_dict(), strict=False)   # same weights, a keeps its descriptor
+    assert missing and all("router_descriptor" in k for k in missing) and not unexpected
+    x = torch.randint(0, 97, (1, 96))
+    for m in (a, b):
+        m.set_routing(capture=True)
+    with torch.no_grad():
+        a(x), b(x)
+    for ra, rb in zip(a.routing_records(), b.routing_records()):
+        assert torch.allclose(ra.scores, rb.scores, atol=1e-5, equal_nan=True)
+
+
+def test_router_descriptor_subblock8_equals_e7_detach_maxsim():
+    """Stage 2 runs set MC_DESCRIPTOR=meanpool, MC_ROUTER_DESCRIPTOR=<x>. For subblock8 that is the
+    E7 config (MC_DESCRIPTOR=subblock8): the gate averages sub-blocks back to the meanpool."""
+    x = torch.randint(0, 97, (1, 96))
+    torch.manual_seed(0)
+    a = LM(tiny(chunk=32, aux_loss="span_copy_ce", aux_weight=1.0, gate="sep_softmax", router="detached_cos",
+                descriptor="subblock8")).eval()
+    torch.manual_seed(0)
+    b = LM(detached("subblock8")).eval()
+    with torch.no_grad():
+        assert torch.allclose(a(x), b(x), atol=1e-5)
+
+
+def test_router_descriptor_needs_own_keys():
+    with pytest.raises(ValueError, match="own keys"):
+        LM(tiny(router="dot", router_descriptor="boundary"))
