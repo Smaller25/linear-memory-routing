@@ -2,6 +2,7 @@
 
 자동 진행(orchestrator, [ORCHESTRATOR.md](ORCHESTRATOR.md))은 이 파일을 위에서부터 읽어 처리한다.
 상태를 바꿀 때마다 이 파일을 PR로 갱신하고, 결과는 [EXPERIMENTS.md](EXPERIMENTS.md)에 적는다.
+짧은 요약판은 Notion [MC router 실험 큐](https://app.notion.com/p/4145fe4de48381639383fe986d2bd18d)에 같이 갱신한다(wandb 링크 포함).
 
 - 상태: `대기` / `제출` / `학습중` / `평가중` / `완료` / `보류(사유)` / `건너뜀(사유)`
 - 조건: 이 항목을 내기 전에 만족해야 하는 것. 조건이 결과에 따라 갈리면 판정 규칙을 따른다.
