@@ -44,7 +44,8 @@
 | E5 | 11-02 | 라우팅 모니터 문항 | KISTI | 64문항, 무작위 hit 13.68% |
 | E6 | 11-02~03 | Stage 1a: span-copy CE 가중치 | KISTI | 최고 w0.1 hit 21.3%(무작위 +7.6pp), val loss +0.044, 기준 미달 |
 | E7 | 11-05~06 | Stage 1c: detach router | KISTI | 통과. maxsim hit 36.6%(무작위 +23pp), val loss mon과 같음(2.947) |
-| E8 | 11-10~ | Stage 2 round 1: router descriptor 6종 + seed 1 재현 | KISTI | 제출(대기 중) |
+| E8 | 11-10~ | Stage 2 round 1: router descriptor 6종 + seed 1 재현 | KISTI | 학습 중 |
+| E9 | 11-10~ | Q2 gate 분리 기여 + seed 2 재현 | KISTI | 제출 |
 
 ---
 
@@ -1038,7 +1039,7 @@ detach_maxsim_w03 0.27 0.13 0.19 0.29 0.25 0.27 0.33 0.46 0.33 0.56 0.35 0.25 0.
 
 ---
 
-### E8. Stage 2 round 1: router descriptor 비교 (2026-11-10 제출, 진행 중)
+### E8. Stage 2 round 1: router descriptor 비교 (2026-11-10 ~, 진행 중)
 
 **목적**
 - focus module을 ④ descriptor로 확정했다(사용자 "④로 확정", 11-10). 근거는 다음 두 가지다.
@@ -1066,7 +1067,8 @@ detach_maxsim_w03 0.27 0.13 0.19 0.29 0.25 0.27 0.33 0.46 0.33 0.56 0.35 0.25 0.
 | stage2b | `mc_desc_mma_50m_ctx8192_s0` | max/min/avg → linear (SeerAttention) | 희석 |
 | stage2b | `mc_desc_keyconv_50m_ctx8192_s0` | causal depthwise conv(4) 후 meanpool (FlashMoBA) | 주변 신호 모으기 |
 
-- job: 1249901 `mslm-pack-stage2a`, 1249902 `mslm-pack-stage2b`(각 24h). 11-10 14:09 KST 제출, 계정 5칸이 차서 tail 작업은 내지 않았다. 제출 직후 둘 다 PENDING(Priority).
+- job: 1249901 `mslm-pack-stage2a`(node1764), 1249902 `mslm-pack-stage2b`(node1722), 각 24h. 11-10 14:09 KST 제출, 약 15:20 학습 시작. 계정 5칸이 차서 tail 작업은 내지 않았다.
+- 속도: run당 45~50k tok/s(keyconv가 가장 느림, 45.7k). 예상 종료 11-11 08시쯤.
 
 **결과 (raw)**
 - 아직 없음.
@@ -1079,6 +1081,37 @@ detach_maxsim_w03 0.27 0.13 0.19 0.29 0.25 0.27 0.33 0.46 0.33 0.56 0.35 0.25 0.
 - pack 계획 파일: `/scratch/t512a03/mslm/jobs/packs/stage2a_20261110_140922.tsv`, `stage2b_20261110_140923.tsv`
 - 로그: `/scratch/t512a03/mslm/slurm_logs/mslm-pack-stage2{a,b}_<jobid>.out`, run별 `/scratch/t512a03/mslm/jobs/packs/<run>_<jobid>.log`
 - 코드: PR #17
+
+---
+
+### E9. Q2: gate 분리 기여 + seed 2 재현 (2026-11-10 제출, 진행 중)
+
+**목적**
+- E7 주의점: mon과 detach run은 router detach와 sep_softmax gate 두 가지가 함께 달랐다. gate만 원래대로(`MC_GATE=softmax`, router 점수를 gate로 재사용) 돌려 sep_softmax의 기여를 분리한다. router 입력은 계속 detach라 backbone은 CE를 받지 않는다(LM gradient는 router 파라미터까지 간다).
+- 같은 pack에 Q3에 필요한 seed 2 재현(subblock8, meanpool)을 넣어 노드 GPU 4장을 채웠다.
+
+**세팅**
+- 50M, ctx 8192, MAX_STEPS 5700, MICRO_BATCH 4, ROUTE_MONITOR_FILE은 E5, CE 0.3. 새 코드 없음(PR #17까지). 로컬 tiny 모델로 detached_cos + softmax gate의 forward/backward를 확인했다.
+
+| run | 바꾼 것 |
+|---|---|
+| `mc_detach_maxsim_softgate_50m_ctx8192_s0` | detach_maxsim + `MC_GATE=softmax` |
+| `mc_detach_maxsim_softgate_50m_ctx8192_s1` | 위와 같음, seed 1 |
+| `mc_detach_maxsim_w03_50m_ctx8192_s2` | E7 detach_maxsim_w03, seed 2 |
+| `mc_detach_w03_50m_ctx8192_s2` | E7 detach_w03, seed 2 |
+
+- job: 1251866 `mslm-pack-stage2c`(24h), 11-10 17:31 KST 제출.
+
+**결과 (raw)**
+- 아직 없음.
+
+**결과 (해석)**
+- 아직 없음. 판정: softgate가 E7 detach_maxsim_w03과 val loss·ruler_hit가 같으면 sep_softmax의 기여는 작다.
+
+**경로**
+- run: `/scratch/t512a03/mslm/runs/<run>/`
+- pack 계획 파일: `/scratch/t512a03/mslm/jobs/packs/stage2c_20261110_173146.tsv`
+- 로그: `/scratch/t512a03/mslm/slurm_logs/mslm-pack-stage2c_1251866.out`, run별 `/scratch/t512a03/mslm/jobs/packs/<run>_1251866.log`
 
 ---
 
