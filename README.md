@@ -224,7 +224,7 @@ config 변수를 그 이름으로 바꾸면 끝이다. 다른 코드는 손대�
 
 | 부품 | 변수 | 기본값 | 예: 후보 아이디어 |
 |---|---|---|---|
-| descriptor (구간 요약) | `MC_DESCRIPTOR` | `meanpool` | `subblock8/16/32`(하위 블록, 있음), `boundary`, `centered`, `mma`, `keyconv`(있음). 전용 key 를 쓰는 라우터는 `MC_ROUTER_DESCRIPTOR` 로 따로 고른다 |
+| descriptor (구간 요약) | `MC_DESCRIPTOR` | `meanpool` | `subblock8/16/32/64`(하위 블록, 있음), `boundary`, `centered`, `mma`, `keyconv`(있음). 전용 key 를 쓰는 라우터는 `MC_ROUTER_DESCRIPTOR` 로 따로 고른다 |
 | router (점수) | `MC_ROUTER` | `dot` | `maxsim`(하위 블록 최댓값, 있음), bilinear. 층 간 라우팅 공유는 `MC_SHARE_FROM`(있음) |
 | gate (섞기) | `MC_GATE` | `softmax` | `sep_softmax`(고르는 점수와 섞는 비중 분리, 있음) |
 | connect (구간 연결) | `MC_CONNECT` | `independent` | `chained`(이미 있음), 구간 길이는 `MC_CHUNK`(예: 64) |

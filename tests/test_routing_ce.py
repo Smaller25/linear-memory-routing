@@ -334,3 +334,16 @@ def test_router_descriptor_subblock8_equals_e7_detach_maxsim():
 def test_router_descriptor_needs_own_keys():
     with pytest.raises(ValueError, match="own keys"):
         LM(tiny(router="dot", router_descriptor="boundary"))
+
+
+def test_subblock64_runs_at_chunk_64():
+    torch.manual_seed(0)
+    m = LM(detached("subblock64", chunk=64)).eval()
+    m.set_routing(capture=True)
+    with torch.no_grad():
+        m(torch.randint(0, 97, (1, 192)))
+    rec = m.routing_records()[0]
+    assert rec.scores.shape == (1, 192, 3) and torch.isfinite(rec.scores[0, 64:, 0]).all()
+    m.set_routing()
+    with pytest.raises(ValueError, match="divisible by 64"):
+        LM(detached("subblock64", chunk=32))(torch.randint(0, 97, (1, 64)))
