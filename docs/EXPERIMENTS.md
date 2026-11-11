@@ -44,7 +44,8 @@
 | E5 | 11-02 | 라우팅 모니터 문항 | KISTI | 64문항, 무작위 hit 13.68% |
 | E6 | 11-02~03 | Stage 1a: span-copy CE 가중치 | KISTI | 최고 w0.1 hit 21.3%(무작위 +7.6pp), val loss +0.044, 기준 미달 |
 | E7 | 11-05~06 | Stage 1c: detach router | KISTI | 통과. maxsim hit 36.6%(무작위 +23pp), val loss mon과 같음(2.947) |
-| E8 | 11-10~ | Stage 2 round 1: router descriptor 6종 + seed 1 재현 | KISTI | 학습 중 |
+| E8 | 11-10~11 | Stage 2 round 1: router descriptor 6종 + seed 1 재현 | KISTI | subblock32 46.7%, subblock16 42.7% 통과(기준 38.2%). 나머지 탈락 |
+| E10 | 11-11~ | Q3 round 2: subblock32·16 seed 반복 + subblock64 | KISTI | 학습 중 |
 | E9 | 11-10~ | Q2 gate 분리 기여 + seed 2 재현 | KISTI | 학습 중 |
 
 ---
@@ -1039,7 +1040,7 @@ detach_maxsim_w03 0.27 0.13 0.19 0.29 0.25 0.27 0.33 0.46 0.33 0.56 0.35 0.25 0.
 
 ---
 
-### E8. Stage 2 round 1: router descriptor 비교 (2026-11-10 ~, 진행 중)
+### E8. Stage 2 round 1: router descriptor 비교 (2026-11-10 ~ 11-11)
 
 **목적**
 - focus module을 ④ descriptor로 확정했다(사용자 "④로 확정", 11-10). 근거는 다음 두 가지다.
@@ -1071,10 +1072,43 @@ detach_maxsim_w03 0.27 0.13 0.19 0.29 0.25 0.27 0.33 0.46 0.33 0.56 0.35 0.25 0.
 - 속도: run당 45~50k tok/s(keyconv가 가장 느림, 45.7k). 예상 종료 11-11 08시쯤.
 
 **결과 (raw)**
-- 아직 없음.
+- `scripts/harvest.py --traj`, 11-11 09:2x KST. ruler3 = 5000·5500·5700 step ruler_hit 평균. ruler_random_hit 0.1368, copy_random_hit 0.4014. keyconv는 이 시점 step 5670(마지막 eval 5500)이라 ruler3가 4500·5000·5500 평균이다(최종값은 다음 tick에 갱신).
 
-**결과 (해석)**
-- 아직 없음.
+| run | val 5700 | ruler 5700 | ruler3 | copy 5700 | aux(마지막) |
+|---|---|---|---|---|---|
+| (E7) meanpool s0 `mc_detach_w03_50m_ctx8192_s0` | 2.9498 | 0.3085 | 0.2887 | 0.7852 | 1.542 |
+| meanpool s1 `mc_detach_w03_50m_ctx8192_s1` | 2.9405 | 0.3085 | 0.3078 | 0.7681 | 1.577 |
+| (E7) subblock8 s0 `mc_detach_maxsim_w03_50m_ctx8192_s0` | 2.9478 | 0.3889 | 0.3628 | 0.8484 | 1.198 |
+| subblock8 s1 `mc_detach_maxsim_w03_50m_ctx8192_s1` | 2.9365 | 0.3740 | 0.3416 | 0.8474 | 1.271 |
+| subblock16 `mc_desc_sb16_50m_ctx8192_s0` | 2.9471 | 0.4931 | 0.4269 | 0.8843 | 1.013 |
+| subblock32 `mc_desc_sb32_50m_ctx8192_s0` | 2.9418 | 0.5268 | 0.4673 | 0.8993 | 0.823 |
+| boundary `mc_desc_boundary_50m_ctx8192_s0` | 2.9582 | 0.1488 | 0.1412 | 0.5675 | 2.337 |
+| centered `mc_desc_centered_50m_ctx8192_s0` | 2.9495 | 0.2470 | 0.2335 | 0.7948 | 1.596 |
+| mma `mc_desc_mma_50m_ctx8192_s0` | 2.9481 | 0.3433 | 0.2742 | 0.7717 | 1.442 |
+| keyconv `mc_desc_keyconv_50m_ctx8192_s0` | 2.9512 (5500) | 0.2212 (5500) | 0.2169 | 0.7708 (5500) | 1.306 |
+
+- step 5700 층별 ruler_hit(L0..L15)
+
+```
+meanpool s1   0.29 0.32 0.29 0.32 0.35 0.32 0.24 0.35 0.30 0.32 0.32 0.25 0.25 0.29 0.38 0.36
+subblock8 s1  0.19 0.32 0.17 0.38 0.48 0.24 0.25 0.21 0.25 0.51 0.48 0.43 0.38 0.49 0.68 0.52
+subblock16    0.22 0.27 0.19 0.30 0.30 0.41 0.44 0.49 0.59 0.71 0.48 0.56 0.56 0.64 0.86 0.87
+subblock32    0.51 0.35 0.52 0.43 0.59 0.43 0.40 0.67 0.71 0.52 0.51 0.32 0.33 0.65 0.73 0.76
+boundary      0.14 0.13 0.14 0.19 0.14 0.16 0.13 0.14 0.08 0.17 0.14 0.17 0.13 0.13 0.16 0.22
+centered      0.24 0.22 0.25 0.17 0.30 0.29 0.30 0.44 0.27 0.22 0.16 0.14 0.13 0.21 0.27 0.33
+mma           0.25 0.16 0.35 0.35 0.21 0.36 0.35 0.30 0.48 0.33 0.41 0.40 0.51 0.27 0.41 0.35
+keyconv(5500) 0.11 0.17 0.24 0.24 0.21 0.24 0.21 0.19 0.27 0.14 0.21 0.24 0.25 0.21 0.30 0.32
+```
+
+- 궤적(step:val/ruler/copy)은 wandb와 `harvest.py --traj`에 있다. 주요 값: subblock32 ruler 0.202(500) → 0.459(2000) → 0.588(4500) → 0.527(5700). boundary는 전 구간 0.12~0.17.
+
+**결과 (해석)** (11-11, QUEUE.md Q1 판정 규칙 적용)
+- seed noise: meanpool |0.2887−0.3078| = 0.019, subblock8 |0.3628−0.3416| = 0.021 → 평균 0.020. 기준 = subblock8 seed 평균 0.352 + max(0.020, 0.03) = **0.382**.
+- 통과: **subblock32 0.467(+11.5pp), subblock16 0.427(+7.5pp)** → Q3로. 하위 블록이 잘수록(32 → 16 → 8토큰) hit가 단조 증가하고 copy_hit도 같이 오른다(0.848 → 0.884 → 0.899). 포화 여부를 보려고 4토큰 단위 subblock64를 Q3에 추가했다(PR #25).
+- 탈락: mma 0.274, centered 0.234, keyconv 0.217, boundary 0.141(무작위 수준). 학습형 요약(mma, keyconv)은 meanpool(0.298)보다도 낮아 Q7(NSA MLP)의 조건을 만족하지 못한다 → Q7 건너뜀.
+- val loss는 모든 run이 2.937~2.958로 같은 범위다. descriptor는 LM 손실에 영향이 없다(detach 틀 유지).
+- 깊은 층(L13~L15)의 hit가 subblock16에서 0.64~0.87로 가장 높다. Q5(층 공유)의 source 층 후보.
+- 주의: seed 1개(subblock16·32), 64문항. 판정은 Q3(seed 3개 + string_match)에서 확정한다.
 
 **경로**
 - run: `/scratch/t512a03/mslm/runs/<run>/`
@@ -1112,6 +1146,31 @@ detach_maxsim_w03 0.27 0.13 0.19 0.29 0.25 0.27 0.33 0.46 0.33 0.56 0.35 0.25 0.
 - run: `/scratch/t512a03/mslm/runs/<run>/`
 - pack 계획 파일: `/scratch/t512a03/mslm/jobs/packs/stage2c_20261110_173146.tsv`
 - 로그: `/scratch/t512a03/mslm/slurm_logs/mslm-pack-stage2c_1251866.out`, run별 `/scratch/t512a03/mslm/jobs/packs/<run>_1251866.log`
+
+---
+
+### E10. Q3 round 2: subblock32·16 seed 반복 + subblock64 (2026-11-11 ~, 진행 중)
+
+**목적**
+- E8 통과 후보(subblock32, subblock16)를 seed 3개로 확인하고 NIAH `string_match`로 최종 best_desc를 정한다.
+- 하위 블록 크기가 작을수록 hit가 올라가는 추세가 4토큰 단위(subblock64)에서도 이어지는지 본다.
+
+**세팅**
+- E8과 같은 틀(`configs/mc_ce_detach_desc_50m.env`, CE 0.3, MICRO_BATCH 4, MAX_STEPS 5700).
+- stage3a(job 1256568, 11-11 09:28 KST 제출): `mc_desc_sb32_50m_ctx8192_s{1,2}`, `mc_desc_sb16_50m_ctx8192_s{1,2}`
+- stage3b(subblock64 s0·s1, 칸이 나면 제출): `detach_desc:RUN_TAG=desc_sb64,MC_ROUTER_DESCRIPTOR=subblock64[,SEED=1]`
+- subblock8 seed 2는 E9 pack에서 학습 중이다.
+- 학습이 끝나면 평가 pack(`PACK_JOB=eval`, `EVAL_TASKS=niah_single_2,niah_multikey_1,niah_multikey_2,niah_multivalue EVAL_LENGTHS=8192`). 평가 문항은 `/scratch/t512a03/mslm/data/eval_ruler/.../8192/`에 이미 있다.
+
+**결과 (raw)**
+- 아직 없음.
+
+**결과 (해석)**
+- 아직 없음.
+
+**경로**
+- pack 계획 파일: `/scratch/t512a03/mslm/jobs/packs/stage3a_20261111_092839.tsv`
+- 로그: `/scratch/t512a03/mslm/slurm_logs/mslm-pack-stage3a_1256568.out`
 
 ---
 
