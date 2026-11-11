@@ -1072,7 +1072,7 @@ detach_maxsim_w03 0.27 0.13 0.19 0.29 0.25 0.27 0.33 0.46 0.33 0.56 0.35 0.25 0.
 - 속도: run당 45~50k tok/s(keyconv가 가장 느림, 45.7k). 예상 종료 11-11 08시쯤.
 
 **결과 (raw)**
-- `scripts/harvest.py --traj`, 11-11 09:2x KST. ruler3 = 5000·5500·5700 step ruler_hit 평균. ruler_random_hit 0.1368, copy_random_hit 0.4014. keyconv는 이 시점 step 5670(마지막 eval 5500)이라 ruler3가 4500·5000·5500 평균이다(최종값은 다음 tick에 갱신).
+- `scripts/harvest.py --traj`, 11-11 09:2x KST. ruler3 = 5000·5500·5700 step ruler_hit 평균. ruler_random_hit 0.1368, copy_random_hit 0.4014. keyconv는 다른 run보다 느려 11-11 10:1x에 끝난 뒤 다시 읽었다(층별 값은 5500 step 것).
 
 | run | val 5700 | ruler 5700 | ruler3 | copy 5700 | aux(마지막) |
 |---|---|---|---|---|---|
@@ -1085,7 +1085,7 @@ detach_maxsim_w03 0.27 0.13 0.19 0.29 0.25 0.27 0.33 0.46 0.33 0.56 0.35 0.25 0.
 | boundary `mc_desc_boundary_50m_ctx8192_s0` | 2.9582 | 0.1488 | 0.1412 | 0.5675 | 2.337 |
 | centered `mc_desc_centered_50m_ctx8192_s0` | 2.9495 | 0.2470 | 0.2335 | 0.7948 | 1.596 |
 | mma `mc_desc_mma_50m_ctx8192_s0` | 2.9481 | 0.3433 | 0.2742 | 0.7717 | 1.442 |
-| keyconv `mc_desc_keyconv_50m_ctx8192_s0` | 2.9512 (5500) | 0.2212 (5500) | 0.2169 | 0.7708 (5500) | 1.306 |
+| keyconv `mc_desc_keyconv_50m_ctx8192_s0` | 2.9430 | 0.2679 | 0.2321 | 0.7753 | 1.536 |
 
 - step 5700 층별 ruler_hit(L0..L15)
 
@@ -1105,7 +1105,7 @@ keyconv(5500) 0.11 0.17 0.24 0.24 0.21 0.24 0.21 0.19 0.27 0.14 0.21 0.24 0.25 0
 **결과 (해석)** (11-11, QUEUE.md Q1 판정 규칙 적용)
 - seed noise: meanpool |0.2887−0.3078| = 0.019, subblock8 |0.3628−0.3416| = 0.021 → 평균 0.020. 기준 = subblock8 seed 평균 0.352 + max(0.020, 0.03) = **0.382**.
 - 통과: **subblock32 0.467(+11.5pp), subblock16 0.427(+7.5pp)** → Q3로. 하위 블록이 잘수록(32 → 16 → 8토큰) hit가 단조 증가하고 copy_hit도 같이 오른다(0.848 → 0.884 → 0.899). 포화 여부를 보려고 4토큰 단위 subblock64를 Q3에 추가했다(PR #25).
-- 탈락: mma 0.274, centered 0.234, keyconv 0.217, boundary 0.141(무작위 수준). 학습형 요약(mma, keyconv)은 meanpool(0.298)보다도 낮아 Q7(NSA MLP)의 조건을 만족하지 못한다 → Q7 건너뜀.
+- 탈락: mma 0.274, centered 0.234, keyconv 0.232, boundary 0.141(무작위 수준). 학습형 요약(mma, keyconv)은 meanpool(0.298)보다도 낮아 Q7(NSA MLP)의 조건을 만족하지 못한다 → Q7 건너뜀.
 - val loss는 모든 run이 2.937~2.958로 같은 범위다. descriptor는 LM 손실에 영향이 없다(detach 틀 유지).
 - 깊은 층(L13~L15)의 hit가 subblock16에서 0.64~0.87로 가장 높다. Q5(층 공유)의 source 층 후보.
 - 주의: seed 1개(subblock16·32), 64문항. 판정은 Q3(seed 3개 + string_match)에서 확정한다.
@@ -1158,7 +1158,7 @@ keyconv(5500) 0.11 0.17 0.24 0.24 0.21 0.24 0.21 0.19 0.27 0.14 0.21 0.24 0.25 0
 **세팅**
 - E8과 같은 틀(`configs/mc_ce_detach_desc_50m.env`, CE 0.3, MICRO_BATCH 4, MAX_STEPS 5700).
 - stage3a(job 1256568, 11-11 09:28 KST 제출): `mc_desc_sb32_50m_ctx8192_s{1,2}`, `mc_desc_sb16_50m_ctx8192_s{1,2}`
-- stage3b(subblock64 s0·s1, 칸이 나면 제출): `detach_desc:RUN_TAG=desc_sb64,MC_ROUTER_DESCRIPTOR=subblock64[,SEED=1]`
+- stage3b(job 1256768, 11-11 10:12 KST 제출): `mc_desc_sb64_50m_ctx8192_s{0,1,2}` (`detach_desc:RUN_TAG=desc_sb64,MC_ROUTER_DESCRIPTOR=subblock64[,SEED=n]`)
 - subblock8 seed 2는 E9 pack에서 학습 중이다.
 - 학습이 끝나면 평가 pack(`PACK_JOB=eval`, `EVAL_TASKS=niah_single_2,niah_multikey_1,niah_multikey_2,niah_multivalue EVAL_LENGTHS=8192`). 평가 문항은 `/scratch/t512a03/mslm/data/eval_ruler/.../8192/`에 이미 있다.
 
@@ -1169,8 +1169,8 @@ keyconv(5500) 0.11 0.17 0.24 0.24 0.21 0.24 0.21 0.19 0.27 0.14 0.21 0.24 0.25 0
 - 아직 없음.
 
 **경로**
-- pack 계획 파일: `/scratch/t512a03/mslm/jobs/packs/stage3a_20261111_092839.tsv`
-- 로그: `/scratch/t512a03/mslm/slurm_logs/mslm-pack-stage3a_1256568.out`
+- pack 계획 파일: `/scratch/t512a03/mslm/jobs/packs/stage3a_20261111_092839.tsv`, `stage3b_20261111_101232.tsv`
+- 로그: `/scratch/t512a03/mslm/slurm_logs/mslm-pack-stage3{a_1256568,b_1256768}.out`
 
 ---
 
