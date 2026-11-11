@@ -208,7 +208,7 @@ def _subblock(m: int):
     return subblock_descriptor
 
 
-for _m in (8, 16, 32):
+for _m in (8, 16, 32, 64):
     register("descriptor", f"subblock{_m}")(_subblock(_m))
 
 
