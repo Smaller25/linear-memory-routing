@@ -43,4 +43,5 @@
 - 2026-11-11: Q1 완료(E8). subblock32·16 통과, Q7 건너뜀. Q3 stage3a 제출, subblock64 추가(PR #25), stage3b 제출.
 - 2026-11-11: hg2(t512a02)도 쓰기로 함(사용자). 평가 pack evalA·evalB를 hg2에 제출.
 - 2026-11-11: 사용자가 hg2를 다른 작업에 쓰려고 비워 달라고 함 → evalA·evalB(대기 중, 실행 전) 취소. **사용자가 다시 말할 때까지 hg2에는 내지 않는다.** 평가는 hg3 칸이 날 때 낸다.
+- 2026-11-11: hg3에 평가 evalA 제출(job 1260946: mon, E7 meanpool·subblock8 s0, subblock32 s0. 8K, niah_single_2·multikey_1·multikey_2·multivalue). evalB(ce_w01, sb16, softgate, mma)는 다음 칸에.
 - 2026-11-11: Q2 완료(E9). sep_softmax 유지. subblock8 3 seed 표준편차 4pp(Q3 판정에 사용).
