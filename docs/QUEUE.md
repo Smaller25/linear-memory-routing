@@ -26,11 +26,11 @@
 |---|---|---|---|---|---|---|---|
 | 1 | Q1 (E8) | descriptor 6종 + seed 1 재현 2개 | ④ | — | stage2a: `detach:RUN_TAG=detach_w03,MC_AUX_WEIGHT=0.3,SEED=1` `detach_maxsim:RUN_TAG=detach_maxsim_w03,MC_AUX_WEIGHT=0.3,SEED=1` `detach_desc:RUN_TAG=desc_sb16,MC_ROUTER_DESCRIPTOR=subblock16` `detach_desc:RUN_TAG=desc_sb32,MC_ROUTER_DESCRIPTOR=subblock32` / stage2b: `detach_desc:RUN_TAG=desc_{boundary,centered,mma,keyconv},MC_ROUTER_DESCRIPTOR=<같은 이름>` | noise = seed 0·1 차이의 절댓값 평균(meanpool, subblock8). subblock8 seed 평균 + max(noise, 3pp) 를 넘는 후보를 상위 2개까지 Q3 로. 없으면 best_desc=subblock8 | 완료 (E8). 기준 38.2% → subblock32 46.7%, subblock16 42.7% 통과. best_desc 후보 = subblock32, subblock16 |
 | 2 | Q2 | gate 분리 기여 분리(E7 주의점) | ⑨ | Q1 제출 후 칸이 비면 | `detach_maxsim:RUN_TAG=detach_maxsim_softgate,MC_AUX_WEIGHT=0.3,MC_GATE=softmax` (router 점수를 gate로 재사용, backbone은 계속 detach) | val loss와 ruler_hit를 E7 detach_maxsim_w03과 비교. 기록만 하고 다음 항목은 막지 않는다 | 학습중 (E9, job 1251866 node1766, 11-10 약 21:10 시작, 11-11 14시쯤 끝: softgate seed 0·1 + Q3용 subblock8·meanpool seed 2를 같은 pack에) |
-| 3 | Q3 | round 2: 상위 후보 seed 반복 + string_match | ④ | Q1 완료 | Q1 상위 ≤2개 × seed 0·1·2 중 없는 것, subblock8 seed 2. 학습 끝난 run마다 평가: `EVAL_TASKS=niah_single_2,niah_multikey_1,niah_multikey_2,niah_multivalue EVAL_LENGTHS=8192 EVAL_NUM_SAMPLES=100`(`scripts/eval.sh`, `slurm/eval.sbatch`). 같은 평가를 E6 mon, E7 4개 run에도 | seed 3개 평균 ruler_hit와 learned string_match 평균이 가장 높은 것을 best_desc 로. 차이가 seed 표준편차보다 작으면 단순한 쪽(subblock 계열 → 적은 파라미터) | 학습중 (E10: stage3a job 1256568 = sb32·sb16 seed 1·2. 추세가 이어지는지 보려고 subblock64 s0·s1을 stage3b로 추가) |
+| 3 | Q3 | round 2: 상위 후보 seed 반복 + string_match | ④ | Q1 완료 | Q1 상위 ≤2개 × seed 0·1·2 중 없는 것, subblock8 seed 2. 학습 끝난 run마다 평가: `EVAL_TASKS=niah_single_2,niah_multikey_1,niah_multikey_2,niah_multivalue EVAL_LENGTHS=8192 EVAL_NUM_SAMPLES=100`(`scripts/eval.sh`, `slurm/eval.sbatch`). 같은 평가를 E6 mon, E7 4개 run에도 | seed 3개 평균 ruler_hit와 learned string_match 평균이 가장 높은 것을 best_desc 로. 차이가 seed 표준편차보다 작으면 단순한 쪽(subblock 계열 → 적은 파라미터) | 학습중 (E10: stage3a job 1256568 = sb32·sb16 seed 1·2. 추세가 이어지는지 보려고 subblock64 s0·1·2를 stage3b(job 1256768)로 추가) |
 | 4 | Q4 | chunk 크기 | ① | Q3 완료 | `detach_desc:RUN_TAG=desc_best_c64,MC_ROUTER_DESCRIPTOR=best_desc,MC_CHUNK=64` `…_c128,MC_CHUNK=128` (subblock 계열이면 chunk가 m으로 나뉘는지 확인) | ruler_hit가 best_desc(256)보다 3pp 이상 높고 tok/s 저하 ≤30% 면 채택 후보. 결과는 Q9 설정에 반영 | 대기 |
 | 5 | Q5 | 층 배치: 한 층이 고른 구간을 공유 | ⑪ | Q3 완료 | best_desc 기준 `MC_SHARE_FROM=<Q3 best run에서 ruler_hit 최고 층>`, `MC_SHARE_FROM=0` 두 run | ruler_hit와 val loss가 best_desc 대비 같거나 좋으면 채택 후보(계산 절약) | 대기 |
 | 6 | Q6 | top-k | ⑦ | Q3 완료 | best_desc 기준 `MC_TOPK=2`, `MC_TOPK=8` | k별 ruler_hit와 val loss를 기록. 다음 항목은 막지 않는다 | 대기 |
-| 7 | Q7 | 학습형 compression MLP(NSA) | ④ | Q1에서 mma 또는 keyconv가 subblock8보다 높을 때만 | 새 descriptor `nsa_mlp`(block 안 위치 임베딩 + 2층 MLP, 초기값 meanpool) 구현 → PR(테스트 포함) → 1 run | Q1 규칙과 같음. 조건 불만족이면 `건너뜀` | 건너뜀 (mma 27.4%, keyconv 21.7% < subblock8 35.2%) |
+| 7 | Q7 | 학습형 compression MLP(NSA) | ④ | Q1에서 mma 또는 keyconv가 subblock8보다 높을 때만 | 새 descriptor `nsa_mlp`(block 안 위치 임베딩 + 2층 MLP, 초기값 meanpool) 구현 → PR(테스트 포함) → 1 run | Q1 규칙과 같음. 조건 불만족이면 `건너뜀` | 건너뜀 (mma 27.4%, keyconv 23.2% < subblock8 35.2%) |
 | 8 | Q8 | router 학습 신호: teacher KL / dense warm-up | ⑩ | Q3 완료 | 새 aux_loss 구현(teacher = 같은 batch의 dense GRM γ 또는 oracle 분포) → PR → 2 run | ruler_hit가 best_desc보다 3pp 이상 높으면 채택 후보 | 대기 |
 | 9 | Q9 | 370M 확장: 최종 설정 + mon | 전체 | Q3~Q6 완료, **사용자 확인** | `SIZE=370m` 최종 설정과 mc(mon), 각각 2노드 × `TRAIN_PARTS` | string_match(4K·8K, 7과제)로 최종 비교 | 대기 |
 
@@ -40,4 +40,4 @@
 - 2026-11-10: Q1 두 pack 모두 학습 시작.
 - 2026-11-10: 칸 하나가 비어 Q2 제출. 노드 GPU 4장을 채우려고 Q3에 필요한 seed 2 재현 2개를 같이 넣음.
 - 2026-11-10: Q2 학습 시작.
-- 2026-11-11: Q1 완료(E8). subblock32·16 통과, Q7 건너뜀. Q3 stage3a 제출, subblock64 추가(PR #25).
+- 2026-11-11: Q1 완료(E8). subblock32·16 통과, Q7 건너뜀. Q3 stage3a 제출, subblock64 추가(PR #25), stage3b 제출.
