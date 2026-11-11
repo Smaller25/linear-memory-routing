@@ -46,7 +46,7 @@
 | E7 | 11-05~06 | Stage 1c: detach router | KISTI | 통과. maxsim hit 36.6%(무작위 +23pp), val loss mon과 같음(2.947) |
 | E8 | 11-10~11 | Stage 2 round 1: router descriptor 6종 + seed 1 재현 | KISTI | subblock32 46.7%, subblock16 42.7% 통과(기준 38.2%). 나머지 탈락 |
 | E10 | 11-11~ | Q3 round 2: subblock32·16 seed 반복 + subblock64 | KISTI | 학습 중 |
-| E9 | 11-10~ | Q2 gate 분리 기여 + seed 2 재현 | KISTI | 학습 중 |
+| E9 | 11-10~11 | Q2 gate 분리 기여 + seed 2 재현 | KISTI | softgate hit 평균 42.5%(seed 차 18pp)지만 val loss +0.05. sep_softmax는 LM 손실을 지킨다 |
 
 ---
 
@@ -1118,7 +1118,7 @@ keyconv(5500) 0.11 0.17 0.24 0.24 0.21 0.24 0.21 0.19 0.27 0.14 0.21 0.24 0.25 0
 
 ---
 
-### E9. Q2: gate 분리 기여 + seed 2 재현 (2026-11-10 제출, 진행 중)
+### E9. Q2: gate 분리 기여 + seed 2 재현 (2026-11-10 ~ 11-11)
 
 **목적**
 - E7 주의점: mon과 detach run은 router detach와 sep_softmax gate 두 가지가 함께 달랐다. gate만 원래대로(`MC_GATE=softmax`, router 점수를 gate로 재사용) 돌려 sep_softmax의 기여를 분리한다. router 입력은 계속 detach라 backbone은 CE를 받지 않는다(LM gradient는 router 파라미터까지 간다).
@@ -1137,10 +1137,33 @@ keyconv(5500) 0.11 0.17 0.24 0.24 0.21 0.24 0.21 0.19 0.27 0.14 0.21 0.24 0.25 0
 - job: 1251866 `mslm-pack-stage2c`(node1766, 24h), 11-10 17:31 KST 제출, 약 21:10 학습 시작. run당 48~49k tok/s.
 
 **결과 (raw)**
-- 아직 없음.
+- `scripts/harvest.py --traj`, 11-11 13:5x KST. ruler3 = 5000·5500·5700 step 평균. ruler_random_hit 0.1368.
 
-**결과 (해석)**
-- 아직 없음. 판정: softgate가 E7 detach_maxsim_w03과 val loss·ruler_hit가 같으면 sep_softmax의 기여는 작다.
+| run | val 5700 | ruler 5700 | ruler3 | copy 5700 | aux(마지막) |
+|---|---|---|---|---|---|
+| softgate s0 `mc_detach_maxsim_softgate_50m_ctx8192_s0` | 2.9958 | 0.3889 | 0.3373 | 0.8529 | 1.262 |
+| softgate s1 `mc_detach_maxsim_softgate_50m_ctx8192_s1` | 2.9941 | 0.5050 | 0.5129 | 0.8459 | 1.361 |
+| subblock8 s2 `mc_detach_maxsim_w03_50m_ctx8192_s2` | 2.9353 | 0.2589 | 0.2854 | 0.8597 | 1.136 |
+| meanpool s2 `mc_detach_w03_50m_ctx8192_s2` | 2.9406 | 0.2589 | 0.2493 | 0.7706 | 1.497 |
+
+- 비교용 seed 3개 요약(sep_softmax gate)
+  - subblock8 ruler3: s0 0.3628, s1 0.3416, s2 0.2854 → 평균 0.330, 표본 표준편차 0.040. val 2.948 / 2.937 / 2.935.
+  - meanpool ruler3: s0 0.2887, s1 0.3078, s2 0.2493 → 평균 0.282, 표준편차 0.030. val 2.950 / 2.941 / 2.941.
+- softgate val loss 궤적은 처음부터 E7보다 높다: 500 step +0.07(4.120 vs 4.054), 2000 +0.07, 5700 +0.05(2.996 vs 2.948).
+- step 5700 층별 ruler_hit(L0..L15)
+
+```
+softgate s0    0.35 0.46 0.43 0.46 0.49 0.30 0.22 0.25 0.19 0.40 0.14 0.25 0.35 0.40 0.70 0.82
+softgate s1    0.44 0.44 0.52 0.33 0.48 0.56 0.51 0.57 0.64 0.68 0.51 0.51 0.40 0.25 0.65 0.59
+subblock8 s2   0.11 0.30 0.13 0.19 0.11 0.17 0.11 0.19 0.14 0.24 0.25 0.14 0.43 0.33 0.68 0.60
+meanpool s2    0.24 0.14 0.16 0.13 0.13 0.21 0.32 0.17 0.16 0.22 0.22 0.29 0.44 0.33 0.56 0.43
+```
+
+**결과 (해석)** (11-11, 에이전트 해석)
+- **sep_softmax의 역할은 LM 손실 보호다.** gate만 softmax(router 점수 재사용)로 바꾸면 val loss가 +0.05 나빠진다(seed 2개 모두 2.994~2.996). backbone은 계속 detach라, LM gradient가 router 파라미터로 가면서 router가 LM 쪽으로 끌려가는 효과로 보인다.
+- **hit는 softgate가 평균으로 더 높지만 불안정하다.** 0.337 / 0.513(평균 0.425, seed 차 18pp). sep_softmax subblock8 3 seed 평균 0.330보다 높지만, seed 2개뿐이고 퍼짐이 커서 확정할 수 없다. 1a(E6)처럼 hit와 LM 손실이 다시 맞바뀌는 구조다.
+- E7의 "detach가 trade-off를 없앴다"는 결론은 **detach + sep_softmax 조합**에 대한 것이다. 기본 틀은 sep_softmax로 유지한다(QUEUE 규칙: 기록만, 다음 항목 막지 않음).
+- **seed noise가 E8 추정(2pp)보다 크다.** subblock8 3 seed 표준편차 4.0pp, meanpool 3.0pp. Q3 판정은 seed 3개 평균과 이 표준편차로 한다. 그래도 subblock32(E8 seed 0, 0.467)는 subblock8 평균보다 3σ 이상 높다.
 
 **경로**
 - run: `/scratch/t512a03/mslm/runs/<run>/`
