@@ -17,12 +17,12 @@
 
 ## KISTI 접근
 
-- 계정 두 개를 쓴다: **hg3 = t512a03**(기본, wandb 로그인됨), **hg2 = t512a02**(칸이 없을 때, 11-11 사용자 허락).
+- 계정 두 개를 쓴다: **hg3 = t512a03**(기본), **hg2 = t512a02**(칸이 없을 때, 11-11 사용자 허락). 둘 다 wandb 로그인됨(hg2는 11-11).
   - hg2 작업은 결과를 hg3의 run 폴더에 쓴다. hg2에서 낼 때 항상 앞에 붙인다:
-    `RUNS_ROOT=/scratch/t512a03/mslm/runs DATA_ROOT=/scratch/t512a03/mslm/data WANDB_PROJECT=`
+    `RUNS_ROOT=/scratch/t512a03/mslm/runs DATA_ROOT=/scratch/t512a03/mslm/data`
     (두 계정이 서로의 /scratch/<계정>/mslm 에 쓸 수 있다. ACL 확인함.)
-  - hg2에는 wandb 로그인이 없다. hg2 run은 tick마다 hg3 pane에서
-    `python -m mslm.wandb_sync /scratch/t512a03/mslm/runs/<run>` 으로 올린다(이미 올린 step은 건너뜀, 평가 결과도 같이 올라감).
+  - 11-11 hg2 로그인 전에 낸 evalA·evalB(job 1260511, 1260513)는 `WANDB_PROJECT=`로 냈다. 끝나면 hg3 pane에서
+    `python -m mslm.wandb_sync /scratch/t512a03/mslm/runs/<run>` 으로 평가 결과를 올린다.
   - hg2 pane에서 명령은 `( unset CONDA_ENVS_PATH; eval "$(conda shell.bash hook)"; cd ~/linear-memory-routing && … )`.
     시스템 python3는 오래돼서 conda hook 없이는 `run_pack.sh`가 실패한다. `git log` 등은 `GIT_PAGER=cat`.
 
