@@ -17,6 +17,15 @@
 
 ## KISTI 접근
 
+- 계정 두 개를 쓴다: **hg3 = t512a03**(기본, wandb 로그인됨), **hg2 = t512a02**(칸이 없을 때, 11-11 사용자 허락).
+  - hg2 작업은 결과를 hg3의 run 폴더에 쓴다. hg2에서 낼 때 항상 앞에 붙인다:
+    `RUNS_ROOT=/scratch/t512a03/mslm/runs DATA_ROOT=/scratch/t512a03/mslm/data WANDB_PROJECT=`
+    (두 계정이 서로의 /scratch/<계정>/mslm 에 쓸 수 있다. ACL 확인함.)
+  - hg2에는 wandb 로그인이 없다. hg2 run은 tick마다 hg3 pane에서
+    `python -m mslm.wandb_sync /scratch/t512a03/mslm/runs/<run>` 으로 올린다(이미 올린 step은 건너뜀, 평가 결과도 같이 올라감).
+  - hg2 pane에서 명령은 `( unset CONDA_ENVS_PATH; eval "$(conda shell.bash hook)"; cd ~/linear-memory-routing && … )`.
+    시스템 python3는 오래돼서 conda hook 없이는 `run_pack.sh`가 실패한다. `git log` 등은 `GIT_PAGER=cat`.
+
 - 제출·`squeue`: t512a03 pane (`tmux -S /tmp/hangang-tmux/sock`, target `sohyung`). Steering_vector_operator 세션과
   함께 쓰므로 마지막 줄이 빈 프롬프트일 때만 입력하고, `clear`·Ctrl-c는 쓰지 않는다. 명령은
   `( unset CONDA_ENVS_PATH; cd ~/linear-memory-routing && … ); echo @@ORC<n>` 형태로 보내고 marker까지 잘라 읽는다.
@@ -36,7 +45,7 @@
      같은 run이 두 번 실패하면 사용자에게 묻는다.
    - 모든 run이 `end`면 `harvest.py --traj`로 결과를 읽어 EXPERIMENTS.md에 기록하고, 판정 규칙을 적용해 QUEUE.md를 갱신한다
      (다음 항목의 `best_desc` 같은 자리 채우기 포함). 평가가 필요한 항목은 상태를 `평가중`으로 두고 평가 pack을 낸다.
-3. **다음 항목 내기.** 남은 칸 = min(3 − 우리 작업 수, 5 − 전체 작업 수). 다른 분 작업이 4칸 이상이면 0.
+3. **다음 항목 내기.** 계정마다 남은 칸 = min(3 − 우리 작업 수, 5 − 전체 작업 수). 그 계정에서 다른 분 작업이 4칸 이상이면 0. hg3를 먼저 채우고 모자라면 hg2.
    QUEUE.md를 위에서부터 보며 조건을 만족하는 `대기` 항목을 칸 수만큼 낸다. 한 항목의 run이 4개를 넘으면 pack을 나눈다.
    - 학습: `MICRO_BATCH=4 MAX_STEPS=5700 ROUTE_MONITOR_FILE=… bash scripts/run_pack.sh <pack> <spec> …`
    - 평가: `PACK_JOB=eval SB_TIME=06:00:00 EVAL_TASKS=… EVAL_LENGTHS=8192 bash scripts/run_pack.sh <pack> <같은 spec> …`.
