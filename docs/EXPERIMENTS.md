@@ -45,6 +45,7 @@
 | E6 | 11-02~03 | Stage 1a: span-copy CE 가중치 | KISTI | 최고 w0.1 hit 21.3%(무작위 +7.6pp), val loss +0.044, 기준 미달 |
 | E7 | 11-05~06 | Stage 1c: detach router | KISTI | 통과. maxsim hit 36.6%(무작위 +23pp), val loss mon과 같음(2.947) |
 | E8 | 11-10~11 | Stage 2 round 1: router descriptor 6종 + seed 1 재현 | KISTI | subblock32 46.7%, subblock16 42.7% 통과(기준 38.2%). 나머지 탈락 |
+| E11 | 11-13~ | Q9: 370M subblock64(+ mon 기준) 10B 토큰 | KISTI | 학습 중 |
 | E10 | 11-11~12 | Q3 round 2: subblock16·32·64 × seed 3 + NIAH string_match | KISTI | subblock64 48.2% > 32 44.3% > 16 37.7% > 8 33.0%(ruler3, seed 3 평균). string_match는 oracle까지 0~4%라 50M에서 변별 불가 |
 | E9 | 11-10~11 | Q2 gate 분리 기여 + seed 2 재현 | KISTI | softgate hit 평균 42.5%(seed 차 18pp)지만 val loss +0.05. sep_softmax는 LM 손실을 지킨다 |
 
@@ -1215,6 +1216,35 @@ meanpool s2    0.24 0.14 0.16 0.13 0.13 0.21 0.32 0.17 0.16 0.22 0.22 0.29 0.44 
 - pack 계획 파일: `/scratch/t512a03/mslm/jobs/packs/stage3a_20261111_092839.tsv`, `stage3b_20261111_101232.tsv`
 - 로그: `/scratch/t512a03/mslm/slurm_logs/mslm-pack-stage3{a_1256568,b_1256768}.out`, 평가 `mslm-pack-evalA_1260946.out`
 - 평가 결과: `/scratch/t512a03/mslm/runs/<run>/eval/step_0005700/{summary.json,items.jsonl}`
+
+---
+
+### E11. Q9: 370M 확장 — subblock64 router descriptor (2026-11-13 ~, 진행 중)
+
+**목적**
+- 50M에서 고른 설정(detach router + sep_softmax + CE 0.3 + router descriptor subblock64, E10)이 370M에서도 router hit를 올리는지 본다.
+- 50M에서는 NIAH string_match가 oracle 라우팅까지 0~4%라 쓸 수 없었다(E10). 370M에서 oracle이 정답률을 올리는지, learned 라우팅이 그 격차를 얼마나 메우는지를 본다.
+- 사용자 지시(11-13): "여기서 괜찮은 아이디어 370M으로 해줘".
+
+**세팅**
+- config `configs/mc_ce_detach_desc_370m.env`(idea `detach_desc`, SIZE=370m: 16층, d=1024, 16 head × 128).
+- 덮어쓴 값: `RUN_TAG=desc_sb64 MC_ROUTER_DESCRIPTOR=subblock64 MAX_TOKENS=10e9 SB_NODES=1 MICRO_BATCH=2 ROUTE_MONITOR_FILE=<E5>`, TRAIN_PARTS 1(이어 받기는 첫 속도를 보고), EVAL 0(평가는 학습 후 따로).
+  - 10B 토큰: 30B 기본보다 줄였다. 1노드면 약 30시간으로 추정(MC 370M 30B가 2노드 약 45시간이라는 README 추정 기준).
+  - 1노드: 다중 노드 NCCL이 이 코드베이스에서 아직 확인되지 않았다(`configs/mc_370m.env` TODO).
+- run: `mc_desc_sb64_370m_ctx8192_s0`
+- 기준선: `mc_mon_370m_ctx8192_s0`(mc_370m, RUN_TAG=mon, 같은 덮어쓰기)을 칸이 나면 낸다.
+- job: 1272512 `mslm-detach_desc_370m_s0-train`(24h), 11-13 KST 제출.
+
+**결과 (raw)**
+- 아직 없음.
+
+**결과 (해석)**
+- 아직 없음.
+
+**경로**
+- run: `/scratch/t512a03/mslm/runs/mc_desc_sb64_370m_ctx8192_s0/`
+- 로그: `/scratch/t512a03/mslm/slurm_logs/mslm-detach_desc_370m_s0-train_1272512.out`
+- wandb: `ks000225/linear-memory-routing/runs/mc_desc_sb64_370m_ctx8192_s0`
 
 ---
 
