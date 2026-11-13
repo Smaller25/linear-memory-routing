@@ -45,6 +45,7 @@
 | E6 | 11-02~03 | Stage 1a: span-copy CE 가중치 | KISTI | 최고 w0.1 hit 21.3%(무작위 +7.6pp), val loss +0.044, 기준 미달 |
 | E7 | 11-05~06 | Stage 1c: detach router | KISTI | 통과. maxsim hit 36.6%(무작위 +23pp), val loss mon과 같음(2.947) |
 | E8 | 11-10~11 | Stage 2 round 1: router descriptor 6종 + seed 1 재현 | KISTI | subblock32 46.7%, subblock16 42.7% 통과(기준 38.2%). 나머지 탈락 |
+| E12 | 11-13~ | Q4·Q6: subblock64 + chunk 64/128, top-k 2/8 (50M) | KISTI | 제출 |
 | E11 | 11-13~ | Q9: 370M subblock64(+ mon 기준) 10B 토큰 | KISTI | 학습 중 |
 | E10 | 11-11~12 | Q3 round 2: subblock16·32·64 × seed 3 + NIAH string_match | KISTI | subblock64 48.2% > 32 44.3% > 16 37.7% > 8 33.0%(ruler3, seed 3 평균). string_match는 oracle까지 0~4%라 50M에서 변별 불가 |
 | E9 | 11-10~11 | Q2 gate 분리 기여 + seed 2 재현 | KISTI | softgate hit 평균 42.5%(seed 차 18pp)지만 val loss +0.05. sep_softmax는 LM 손실을 지킨다 |
@@ -1232,8 +1233,8 @@ meanpool s2    0.24 0.14 0.16 0.13 0.13 0.21 0.32 0.17 0.16 0.22 0.22 0.29 0.44 
   - 10B 토큰: 30B 기본보다 줄였다. 1노드면 약 30시간으로 추정(MC 370M 30B가 2노드 약 45시간이라는 README 추정 기준).
   - 1노드: 다중 노드 NCCL이 이 코드베이스에서 아직 확인되지 않았다(`configs/mc_370m.env` TODO).
 - run: `mc_desc_sb64_370m_ctx8192_s0`
-- 기준선: `mc_mon_370m_ctx8192_s0`(mc_370m, RUN_TAG=mon, 같은 덮어쓰기)을 칸이 나면 낸다.
-- job: 1272512 `mslm-detach_desc_370m_s0-train`(24h), 11-13 KST 제출.
+- 기준선: `mc_mon_370m_ctx8192_s0`(mc_370m, RUN_TAG=mon, 같은 덮어쓰기).
+- job: 1272512 `mslm-detach_desc_370m_s0-train`(subblock64), 1273114 `mslm-mc_370m_s0-train`(mon). 각 24h, 11-13 KST 제출.
 
 **결과 (raw)**
 - 아직 없음.
@@ -1245,6 +1246,38 @@ meanpool s2    0.24 0.14 0.16 0.13 0.13 0.21 0.32 0.17 0.16 0.22 0.22 0.29 0.44 
 - run: `/scratch/t512a03/mslm/runs/mc_desc_sb64_370m_ctx8192_s0/`
 - 로그: `/scratch/t512a03/mslm/slurm_logs/mslm-detach_desc_370m_s0-train_1272512.out`
 - wandb: `ks000225/linear-memory-routing/runs/mc_desc_sb64_370m_ctx8192_s0`
+
+---
+
+### E12. Q4·Q6: subblock64 기준 chunk 크기와 top-k (2026-11-13 ~, 진행 중)
+
+**목적**
+- Q4(①): segment 길이를 256에서 64·128로 줄이면 router hit가 더 오르는지, 속도 비용은 얼마인지.
+- Q6(⑦): 읽는 segment 수 k를 4에서 2·8로 바꿀 때 hit와 val loss가 어떻게 바뀌는지.
+- 기준은 E10의 subblock64(ruler3 seed 3 평균 0.482, 표준편차 0.029, val 2.933~2.941).
+
+**세팅**
+- E10과 같은 틀(`configs/mc_ce_detach_desc_50m.env`, CE 0.3, MICRO_BATCH 4, MAX_STEPS 5700, seed 0), `MC_ROUTER_DESCRIPTOR=subblock64`.
+
+| run | 바꾼 것 | 메모 |
+|---|---|---|
+| `mc_desc_sb64_c64_50m_ctx8192_s0` | `MC_CHUNK=64` | 하위 블록 1토큰(토큰 단위 max-sim), segment 128개 |
+| `mc_desc_sb64_c128_50m_ctx8192_s0` | `MC_CHUNK=128` | 하위 블록 2토큰, segment 64개 |
+| `mc_desc_sb64_k2_50m_ctx8192_s0` | `MC_TOPK=2` | |
+| `mc_desc_sb64_k8_50m_ctx8192_s0` | `MC_TOPK=8` | |
+
+- job: 1273115 `mslm-pack-stage4`(24h), 11-13 15:45 KST 제출.
+- 주의: chunk 64는 무작위 기준선(ruler_random_hit)이 k/N이 바뀌어 달라진다. 비교는 random 대비 차이로도 본다.
+
+**결과 (raw)**
+- 아직 없음.
+
+**결과 (해석)**
+- 아직 없음.
+
+**경로**
+- pack 계획 파일: `/scratch/t512a03/mslm/jobs/packs/stage4_20261113_154527.tsv`
+- 로그: `/scratch/t512a03/mslm/slurm_logs/mslm-pack-stage4_1273115.out`
 
 ---
 
