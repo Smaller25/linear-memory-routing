@@ -45,7 +45,7 @@
 | E6 | 11-02~03 | Stage 1a: span-copy CE 가중치 | KISTI | 최고 w0.1 hit 21.3%(무작위 +7.6pp), val loss +0.044, 기준 미달 |
 | E7 | 11-05~06 | Stage 1c: detach router | KISTI | 통과. maxsim hit 36.6%(무작위 +23pp), val loss mon과 같음(2.947) |
 | E8 | 11-10~11 | Stage 2 round 1: router descriptor 6종 + seed 1 재현 | KISTI | subblock32 46.7%, subblock16 42.7% 통과(기준 38.2%). 나머지 탈락 |
-| E10 | 11-11~ | Q3 round 2: subblock32·16 seed 반복 + subblock64 | KISTI | 학습 중 |
+| E10 | 11-11~12 | Q3 round 2: subblock16·32·64 × seed 3 + NIAH string_match | KISTI | subblock64 48.2% > 32 44.3% > 16 37.7% > 8 33.0%(ruler3, seed 3 평균). string_match는 oracle까지 0~4%라 50M에서 변별 불가 |
 | E9 | 11-10~11 | Q2 gate 분리 기여 + seed 2 재현 | KISTI | softgate hit 평균 42.5%(seed 차 18pp)지만 val loss +0.05. sep_softmax는 LM 손실을 지킨다 |
 
 ---
@@ -1172,7 +1172,7 @@ meanpool s2    0.24 0.14 0.16 0.13 0.13 0.21 0.32 0.17 0.16 0.22 0.22 0.29 0.44 
 
 ---
 
-### E10. Q3 round 2: subblock32·16 seed 반복 + subblock64 (2026-11-11 ~, 진행 중)
+### E10. Q3 round 2: subblock32·16 seed 반복 + subblock64 (2026-11-11 ~ 11-13)
 
 **목적**
 - E8 통과 후보(subblock32, subblock16)를 seed 3개로 확인하고 NIAH `string_match`로 최종 best_desc를 정한다.
@@ -1186,14 +1186,35 @@ meanpool s2    0.24 0.14 0.16 0.13 0.13 0.21 0.32 0.17 0.16 0.22 0.22 0.29 0.44 
 - 학습이 끝나면 평가 pack(`PACK_JOB=eval`, `EVAL_TASKS=niah_single_2,niah_multikey_1,niah_multikey_2,niah_multivalue EVAL_LENGTHS=8192`). 평가 문항은 `/scratch/t512a03/mslm/data/eval_ruler/.../8192/`에 이미 있다.
 
 **결과 (raw)**
-- 아직 없음.
+- 학습: `scripts/harvest.py`, 11-13 KST. ruler3 = 5000·5500·5700 step ruler_hit 평균, ruler_random_hit 0.1368. s0는 E8(subblock16·32) 또는 이번 stage3b(subblock64) run이다.
 
-**결과 (해석)**
-- 아직 없음.
+| descriptor | ruler3 s0 / s1 / s2 | 평균 | 표준편차 | val 5700 s0 / s1 / s2 | copy 5700 s0 / s1 / s2 |
+|---|---|---|---|---|---|
+| subblock8 (E7·E8·E9) | 0.3628 / 0.3416 / 0.2854 | 0.330 | 0.040 | 2.9478 / 2.9365 / 2.9353 | 0.848 / 0.847 / 0.860 |
+| subblock16 | 0.4269 / 0.3810 / 0.3224 | 0.377 | 0.052 | 2.9471 / 2.9350 / 2.9316 | 0.884 / 0.885 / 0.885 |
+| subblock32 | 0.4673 / 0.4190 / 0.4431 | 0.443 | 0.024 | 2.9418 / 2.9336 / 2.9306 | 0.899 / 0.904 / 0.897 |
+| subblock64 | 0.5125 / 0.4547 / 0.4798 | 0.482 | 0.029 | 2.9413 / 2.9335 / 2.9329 | 0.914 / 0.908 / 0.915 |
+
+- 평가 evalA(job 1260946, hg3): RULER string_match_all(%), 8192 토큰, 과제당 100문항, step 5700 ckpt. learned / oracle 라우팅.
+
+| run | niah_single_2 | niah_multikey_1 | niah_multikey_2 | niah_multivalue |
+|---|---|---|---|---|
+| mon `mc_mon_50m_ctx8192_s0` | 1.0 / 1.0 | 2.0 / 1.0 | 0.0 / 0.0 | 0.0 / 4.0 |
+| meanpool `mc_detach_w03_50m_ctx8192_s0` | 1.0 / 1.0 | 1.0 / 1.0 | 0.0 / 0.0 | 0.8 / 0.8 |
+| subblock8 `mc_detach_maxsim_w03_50m_ctx8192_s0` | 0.0 / 0.0 | 3.0 / 3.0 | 0.0 / 0.0 | 0.8 / 1.0 |
+| subblock32 `mc_desc_sb32_50m_ctx8192_s0` | 1.0 / 0.0 | 1.0 / 2.0 | 0.0 / 0.0 | 0.0 / 0.2 |
+
+- evalB(ce_w01, subblock16, softgate, mma)는 hg2 보류로 취소한 뒤 아직 내지 않았다.
+
+**결과 (해석)** (11-13, 에이전트 해석)
+- **router hit는 하위 블록이 작을수록 계속 오른다.** 8 → 16 → 32 → 64(32 → 16 → 8 → 4토큰): 33.0 → 37.7 → 44.3 → 48.2%. subblock64가 subblock32보다 +3.9pp로, 두 표준편차(2.4, 2.9pp)보다 크다. QUEUE Q3 규칙(ruler_hit 기준)으로 **best_desc = subblock64**. 아직 포화하지 않았다.
+- val loss는 모두 2.93~2.95로 같다. copy_hit도 하위 블록이 작을수록 오른다(0.85 → 0.91).
+- **string_match는 50M·3B 토큰에서 변별력이 없다.** 모든 run이 0~4%이고 oracle 라우팅(정답 구간 강제)도 learned와 같은 수준이다. 라우팅이 아니라 생성 능력 자체가 병목이다. Q3 규칙의 "string_match 평균" 항목은 이 규모에서 판정에 쓸 수 없다 → 사용자 확인 필요.
 
 **경로**
 - pack 계획 파일: `/scratch/t512a03/mslm/jobs/packs/stage3a_20261111_092839.tsv`, `stage3b_20261111_101232.tsv`
-- 로그: `/scratch/t512a03/mslm/slurm_logs/mslm-pack-stage3{a_1256568,b_1256768}.out`
+- 로그: `/scratch/t512a03/mslm/slurm_logs/mslm-pack-stage3{a_1256568,b_1256768}.out`, 평가 `mslm-pack-evalA_1260946.out`
+- 평가 결과: `/scratch/t512a03/mslm/runs/<run>/eval/step_0005700/{summary.json,items.jsonl}`
 
 ---
 
