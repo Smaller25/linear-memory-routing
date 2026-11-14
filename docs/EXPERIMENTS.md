@@ -1243,6 +1243,8 @@ meanpool s2    0.24 0.14 0.16 0.13 0.13 0.21 0.32 0.17 0.16 0.22 0.22 0.29 0.44 
 - 11-14 02~05시 KISTI 로그인(hangang-b)이 끊겨 확인하지 못했다(학습은 계속됨).
 - 11-14 05시(로그인 복구 후) 중간값: subblock64 step 8430(eval 8000 val 2.5387, ruler3 0.5407, copy 0.920) / mon step 7640(eval 7500 val 2.5595, ruler3 0.1194, copy 0.602).
   - 같은 step 2000 비교: subblock64 val 2.8650·ruler3 0.503, mon val 2.8706·ruler3 0.116.
+- 11-14 20시: subblock64 part 1(1272512)이 24시간 제한으로 step 11,460에서 끝났다(마지막 ckpt는 step 11,000). part 2(1277587)는 Priority 대기. 같은 step 11,000: subblock64 val 2.4814·ruler3 0.589, mon val 2.4857·ruler3 0.125.
+  - 시작 기록의 params는 481,266,960(임베딩 제외 448,498,960)이다. 프리셋 이름은 370m이지만 실제로는 0.48B다.
 - part 2: 1277587(subblock64, `afterany:1272512`), 1277588(mon, `afterany:1273114`). `scripts/sbatch_cmd.sh train`에 같은 덮어쓰기로 냈다. 다른 분 작업이 모두 끝나 계정 5칸 중 우리가 5칸(대기 2 포함)을 쓴다. 이어 받기라 상한 3을 넘겼다.
 
 **결과 (해석)**
@@ -1276,7 +1278,8 @@ meanpool s2    0.24 0.14 0.16 0.13 0.13 0.21 0.32 0.17 0.16 0.22 0.22 0.29 0.44 
 - 주의: chunk 64는 무작위 기준선(ruler_random_hit)이 k/N이 바뀌어 달라진다. 비교는 random 대비 차이로도 본다.
 
 **결과 (raw)**
-- 아직 없음.
+- 속도: c64 29.6k, c128 39.1k, k2 55.4k, k8 34.7k tok/s. c64·c128·k8은 24시간 안에 5,700 step을 못 끝내 tail(job 1278905, `afterany:1273115`, 12h, 3 run)을 걸었다.
+- k2 끝남: val 2.9408, ruler 0.2748, ruler3 0.2824, copy 0.7893, ruler_random_hit 0.0684.
 
 **결과 (해석)**
 - 아직 없음.
