@@ -45,6 +45,7 @@
 | E6 | 11-02~03 | Stage 1a: span-copy CE 가중치 | KISTI | 최고 w0.1 hit 21.3%(무작위 +7.6pp), val loss +0.044, 기준 미달 |
 | E7 | 11-05~06 | Stage 1c: detach router | KISTI | 통과. maxsim hit 36.6%(무작위 +23pp), val loss mon과 같음(2.947) |
 | E8 | 11-10~11 | Stage 2 round 1: router descriptor 6종 + seed 1 재현 | KISTI | subblock32 46.7%, subblock16 42.7% 통과(기준 38.2%). 나머지 탈락 |
+| E13 | 11-15~ | Q5: subblock64 + 층 공유(0층, 14층) + sb64·sb32 seed 3 | KISTI | 제출 |
 | E12 | 11-13~ | Q4·Q6: subblock64 + chunk 64/128, top-k 2/8 (50M) | KISTI | 제출 |
 | E11 | 11-13~ | Q9: 370M subblock64(+ mon 기준) 10B 토큰 | KISTI | 학습 중 |
 | E10 | 11-11~12 | Q3 round 2: subblock16·32·64 × seed 3 + NIAH string_match | KISTI | subblock64 48.2% > 32 44.3% > 16 37.7% > 8 33.0%(ruler3, seed 3 평균). string_match는 oracle까지 0~4%라 50M에서 변별 불가 |
@@ -1279,7 +1280,17 @@ meanpool s2    0.24 0.14 0.16 0.13 0.13 0.21 0.32 0.17 0.16 0.22 0.22 0.29 0.44 
 
 **결과 (raw)**
 - 속도: c64 29.6k, c128 39.1k, k2 55.4k, k8 34.7k tok/s. c64·c128·k8은 24시간 안에 5,700 step을 못 끝내 tail(job 1278905, `afterany:1273115`, 12h, 3 run)을 걸었다.
-- k2 끝남: val 2.9408, ruler 0.2748, ruler3 0.2824, copy 0.7893, ruler_random_hit 0.0684.
+- 끝난 run(5700 step). 무작위 대비 = ruler3 − ruler_random_hit.
+
+| run | val 5700 | ruler3 | ruler_random_hit | 무작위 대비 | copy 5700 | tok/s |
+|---|---|---|---|---|---|---|
+| (E10) subblock64 기본(k4, chunk 256), seed 3개 평균 | 2.936 | 0.482 | 0.137 | +34.5pp | 0.912 | 46.6k |
+| k2 `mc_desc_sb64_k2_50m_ctx8192_s0` | 2.9408 | 0.2824 | 0.0684 | +21.4pp | 0.789 | 55.4k |
+| k8 `mc_desc_sb64_k8_50m_ctx8192_s0` | 2.9421 | 0.6045 | 0.2735 | +33.1pp | 0.978 | 34.7k |
+| chunk 128 `mc_desc_sb64_c128_50m_ctx8192_s0` | 2.9609 | 0.3403 | 0.0676 | +27.3pp | 0.875 | 39.1k |
+| chunk 64 `mc_desc_sb64_c64_50m_ctx8192_s0` | (tail에서 학습 중, step 4860) | | 0.0336 | | | 29.6k |
+
+- 해석(중간, 에이전트): 무작위 대비로 보면 기본(k4, chunk 256)이 가장 높다. k8은 비슷하고(+33.1pp) 30% 느리다. k2는 낮다. chunk 128은 무작위 대비가 낮고 val loss도 0.02 나쁘다. chunk 64가 끝나면 Q4를 판정한다.
 
 **결과 (해석)**
 - 아직 없음.
@@ -1287,6 +1298,36 @@ meanpool s2    0.24 0.14 0.16 0.13 0.13 0.21 0.32 0.17 0.16 0.22 0.22 0.29 0.44 
 **경로**
 - pack 계획 파일: `/scratch/t512a03/mslm/jobs/packs/stage4_20261113_154527.tsv`
 - 로그: `/scratch/t512a03/mslm/slurm_logs/mslm-pack-stage4_1273115.out`
+
+---
+
+### E13. Q5: 층 간 라우팅 공유 (2026-11-15 ~, 진행 중)
+
+**목적**
+- ⑪: 한 층이 고른 segment를 위층 전부가 쓰면(`MC_SHARE_FROM`) hit와 val loss가 어떻게 되는지. 50M subblock64는 깊은 층(L13~L15) hit가 가장 높아(E8·E10), 14층과 0층 두 경우를 본다.
+- 같은 pack에 subblock64·subblock32의 seed 3을 넣어(GPU 4장 채움) 두 descriptor 차이(3.9pp)를 seed 4개로 확인한다.
+
+**세팅**
+- E10 틀(`configs/mc_ce_detach_desc_50m.env`, CE 0.3, MICRO_BATCH 4, MAX_STEPS 5700), `MC_ROUTER_DESCRIPTOR=subblock64`.
+- 로컬 tiny 모델로 detached_cos + sep_softmax + 층 공유의 forward/backward와 모든 층 router gradient를 확인했다.
+
+| run | 바꾼 것 |
+|---|---|
+| `mc_desc_sb64_share0_50m_ctx8192_s0` | `MC_SHARE_FROM=0` |
+| `mc_desc_sb64_share14_50m_ctx8192_s0` | `MC_SHARE_FROM=14`(14층이 고르고 15층이 따름, 0~13층은 각자) |
+| `mc_desc_sb64_50m_ctx8192_s3` | subblock64 seed 3 |
+| `mc_desc_sb32_50m_ctx8192_s3` | subblock32 seed 3 |
+
+- job: 1280195 `mslm-pack-stage5`(24h), 11-15 02:10 KST 제출.
+
+**결과 (raw)**
+- 아직 없음.
+
+**결과 (해석)**
+- 아직 없음.
+
+**경로**
+- pack 계획 파일: `/scratch/t512a03/mslm/jobs/packs/stage5_20261115_021038.tsv`
 
 ---
 
