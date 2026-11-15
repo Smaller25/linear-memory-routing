@@ -45,7 +45,7 @@
 | E6 | 11-02~03 | Stage 1a: span-copy CE 가중치 | KISTI | 최고 w0.1 hit 21.3%(무작위 +7.6pp), val loss +0.044, 기준 미달 |
 | E7 | 11-05~06 | Stage 1c: detach router | KISTI | 통과. maxsim hit 36.6%(무작위 +23pp), val loss mon과 같음(2.947) |
 | E8 | 11-10~11 | Stage 2 round 1: router descriptor 6종 + seed 1 재현 | KISTI | subblock32 46.7%, subblock16 42.7% 통과(기준 38.2%). 나머지 탈락 |
-| E13 | 11-15~ | Q5: subblock64 + 층 공유(0층, 14층) + sb64·sb32 seed 3 | KISTI | 제출 |
+| E13 | 11-15~16 | Q5: subblock64 + 층 공유(0층, 14층) + sb64·sb32 seed 3 | KISTI | share0 hit↑(57.7%)·val +0.033, share14 hit 45.9%·val 같음 → 채택 없음. sb64 4 seed 48.2% |
 | E12 | 11-13~15 | Q4·Q6: subblock64 + chunk 64/128, top-k 2/8 (50M) | KISTI | 기본(k4, chunk 256)이 무작위 대비 최고. 채택 없음 |
 | E11 | 11-13~15 | Q9: 370M subblock64(+ mon 기준) 10B 토큰 | KISTI | 학습 끝: sb64 val 2.3996·hit 56.8%, mon val 2.4008·hit 12.1%. string_match 평가 중 |
 | E10 | 11-11~12 | Q3 round 2: subblock16·32·64 × seed 3 + NIAH string_match | KISTI | subblock64 48.2% > 32 44.3% > 16 37.7% > 8 33.0%(ruler3, seed 3 평균). string_match는 oracle까지 0~4%라 50M에서 변별 불가 |
@@ -1256,6 +1256,16 @@ meanpool s2    0.24 0.14 0.16 0.13 0.13 0.21 0.32 0.17 0.16 0.22 0.22 0.29 0.44 
 | mon `mc_mon_370m_ctx8192_s0` | 2.4008 | 0.1200 | 0.1207 | 0.6092 | 84.1k |
 
   - 해석(에이전트): 50M과 같은 결론이 0.48B·10B 토큰에서도 선다. router hit 4.7배(무작위 0.137 대비 mon은 그 이하), val loss는 같거나 약간 낮다(전 구간 같은 step에서 sb64 ≤ mon + 0.002). 비용은 학습 속도 −16%(70k vs 84k tok/s).
+- 11-16 00시 평가 중간값(eval370, step 19,074 ckpt, RULER string_match_all %, 100문항). routing_hit = 정답 구간이 top-k에 든 비율(층 평균).
+
+| run | 길이 | 과제 | learned | oracle | learned routing_hit | random_hit |
+|---|---|---|---|---|---|---|
+| subblock64 | 4096 | niah_single_2 | **68.0** | 67.0 | 0.722 | 0.280 |
+| mon | 4096 | niah_single_2 | 37.0 | 62.0 | 0.340 | 0.280 |
+| mon | 4096 | niah_multikey_1 | 21.0 | (진행 중) | 0.428 | 0.326 |
+
+  - 해석(중간, 에이전트): 370M에서는 50M과 달리 oracle 라우팅이 정답률을 크게 올린다(62~67%). mon은 learned와 oracle의 차이가 25pp(37 vs 62)이고, subblock64는 learned가 oracle과 같다(68 vs 67). 이 과제에서는 router가 생성 정답률의 병목을 거의 다 없앴다. 나머지 과제·8192는 평가 진행 중.
+  - 주의: eval370 pack이 2노드(첫 config `mc_370m.env`의 SB_NODES=2)로 잡혀 같은 평가가 두 노드에서 한 번씩 돌았다(로그 줄이 두 번씩). 결과 값은 같다. 다음 평가 pack은 `SB_NODES=1`로 낸다.
   - NIAH string_match: 평가 pack eval370(job 1283301, 2 run, 4096·8192, niah_single_2·multikey_1·multikey_2·multivalue, learned·oracle) 제출. 앞서 낸 mon 단독 평가(1282720)는 시작 전에 취소하고 이 pack에 합쳤다.
   - 시작 기록의 params는 481,266,960(임베딩 제외 448,498,960)이다. 프리셋 이름은 370m이지만 실제로는 0.48B다.
 - part 2: 1277587(subblock64, `afterany:1272512`), 1277588(mon, `afterany:1273114`). `scripts/sbatch_cmd.sh train`에 같은 덮어쓰기로 냈다. 다른 분 작업이 모두 끝나 계정 5칸 중 우리가 5칸(대기 2 포함)을 쓴다. 이어 받기라 상한 3을 넘겼다.
@@ -1313,7 +1323,7 @@ meanpool s2    0.24 0.14 0.16 0.13 0.13 0.21 0.32 0.17 0.16 0.22 0.22 0.29 0.44 
 
 ---
 
-### E13. Q5: 층 간 라우팅 공유 (2026-11-15 ~, 진행 중)
+### E13. Q5: 층 간 라우팅 공유 (2026-11-15 ~ 11-16)
 
 **목적**
 - ⑪: 한 층이 고른 segment를 위층 전부가 쓰면(`MC_SHARE_FROM`) hit와 val loss가 어떻게 되는지. 50M subblock64는 깊은 층(L13~L15) hit가 가장 높아(E8·E10), 14층과 0층 두 경우를 본다.
@@ -1333,10 +1343,21 @@ meanpool s2    0.24 0.14 0.16 0.13 0.13 0.21 0.32 0.17 0.16 0.22 0.22 0.29 0.44 
 - job: 1280195 `mslm-pack-stage5`(24h), 11-15 02:10 KST 제출.
 
 **결과 (raw)**
-- 아직 없음.
+- `harvest.py --traj`, 11-16 00시. ruler_random_hit 0.1368.
 
-**결과 (해석)**
-- 아직 없음.
+| run | val 5700 | ruler 5700 | ruler3 | copy 5700 | tok/s |
+|---|---|---|---|---|---|
+| share0 `mc_desc_sb64_share0_50m_ctx8192_s0` | 2.9694 | 0.6190 | 0.5767 | 0.7637 | 46.4k |
+| share14 `mc_desc_sb64_share14_50m_ctx8192_s0` | 2.9392 | 0.4762 | 0.4587 | 0.9154 | 46.4k |
+| subblock64 seed 3 `mc_desc_sb64_50m_ctx8192_s3` | 2.9312 | 0.4891 | 0.4815 | 0.9076 | 46.6k |
+| subblock32 seed 3 `mc_desc_sb32_50m_ctx8192_s3` | 2.9335 | 0.4494 | 0.4296 | 0.8949 | 47.6k |
+
+- 층별 ruler_hit(5700): share0은 모든 층 0.62(0층 결정을 그대로 씀). share14는 L0~L6 0.11~0.67, L14·15 0.62.
+- seed 4개 요약: subblock64 0.5125 / 0.4547 / 0.4798 / 0.4815 → 평균 0.482, 표준편차 0.024. subblock32 0.4673 / 0.4190 / 0.4431 / 0.4296 → 0.440, 0.021.
+
+**결과 (해석)** (에이전트)
+- 층 공유는 채택하지 않는다. share0은 hit가 +9.5pp(0.577 vs 0.482) 높지만 val loss가 +0.033 나쁘고 copy_hit가 0.76으로 떨어진다(모든 층이 0층 선택을 따르면서 LM 쪽 손해). share14는 val loss가 같고 hit는 −2.3pp로 seed 표준편차 안이다. 공유로 계산이 줄지도 않았다(속도 같음).
+- subblock64 > subblock32 차이(4.2pp)가 seed 4개에서도 유지된다(표준편차 2.1~2.4pp).
 
 **경로**
 - pack 계획 파일: `/scratch/t512a03/mslm/jobs/packs/stage5_20261115_021038.tsv`
