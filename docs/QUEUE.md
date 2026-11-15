@@ -28,7 +28,7 @@
 | 2 | Q2 | gate 분리 기여 분리(E7 주의점) | ⑨ | Q1 제출 후 칸이 비면 | `detach_maxsim:RUN_TAG=detach_maxsim_softgate,MC_AUX_WEIGHT=0.3,MC_GATE=softmax` (router 점수를 gate로 재사용, backbone은 계속 detach) | val loss와 ruler_hit를 E7 detach_maxsim_w03과 비교. 기록만 하고 다음 항목은 막지 않는다 | 완료 (E9). softgate hit 평균 42.5%(0.337/0.513)·val +0.05 → sep_softmax 유지. 함께 넣은 seed 2: subblock8 0.285, meanpool 0.249. 원래 메모: softgate seed 0·1 + Q3용 subblock8·meanpool seed 2를 같은 pack에) |
 | 3 | Q3 | round 2: 상위 후보 seed 반복 + string_match | ④ | Q1 완료 | Q1 상위 ≤2개 × seed 0·1·2 중 없는 것, subblock8 seed 2. 학습 끝난 run마다 평가: `EVAL_TASKS=niah_single_2,niah_multikey_1,niah_multikey_2,niah_multivalue EVAL_LENGTHS=8192 EVAL_NUM_SAMPLES=100`(`scripts/eval.sh`, `slurm/eval.sbatch`). 같은 평가를 E6 mon, E7 4개 run에도 | seed 3개 평균 ruler_hit와 learned string_match 평균이 가장 높은 것을 best_desc 로. 차이가 seed 표준편차보다 작으면 단순한 쪽(subblock 계열 → 적은 파라미터) | 완료 (E10). ruler3 seed 3 평균: sb64 48.2% > sb32 44.3% > sb16 37.7% > sb8 33.0% → **best_desc = subblock64**. string_match는 oracle까지 0~4%라 50M에서 판정 불가(사용자 확인 대기) |
 | 4 | Q4 | chunk 크기 | ① | Q3 완료 | `detach_desc:RUN_TAG=desc_best_c64,MC_ROUTER_DESCRIPTOR=best_desc,MC_CHUNK=64` `…_c128,MC_CHUNK=128` (subblock 계열이면 chunk가 m으로 나뉘는지 확인) | ruler_hit가 best_desc(256)보다 3pp 이상 높고 tok/s 저하 ≤30% 면 채택 후보. 결과는 Q9 설정에 반영 | 완료 (E12). chunk 128 +27.3pp, 64 +31.5pp < 기본 +34.5pp, val loss도 나빠짐 → 채택 없음 |
-| 5 | Q5 | 층 배치: 한 층이 고른 구간을 공유 | ⑪ | Q3 완료 | best_desc 기준 `MC_SHARE_FROM=<Q3 best run에서 ruler_hit 최고 층>`, `MC_SHARE_FROM=0` 두 run | ruler_hit와 val loss가 best_desc 대비 같거나 좋으면 채택 후보(계산 절약) | 학습중 (E13, job 1280195 stage5: subblock64 + MC_SHARE_FROM=0 / 14, sb64·sb32 seed 3 함께) |
+| 5 | Q5 | 층 배치: 한 층이 고른 구간을 공유 | ⑪ | Q3 완료 | best_desc 기준 `MC_SHARE_FROM=<Q3 best run에서 ruler_hit 최고 층>`, `MC_SHARE_FROM=0` 두 run | ruler_hit와 val loss가 best_desc 대비 같거나 좋으면 채택 후보(계산 절약) | 완료 (E13). share0 hit 57.7%지만 val +0.033, share14 hit 45.9%·val 같음 → 채택 없음 |
 | 6 | Q6 | top-k | ⑦ | Q3 완료 | best_desc 기준 `MC_TOPK=2`, `MC_TOPK=8` | k별 ruler_hit와 val loss를 기록. 다음 항목은 막지 않는다 | 완료 (E12). k8 +33.1pp(30% 느림), k2 +21.4pp < 기본 +34.5pp → k=4 유지 |
 | 7 | Q7 | 학습형 compression MLP(NSA) | ④ | Q1에서 mma 또는 keyconv가 subblock8보다 높을 때만 | 새 descriptor `nsa_mlp`(block 안 위치 임베딩 + 2층 MLP, 초기값 meanpool) 구현 → PR(테스트 포함) → 1 run | Q1 규칙과 같음. 조건 불만족이면 `건너뜀` | 건너뜀 (mma 27.4%, keyconv 23.2% < subblock8 35.2%) |
 | 8 | Q8 | router 학습 신호: teacher KL / dense warm-up | ⑩ | Q3 완료 | 새 aux_loss 구현(teacher = 같은 batch의 dense GRM γ 또는 oracle 분포) → PR → 2 run | ruler_hit가 best_desc보다 3pp 이상 높으면 채택 후보 | 대기 |
@@ -43,6 +43,7 @@
 - 2026-11-11: Q1 완료(E8). subblock32·16 통과, Q7 건너뜀. Q3 stage3a 제출, subblock64 추가(PR #25), stage3b 제출.
 - 2026-11-11: hg2(t512a02)도 쓰기로 함(사용자). 평가 pack evalA·evalB를 hg2에 제출.
 - 2026-11-11: 사용자가 hg2를 다른 작업에 쓰려고 비워 달라고 함 → evalA·evalB(대기 중, 실행 전) 취소. **사용자가 다시 말할 때까지 hg2에는 내지 않는다.** 평가는 hg3 칸이 날 때 낸다.
+- 2026-11-16: Q5 완료(채택 없음). 370M 평가 중간값: niah_single_2@4K string_match sb64 learned 68 / oracle 67, mon 37 / 62.
 - 2026-11-15: 370M 두 run 학습 끝(sb64 val 2.3996·hit 56.8% / mon 2.4008·12.1%). 평가 pack eval370(job 1283301). Q4·Q6 완료, 채택 없음.
 - 2026-11-15: Q6(k2·k8)·Q4 chunk 128 끝남. Q5 pack(stage5, job 1280195) 제출.
 - 2026-11-14: KISTI 로그인 끊김(02~05시) 후 복구. 370M part 2 제출(1277587 subblock64, 1277588 mon). 이어 받기라 우리 작업 상한 3을 넘겨 5칸 사용(다른 분 작업 0). stage4 tail은 칸이 나면.
