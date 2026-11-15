@@ -1245,6 +1245,9 @@ meanpool s2    0.24 0.14 0.16 0.13 0.13 0.21 0.32 0.17 0.16 0.22 0.22 0.29 0.44 
 - 11-14 05시(로그인 복구 후) 중간값: subblock64 step 8430(eval 8000 val 2.5387, ruler3 0.5407, copy 0.920) / mon step 7640(eval 7500 val 2.5595, ruler3 0.1194, copy 0.602).
   - 같은 step 2000 비교: subblock64 val 2.8650·ruler3 0.503, mon val 2.8706·ruler3 0.116.
 - 11-14 20시: subblock64 part 1(1272512)이 24시간 제한으로 step 11,460에서 끝났다(마지막 ckpt는 step 11,000). part 2(1277587)는 Priority 대기. 같은 step 11,000: subblock64 val 2.4814·ruler3 0.589, mon val 2.4857·ruler3 0.125.
+- 11-15: mon 370M 끝남(step 19,074): val 2.4008, ruler 0.1200, ruler3 0.1207, copy 0.6092. NIAH 평가 pack(job 1282720, 4096·8192, niah_single_2·multikey_1·multikey_2·multivalue, learned·oracle) 제출.
+  - 같은 시점 subblock64: step 17,920(eval 17500 val 2.4064, ruler3 0.569). part 2가 약 3.5시간 남음.
+  - 같은 step 비교(val / ruler3): 13,500 → sb64 2.4428 / 0.586, mon 2.4445 / 0.122. 16,000 → sb64 2.4169 / 0.591, mon 2.4183 / 0.123.
   - 시작 기록의 params는 481,266,960(임베딩 제외 448,498,960)이다. 프리셋 이름은 370m이지만 실제로는 0.48B다.
 - part 2: 1277587(subblock64, `afterany:1272512`), 1277588(mon, `afterany:1273114`). `scripts/sbatch_cmd.sh train`에 같은 덮어쓰기로 냈다. 다른 분 작업이 모두 끝나 계정 5칸 중 우리가 5칸(대기 2 포함)을 쓴다. 이어 받기라 상한 3을 넘겼다.
 
