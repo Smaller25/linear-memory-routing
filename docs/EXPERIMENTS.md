@@ -46,8 +46,8 @@
 | E7 | 11-05~06 | Stage 1c: detach router | KISTI | 통과. maxsim hit 36.6%(무작위 +23pp), val loss mon과 같음(2.947) |
 | E8 | 11-10~11 | Stage 2 round 1: router descriptor 6종 + seed 1 재현 | KISTI | subblock32 46.7%, subblock16 42.7% 통과(기준 38.2%). 나머지 탈락 |
 | E13 | 11-15~ | Q5: subblock64 + 층 공유(0층, 14층) + sb64·sb32 seed 3 | KISTI | 제출 |
-| E12 | 11-13~ | Q4·Q6: subblock64 + chunk 64/128, top-k 2/8 (50M) | KISTI | 제출 |
-| E11 | 11-13~ | Q9: 370M subblock64(+ mon 기준) 10B 토큰 | KISTI | 학습 중 |
+| E12 | 11-13~15 | Q4·Q6: subblock64 + chunk 64/128, top-k 2/8 (50M) | KISTI | 기본(k4, chunk 256)이 무작위 대비 최고. 채택 없음 |
+| E11 | 11-13~15 | Q9: 370M subblock64(+ mon 기준) 10B 토큰 | KISTI | 학습 끝: sb64 val 2.3996·hit 56.8%, mon val 2.4008·hit 12.1%. string_match 평가 중 |
 | E10 | 11-11~12 | Q3 round 2: subblock16·32·64 × seed 3 + NIAH string_match | KISTI | subblock64 48.2% > 32 44.3% > 16 37.7% > 8 33.0%(ruler3, seed 3 평균). string_match는 oracle까지 0~4%라 50M에서 변별 불가 |
 | E9 | 11-10~11 | Q2 gate 분리 기여 + seed 2 재현 | KISTI | softgate hit 평균 42.5%(seed 차 18pp)지만 val loss +0.05. sep_softmax는 LM 손실을 지킨다 |
 
@@ -1221,7 +1221,7 @@ meanpool s2    0.24 0.14 0.16 0.13 0.13 0.21 0.32 0.17 0.16 0.22 0.22 0.29 0.44 
 
 ---
 
-### E11. Q9: 370M 확장 — subblock64 router descriptor (2026-11-13 ~, 진행 중)
+### E11. Q9: 370M 확장 — subblock64 router descriptor (2026-11-13 ~ 11-15, 평가 진행 중)
 
 **목적**
 - 50M에서 고른 설정(detach router + sep_softmax + CE 0.3 + router descriptor subblock64, E10)이 370M에서도 router hit를 올리는지 본다.
@@ -1248,6 +1248,15 @@ meanpool s2    0.24 0.14 0.16 0.13 0.13 0.21 0.32 0.17 0.16 0.22 0.22 0.29 0.44 
 - 11-15: mon 370M 끝남(step 19,074): val 2.4008, ruler 0.1200, ruler3 0.1207, copy 0.6092. NIAH 평가 pack(job 1282720, 4096·8192, niah_single_2·multikey_1·multikey_2·multivalue, learned·oracle) 제출.
   - 같은 시점 subblock64: step 17,920(eval 17500 val 2.4064, ruler3 0.569). part 2가 약 3.5시간 남음.
   - 같은 step 비교(val / ruler3): 13,500 → sb64 2.4428 / 0.586, mon 2.4445 / 0.122. 16,000 → sb64 2.4169 / 0.591, mon 2.4183 / 0.123.
+- 11-15 학습 끝(둘 다 step 19,074, 10B 토큰):
+
+| run | val | ruler | ruler3 | copy | tok/s |
+|---|---|---|---|---|---|
+| subblock64 `mc_desc_sb64_370m_ctx8192_s0` | 2.3996 | 0.5615 | 0.5675 | 0.9293 | 70.3k |
+| mon `mc_mon_370m_ctx8192_s0` | 2.4008 | 0.1200 | 0.1207 | 0.6092 | 84.1k |
+
+  - 해석(에이전트): 50M과 같은 결론이 0.48B·10B 토큰에서도 선다. router hit 4.7배(무작위 0.137 대비 mon은 그 이하), val loss는 같거나 약간 낮다(전 구간 같은 step에서 sb64 ≤ mon + 0.002). 비용은 학습 속도 −16%(70k vs 84k tok/s).
+  - NIAH string_match: 평가 pack eval370(job 1283301, 2 run, 4096·8192, niah_single_2·multikey_1·multikey_2·multivalue, learned·oracle) 제출. 앞서 낸 mon 단독 평가(1282720)는 시작 전에 취소하고 이 pack에 합쳤다.
   - 시작 기록의 params는 481,266,960(임베딩 제외 448,498,960)이다. 프리셋 이름은 370m이지만 실제로는 0.48B다.
 - part 2: 1277587(subblock64, `afterany:1272512`), 1277588(mon, `afterany:1273114`). `scripts/sbatch_cmd.sh train`에 같은 덮어쓰기로 냈다. 다른 분 작업이 모두 끝나 계정 5칸 중 우리가 5칸(대기 2 포함)을 쓴다. 이어 받기라 상한 3을 넘겼다.
 
@@ -1261,7 +1270,7 @@ meanpool s2    0.24 0.14 0.16 0.13 0.13 0.21 0.32 0.17 0.16 0.22 0.22 0.29 0.44 
 
 ---
 
-### E12. Q4·Q6: subblock64 기준 chunk 크기와 top-k (2026-11-13 ~, 진행 중)
+### E12. Q4·Q6: subblock64 기준 chunk 크기와 top-k (2026-11-13 ~ 11-15)
 
 **목적**
 - Q4(①): segment 길이를 256에서 64·128로 줄이면 router hit가 더 오르는지, 속도 비용은 얼마인지.
@@ -1291,9 +1300,9 @@ meanpool s2    0.24 0.14 0.16 0.13 0.13 0.21 0.32 0.17 0.16 0.22 0.22 0.29 0.44 
 | k2 `mc_desc_sb64_k2_50m_ctx8192_s0` | 2.9408 | 0.2824 | 0.0684 | +21.4pp | 0.789 | 55.4k |
 | k8 `mc_desc_sb64_k8_50m_ctx8192_s0` | 2.9421 | 0.6045 | 0.2735 | +33.1pp | 0.978 | 34.7k |
 | chunk 128 `mc_desc_sb64_c128_50m_ctx8192_s0` | 2.9609 | 0.3403 | 0.0676 | +27.3pp | 0.875 | 39.1k |
-| chunk 64 `mc_desc_sb64_c64_50m_ctx8192_s0` | (tail에서 학습 중, step 4860) | | 0.0336 | | | 29.6k |
+| chunk 64 `mc_desc_sb64_c64_50m_ctx8192_s0` | 2.9813 | 0.3486 | 0.0336 | +31.5pp | 0.874 | 29.6k |
 
-- 해석(중간, 에이전트): 무작위 대비로 보면 기본(k4, chunk 256)이 가장 높다. k8은 비슷하고(+33.1pp) 30% 느리다. k2는 낮다. chunk 128은 무작위 대비가 낮고 val loss도 0.02 나쁘다. chunk 64가 끝나면 Q4를 판정한다.
+- 해석(에이전트, Q4·Q6 판정): 무작위 대비로 기본(k4, chunk 256, +34.5pp)이 가장 높다. chunk를 줄이면(128 +27.3pp, 64 +31.5pp) 무작위 대비가 낮아지고 val loss가 나빠지며(2.961, 2.981 vs 2.936) 느려진다(39k, 30k vs 47k tok/s) → Q4 채택 없음. k8은 비슷하지만(+33.1pp) 30% 느리고, k2는 낮다 → Q6도 기본 유지. 모두 seed 1개.
 
 **결과 (해석)**
 - 아직 없음.
