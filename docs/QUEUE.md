@@ -32,7 +32,7 @@
 | 6 | Q6 | top-k | ⑦ | Q3 완료 | best_desc 기준 `MC_TOPK=2`, `MC_TOPK=8` | k별 ruler_hit와 val loss를 기록. 다음 항목은 막지 않는다 | 완료 (E12). k8 +33.1pp(30% 느림), k2 +21.4pp < 기본 +34.5pp → k=4 유지 |
 | 7 | Q7 | 학습형 compression MLP(NSA) | ④ | Q1에서 mma 또는 keyconv가 subblock8보다 높을 때만 | 새 descriptor `nsa_mlp`(block 안 위치 임베딩 + 2층 MLP, 초기값 meanpool) 구현 → PR(테스트 포함) → 1 run | Q1 규칙과 같음. 조건 불만족이면 `건너뜀` | 건너뜀 (mma 27.4%, keyconv 23.2% < subblock8 35.2%) |
 | 8 | Q8 | router 학습 신호: teacher KL / dense warm-up | ⑩ | Q3 완료 | 새 aux_loss 구현(teacher = 같은 batch의 dense GRM γ 또는 oracle 분포) → PR → 2 run | ruler_hit가 best_desc보다 3pp 이상 높으면 채택 후보 | 대기 |
-| 9 | Q9 | 370M 확장: 최종 설정 + mon | 전체 | Q3~Q6 완료, **사용자 확인** | `SIZE=370m` 최종 설정과 mc(mon), 각각 2노드 × `TRAIN_PARTS` | string_match(4K·8K, 7과제)로 최종 비교 | 학습중 (E11, 11-13 사용자 확인 "괜찮은 아이디어 370M으로"). 1노드 4 GPU, 10B 토큰, MICRO_BATCH 2. subblock64: job 1272512(part 1). mon(mc_370m RUN_TAG=mon): job 1273114. part 2는 첫 tok/s를 보고 `AFTER=`로 이어 건다. 끝나면 string_match(learned·oracle)로 평가 |
+| 9 | Q9 | 370M 확장: 최종 설정 + mon | 전체 | Q3~Q6 완료, **사용자 확인** | `SIZE=370m` 최종 설정과 mc(mon), 각각 2노드 × `TRAIN_PARTS` | string_match(4K·8K, 7과제)로 최종 비교 | 완료 (E11). hit 56.8% vs 12.1%, val 같음. NIAH single_2 정답률 4K 68 vs 37, 8K 70 vs 7(mon oracle 28) |
 
 ## 변경 기록
 
@@ -43,6 +43,7 @@
 - 2026-11-11: Q1 완료(E8). subblock32·16 통과, Q7 건너뜀. Q3 stage3a 제출, subblock64 추가(PR #25), stage3b 제출.
 - 2026-11-11: hg2(t512a02)도 쓰기로 함(사용자). 평가 pack evalA·evalB를 hg2에 제출.
 - 2026-11-11: 사용자가 hg2를 다른 작업에 쓰려고 비워 달라고 함 → evalA·evalB(대기 중, 실행 전) 취소. **사용자가 다시 말할 때까지 hg2에는 내지 않는다.** 평가는 hg3 칸이 날 때 낸다.
+- 2026-11-16: Q9 완료. 370M NIAH single_2 정답률 sb64 vs mon: 4K 68 vs 37, 8K 70 vs 7. 다른 과제는 둘 다 oracle까지 낮음.
 - 2026-11-16: Q5 완료(채택 없음). 370M 평가 중간값: niah_single_2@4K string_match sb64 learned 68 / oracle 67, mon 37 / 62.
 - 2026-11-15: 370M 두 run 학습 끝(sb64 val 2.3996·hit 56.8% / mon 2.4008·12.1%). 평가 pack eval370(job 1283301). Q4·Q6 완료, 채택 없음.
 - 2026-11-15: Q6(k2·k8)·Q4 chunk 128 끝남. Q5 pack(stage5, job 1280195) 제출.
