@@ -47,7 +47,7 @@
 | E8 | 11-10~11 | Stage 2 round 1: router descriptor 6종 + seed 1 재현 | KISTI | subblock32 46.7%, subblock16 42.7% 통과(기준 38.2%). 나머지 탈락 |
 | E13 | 11-15~16 | Q5: subblock64 + 층 공유(0층, 14층) + sb64·sb32 seed 3 | KISTI | share0 hit↑(57.7%)·val +0.033, share14 hit 45.9%·val 같음 → 채택 없음. sb64 4 seed 48.2% |
 | E12 | 11-13~15 | Q4·Q6: subblock64 + chunk 64/128, top-k 2/8 (50M) | KISTI | 기본(k4, chunk 256)이 무작위 대비 최고. 채택 없음 |
-| E11 | 11-13~15 | Q9: 370M subblock64(+ mon 기준) 10B 토큰 | KISTI | 학습 끝: sb64 val 2.3996·hit 56.8%, mon val 2.4008·hit 12.1%. string_match 평가 중 |
+| E11 | 11-13~16 | Q9: 370M subblock64(+ mon 기준) 10B 토큰 | KISTI | sb64 val 2.3996·hit 56.8% vs mon 2.4008·12.1%. NIAH single_2 정답률 4K 68 vs 37, 8K 70 vs 7 |
 | E10 | 11-11~12 | Q3 round 2: subblock16·32·64 × seed 3 + NIAH string_match | KISTI | subblock64 48.2% > 32 44.3% > 16 37.7% > 8 33.0%(ruler3, seed 3 평균). string_match는 oracle까지 0~4%라 50M에서 변별 불가 |
 | E9 | 11-10~11 | Q2 gate 분리 기여 + seed 2 재현 | KISTI | softgate hit 평균 42.5%(seed 차 18pp)지만 val loss +0.05. sep_softmax는 LM 손실을 지킨다 |
 
@@ -1221,7 +1221,7 @@ meanpool s2    0.24 0.14 0.16 0.13 0.13 0.21 0.32 0.17 0.16 0.22 0.22 0.29 0.44 
 
 ---
 
-### E11. Q9: 370M 확장 — subblock64 router descriptor (2026-11-13 ~ 11-15, 평가 진행 중)
+### E11. Q9: 370M 확장 — subblock64 router descriptor (2026-11-13 ~ 11-16)
 
 **목적**
 - 50M에서 고른 설정(detach router + sep_softmax + CE 0.3 + router descriptor subblock64, E10)이 370M에서도 router hit를 올리는지 본다.
@@ -1268,13 +1268,32 @@ meanpool s2    0.24 0.14 0.16 0.13 0.13 0.21 0.32 0.17 0.16 0.22 0.22 0.29 0.44 
   - 주의: eval370 pack이 2노드(첫 config `mc_370m.env`의 SB_NODES=2)로 잡혀 같은 평가가 두 노드에서 한 번씩 돌았다(로그 줄이 두 번씩). 결과 값은 같다. 다음 평가 pack은 `SB_NODES=1`로 낸다.
   - NIAH string_match: 평가 pack eval370(job 1283301, 2 run, 4096·8192, niah_single_2·multikey_1·multikey_2·multivalue, learned·oracle) 제출. 앞서 낸 mon 단독 평가(1282720)는 시작 전에 취소하고 이 pack에 합쳤다.
   - 시작 기록의 params는 481,266,960(임베딩 제외 448,498,960)이다. 프리셋 이름은 370m이지만 실제로는 0.48B다.
+- 11-16 04시 평가 끝(eval370, job 1283301, 약 5.6시간). step 19,074 ckpt, RULER string_match_all %, 과제·길이당 100문항. hit = learned 라우팅에서 정답 구간이 top-k에 든 비율(층 평균), rand = 무작위 k개를 골랐을 때의 기대 hit. wandb run summary의 `eval/step_0019074/...`에도 올라갔다.
+
+| 길이 | 과제 | sb64 learned | sb64 oracle | sb64 hit | mon learned | mon oracle | mon hit | rand |
+|---|---|---|---|---|---|---|---|---|
+| 4096 | niah_single_2 | **68** | 67 | 0.722 | 37 | 62 | 0.340 | 0.280 |
+| 4096 | niah_multikey_1 | 26 | 21 | 0.712 | 21 | 28 | 0.428 | 0.326 |
+| 4096 | niah_multikey_2 | 0 | 0 | 0.321 | 0 | 0 | 0.321 | 0.287 |
+| 4096 | niah_multivalue | 17 | 16.75 | 0.868 | 15 | 16 | 0.772 | 0.743 |
+| 8192 | niah_single_2 | **70** | 67 | 0.628 | 7 | 28 | 0.177 | 0.136 |
+| 8192 | niah_multikey_1 | 15 | 6 | 0.541 | 7 | 15 | 0.112 | 0.140 |
+| 8192 | niah_multikey_2 | 0 | 0 | 0.145 | 0 | 0 | 0.116 | 0.131 |
+| 8192 | niah_multivalue | 16.75 | 15.75 | 0.729 | 14 | 17 | 0.436 | 0.438 |
+
+  - 4096 niah_multikey_2의 learned hit가 두 run에서 끝자리까지 같다(0.32079). 8192에서는 다르다(0.145 vs 0.116). 이 과제는 oracle도 0%라 결론에는 영향이 없지만, 계산을 아직 확인하지 않았다.
 - part 2: 1277587(subblock64, `afterany:1272512`), 1277588(mon, `afterany:1273114`). `scripts/sbatch_cmd.sh train`에 같은 덮어쓰기로 냈다. 다른 분 작업이 모두 끝나 계정 5칸 중 우리가 5칸(대기 2 포함)을 쓴다. 이어 받기라 상한 3을 넘겼다.
 
-**결과 (해석)**
-- 아직 없음.
+**결과 (해석)** (에이전트)
+- 370M에서는 router가 생성 정답률로 이어진다. niah_single_2에서 subblock64는 learned가 oracle과 같고(4K 68 vs 67, 8K 70 vs 67), mon은 learned가 oracle보다 크게 낮다(4K 37 vs 62, 8K 7 vs 28).
+- 8K에서 mon은 oracle로 정답 구간을 줘도 28%다. subblock64는 oracle 67%. 같은 정답 구간을 읽혀도 차이가 크므로, 학습 중 router가 맞는 구간을 고른 덕에 모델이 읽은 구간을 쓰는 법도 함께 배운 것으로 본다(추정, 직접 검증은 안 함).
+- multikey_1·multivalue는 두 모델 모두 oracle까지 6~28%로 낮다. multikey_2는 0%. 이 과제들은 router가 아니라 모델 크기·학습량이 병목이다. multivalue는 무작위 hit가 0.44~0.74라 router 차이가 드러나기 어렵다.
+- 비용은 학습 속도 −16%, val loss는 같다. Q9 결론: subblock64 router descriptor를 최종 설정으로 둔다.
 
 **경로**
 - run: `/scratch/t512a03/mslm/runs/mc_desc_sb64_370m_ctx8192_s0/`
+- 평가: `<run>/eval/step_0019074/summary.json`, `items.jsonl` (두 run)
+- 평가 로그: `/scratch/t512a03/mslm/jobs/packs/<run>_1283301.log`
 - 로그: `/scratch/t512a03/mslm/slurm_logs/mslm-detach_desc_370m_s0-train_1272512.out`
 - wandb: `ks000225/linear-memory-routing/runs/mc_desc_sb64_370m_ctx8192_s0`
 
